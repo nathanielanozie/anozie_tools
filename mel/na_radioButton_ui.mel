@@ -1,0 +1,227 @@
+/**@file na_radioButton_ui.mel
+*
+*Makes MEL user interfaces quickly.(Tested Maya 2008)
+*
+*@author Nathaniel O. Anozie (ogbonnawork at gmail dot com)
+*@note Modify at your own risk
+*
+*@addtogroup ui
+*@{
+*/
+
+
+
+/**add a radio button to a window
+@parm string $form -- name of form
+@param string $winName -- name of window
+@param string $label -- label
+@param float $top  position top
+@param float $left position left
+@param string $cmd command for button
+@param string $collection container to hold this radio button
+*/
+global proc na_radioButton(string $form, string $winName, string $label, float $top, float $left, string $cmd, string $collection)
+{
+    if( `window -exists $winName`  )
+    {       
+        string $val = `radioButton -label $label -onc $cmd -cl $collection`;
+               
+        //how should things be positioned
+        formLayout -edit 
+        -attachForm $val "top" $top
+        -attachForm $val "left" $left
+        $form;
+        
+
+        //setParent $winName;//add tab to arg window
+        
+        //to make sure something is selected, avoids empty 
+        //thing sent to places
+        radioCollection -edit -select $val $collection;
+        
+    
+    }
+    else{
+        ui_errorMessage();
+    }
+}
+
+
+
+/** get name of radio button for radio collections, either short or long
+@note could support other places where we have a long name and want the short version
+@param $collection list of radio button collections
+@param $isShortName 1 return short names, 0 long name
+*/
+global proc string[] na_getCollectionRadioButton(string $collection[], int $isShortName)
+{
+    na_assertBinaryInteger({$isShortName});
+    string $result[] = {};
+    string $sep = "|"; //because long name returned is divided by this separator
+                
+    for($obj in $collection)
+    {
+        //go through long name and save the last thing, the radio button name 
+        if(`radioCollection -ex $obj`){
+            
+            string $argArray[] = `radioCollection -query -collectionItemArray $obj`;
+            
+            //save radio button name whether short or long
+            //
+            if($isShortName == 1){
+                for($arg in $argArray){
+                    
+                    string $tokens[] = na_getTokensByThisSeparator($arg,$sep);
+                    if(size($tokens) > 0 )
+                    {
+                        $result[size($result)] = $tokens[ (size($tokens)-1)];
+                    }
+                    else{error("Requires Separator with--"+$sep+"for "+$arg); }
+                }
+            }
+            else
+            {
+                for($arg in $argArray)
+                {
+                    $result[size($result)] = $arg;
+                } 
+            }
+            
+        }else{ error("Requires Radio Collection Existence of--"+$obj); }
+    }
+    
+    
+    return $result;
+}
+
+
+
+/**set radio buttons as selected by radio button index for all radio collection(s)
+@pre radio collections exist, order input matters
+@param a string space separated of all radio button collections
+@bug untested in practice
+*/
+global proc
+na_selectRadioButtonOfCollectionByIndex(string $radioCol, int $selectIndex[])
+{
+    int $widgetArray[] = {}; //contains all user selections
+    string $collectionArray[] = {};
+    $collectionArray = stringToStringArray($radioCol," ");
+    string $allCollectionButton[] = na_getCollectionRadioButton($collectionArray,0);
+    
+    //select radio button
+    for( $index in $selectIndex )
+    {
+        if( $index < size($allCollectionButton) )
+        {   radioButton -edit -sl $allCollectionButton[$index]; }
+    }
+    
+}
+
+
+/**get int list of current user selected radio buttons fro all radio collection(s)
+@pre radio collections exist
+@param a string space separated of all radio button collections
+*/
+global proc int[] 
+na_getIDFromRadioButtonCollection(string $radioCol)
+{
+    int $result[] = {};
+    
+    //To allow matching of user selections for differen rig parts
+    //we figure out user selection before pressing done by using all the ui radio collections
+    //
+    int $widgetArray[] = {}; //contains all user selections
+    string $collectionArray[] = {};
+    $collectionArray = stringToStringArray($radioCol," ");
+    string $allCollectionButton[] = na_getCollectionRadioButton($collectionArray,1);
+    
+    for($collection in $collectionArray)
+    {
+        if(`radioCollection -ex $collection`){
+            string $button = `radioCollection -query -select $collection`;
+            int $foundIndex[] = naIndex($button,$allCollectionButton);
+            na_assertIntSizeEqualArg($foundIndex,1);
+            $widgetArray[size($widgetArray)] = $foundIndex[0];
+        }
+        else{ error("Requires UI Exist --"+$collection); }
+    }
+    
+    $result = $widgetArray;
+    
+    return $result;
+}
+
+
+
+
+
+/**Make a ui that holds multiple other ui's
+@pre each ui to be put together into one:
+@pre -- ui need 2 string input: title, window
+@pre -- need to have no window creation command or showing of window
+@bug im not sure how to verify the sub ui functions meet the preconditions ex: number of parameters and type
+@bug doesn't support access to the sub ui layouts
+@note example put before form of sub ui
+@note
+    string $firstFrameLayout =
+    `frameLayout
+    -label $title
+    -labelAlign "center"
+    -collapsable true`;
+@note example put in parameter of sub ui
+@note (string $title, string $mainWindowName)
+@note remove window and show window
+*/
+global proc
+na_windowFrameLayout(string $allTitle, int $allWidth, int $allHeight, string $allGlobalName,
+string $uiFunction[], string $uiTitle[])
+{
+    na_assertCmdExist( $uiFunction );
+    na_assertSizeGreaterEqualTo($uiFunction,1);
+    na_assertSizeEqualArg($uiFunction, size($uiTitle) );
+    
+    int $numFrameLayout = size($uiFunction);
+    
+    //setup up title for gui
+    string $titleWindow = $allTitle;
+    
+    
+    string $mainWindowName = $allGlobalName;
+    na_window($mainWindowName,$titleWindow, $allWidth, $allHeight);
+    
+    //set up format for gui
+    string $form = `columnLayout -adjustableColumn true`;
+    
+    
+    //put all ui together
+    //
+    string $cmd = "";  
+    for($i = 0; $i < $numFrameLayout; $i++)
+    {
+        //this is important to put here
+        //kind of like how pickwalk automatically changes hierarchy, when building
+        //ui the ui hierarchy gets automatically changed so before we add on something new we return to the root of hierarchy
+        //instead of world space this is allLayout.
+        setParent $form;
+        
+        
+        //prepare to tell sub ui's to use this gui via its global name
+        //notice we need the quotes to for Mel to know they are strings and not objects
+        //
+        $cmd = $uiFunction[$i]+"(\""+$uiTitle[$i]+"\",\""+$mainWindowName+"\")";
+        
+        //may get bug if unmatched parameter
+        eval($cmd);
+        
+    }
+    
+          
+    showWindow $mainWindowName;
+}
+
+/**
+*@}
+*/
+
+

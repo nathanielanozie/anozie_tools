@@ -1,0 +1,41 @@
+//author: Nathaniel Anozie (ogbonnawork at gmail dot com)
+//
+//
+
+//modify at own risk
+
+//last updated: 08/14/2014 -- try to get it working, and make it more usable
+//last updated: 07/11/2013 -- working on adding a fk control that stays exterior to joint
+
+
+global proc na_fkControl(string $joint)
+{
+    string $sel[] = {};
+    $sel = `ls -sl`;
+    
+    //add a circular shape to input and center cvs, uses a default radius
+    select -cl;
+    
+    print("Drawing fk type of face controls---\n");
+    float $radius = 1; //default radius
+    string $circleAr[] = `circle -c 0 0 0 -nr 0 1 0 -sw 360 -r $radius -d 3 -ut 0 -s 8 -ch 1`; //-tol 3.93701e-05
+    string $circle = $circleAr[0];
+    delete -ch $circle;
+    string $shapeAr[] = `pickWalk -d down $circle`;
+    string $shape = $shapeAr[0];
+    
+    //need shape to match orientation of joint
+    delete( `parentConstraint $joint $circle` );//where to go to comes first
+    
+    parent -add -shape $shape $joint;
+    delete $circle;    
+    rename $shape ($joint+"Shape");
+    
+    catch( `select -r $sel` );//restore user selection
+}
+
+global proc na_fkControl_undo(string $joint)
+{
+    //remove all shapes from input
+    delete( `listRelatives -type nurbsCurve $joint` );//should be immediate parent only
+}

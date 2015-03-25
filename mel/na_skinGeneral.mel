@@ -1,0 +1,575 @@
+/**@file na_skinGeneral.mel
+@brief v1.0.1 skinning tools. ex: adding influence, holding and flooding weight etc.
+@author Nathaniel O. Anozie (ogbonnawork at gmail dot com)
+@bug 
+@note date created: May 31, 2012
+@note How to Install
+@source na_assertGeneral.mel
+@source naGeneral.mel
+@note released --
+@note -- working on a hold on selected influence tool and weight 1 on selected component tool
+@note -- working on smooth on selected components no changing of lock state of influences
+@note Modify at your own risk
+@note Inspired by Tyler Hurd's online examples of finding skin cluster (tylerhurd dot com)
+*/
+
+
+
+/**smooth selected components
+@pre single skin cluster, vtx only selected
+@post smoothes components to all unheld influences
+@note does nothing if all or all but 1 influences are held
+@note also supports nurbs surfaces
+*/
+global proc
+na_smoothSelectedComponent()
+{
+    string $sel[] = `ls -sl`;
+    na_assertSizeGreaterEqualTo($sel, 1);
+    na_assertTypeInList( $sel, {"mesh","nurbsSurface"} );
+    
+    //are component bound to skin
+    string $cluster[] = {};
+    $cluster = na_getSkinClusterGivenComponent($sel[0]);
+
+    na_assertSizeEqualArg($cluster ,1);
+    
+    //components share same skin
+    //
+    na_assertSameSkinClusterByComponent( $sel );
+
+    //given select vertices this smooths weight
+    ArtPaintSkinWeightsToolOptions;
+    artAttrSkinPaintCtx -e -clear `currentCtx`;
+    //artAttrSkinPaintCtx -e -clear "artAttrSkinContext";
+    
+}
+
+    
+/**select all influences to selected polygon
+@pre one polygon with skin is selected
+@note also supports nurbs surfaces
+*/
+global proc
+na_selectAllInfluenceToSelectedPolygon()
+{
+    string $sel[] = `ls -sl`;
+    
+    na_assertSizeGreaterEqualTo($sel, 1);
+    na_assertTypeInList( $sel, {"transform"} );
+    
+    //find and select influences of skin
+    //
+    string $curInfluence[] = {};
+    $curInfluence = na_getInfluenceToPolygon($sel[0]);
+    na_assertSizeGreaterEqualTo( $curInfluence, 1 );
+    
+    select -r $curInfluence;
+}
+
+
+/**get all influences to selected polygon
+@result string list of influences
+@pre polygon with skin
+@note also supports nurbs surfaces
+*/
+global proc string[] 
+na_getInfluenceToPolygon(string $poly)
+{
+    string $result[] = {};
+    
+    na_assertTypeInList( {$poly}, {"transform"} );
+    
+    string $skin[] = {};
+    string $skinArg = `findRelatedSkinCluster $poly`;
+    if( size($skinArg) > 0 ){$skin = {$skinArg};}
+    na_assertSizeEqualArg( $skin, 1 );
+    na_assertObjectExist($skin);
+    
+    //find influences of skin
+    //
+    string $curInfluence[] = {};
+    $curInfluence = `skinCluster -q -inf $skin`;
+    na_assertSizeGreaterEqualTo( $curInfluence, 1 );
+    
+    $result = $curInfluence;
+    
+    
+    return $result;
+}
+
+
+
+/**given selected influences (joint,or poly) then last a polygon it add the influence
+@note 
+@note also supports nurbs surfaces
+*/
+global proc
+na_addSelectedInfluenceToPolygon()
+{
+  
+    string $sel[] = `ls -sl`;
+    
+    na_assertSizeGreaterEqualTo($sel, 2);
+    na_assertTypeInList( $sel, {"joint","transform"} );
+     
+    string $object = "";
+    $object = $sel[size($sel)-1];
+    na_assertTypeInList( {$object},{"transform"} );
+    
+    string $influence[] = {};
+    $influence = $sel;
+    //all but last selection is something to add to skin
+    //
+    stringArrayRemoveAtIndex( (size($influence) - 1), $influence);
+     
+    string $skin[] = {};
+    string $skinArg = `findRelatedSkinCluster $object`;
+    if( size($skinArg) > 0 ){$skin = {$skinArg};}
+    na_assertSizeEqualArg( $skin, 1 );
+    na_assertObjectExist($skin);
+    
+    //add influence which depends on type
+    //
+    for($inf in $influence)
+    {
+         int $isTransform = na_isType($inf,"transform");
+         int $isJoint = na_isType($inf,"joint");
+         
+         
+         if( $isTransform == 1 )
+         {
+             na_addGeometryInfluence({$inf},$skin[0]);
+         }
+         else if( $isJoint == 1 )
+         {
+             na_addJointInfluence({$inf},$skin[0]);
+         }
+         else{ error("Requires -- joint , transform-- potential added objects"); }
+    }
+    select -r $sel;
+}
+
+/**given selected influences (joint,or poly) then last a polygon it removes the influence
+@note 
+*/
+global proc
+na_removeSelectedInfluenceToPolygon()
+{
+    string $sel[] = `ls -sl`;
+    
+    na_assertSizeGreaterEqualTo($sel, 2);
+    na_assertTypeInList( $sel, {"joint","transform"} );
+     
+    string $object = "";
+    $object = $sel[size($sel)-1];
+    na_assertTypeInList( {$object},{"transform"} );
+    
+    string $influence[] = {};
+    $influence = $sel;
+    //all but last selection is something to add to skin
+    //
+    stringArrayRemoveAtIndex( (size($influence) - 1), $influence);
+     
+    string $skin[] = {};
+    $skin = na_getSkinClusterGivenPolygon($object);
+    na_assertSizeEqualArg( $skin, 1 );
+    na_assertObjectExist($skin);
+    
+    //add influence which depends on type
+    //
+    for($inf in $influence)
+    {skinCluster -e -ri $inf $skin[0];}
+    select -r $sel;
+}
+
+
+/**add geo to skin 
+@param influences
+@param skin cluster name
+@note
+skin		-- skinCluster1
+useGeometry	-- on
+dropRate	-- 4.0
+nurbs samples -- 10
+poly smooth -- 0
+weight locking -- off
+@see na_isOption
+*/
+global proc
+na_addGeometryInfluence(string $infArray[], string $skin)
+{
+    if(size($infArray) > 0 )
+    {
+        na_assertObjectExist($infArray);
+        na_assertObjectExist({$skin});
+        na_assertTypeInList( $infArray, {"transform"} );
+        
+        string $curInfluence[] = {};
+        $curInfluence = `skinCluster -q -inf $skin`;
+        na_assertSizeGreaterEqualTo( $curInfluence, 1 );
+        
+        int $isInf = 1;
+        //dont put any influence on scene if there already there
+        //
+        $isInf = na_isOption($infArray,$curInfluence,1);
+        if($isInf == 1){ error("Requires input influence to not already be on skin--"+$skin); }
+        
+        //add influence to geo
+        //
+        for($inf in $infArray )
+            {  skinCluster -e -ug -dr 4 -ps 0 -ns 10 -ai $inf $skin; }
+        
+    }
+    else{ print("Requires influences to add"); }
+}
+
+/**add joint(s) to skin
+@param influences
+@param skin cluster name
+@note
+skin		-- skinCluster1
+useGeometry	-- off
+dropRate	-- 4.0
+weight locking -- on
+weight -- 0
+@post added influences are unheld
+@see na_isOption
+*/
+global proc
+na_addJointInfluence(string $infArray[], string $skin)
+{
+    string $sel[] = `ls -sl`;
+    
+    if(size($infArray) > 0 )
+    {
+        na_assertObjectExist($infArray);
+        na_assertObjectExist({$skin});
+        na_assertTypeInList( $infArray, {"joint"} );
+        
+        string $curInfluence[] = {};
+        $curInfluence = `skinCluster -q -inf $skin`;
+        na_assertSizeGreaterEqualTo( $curInfluence, 1 );
+        
+        
+        //dont put any influence on scene if there already there
+        //
+        int $isInf = 1;
+        $isInf = na_isOption($infArray,$curInfluence,1);
+        if($isInf == 1){ error("Requires input influence to not already be on skin--"+$skin); }
+        
+        //add influence to geo
+        //
+        for($inf in $infArray )
+            {  skinCluster -e  -dr 4 -lw true -wt 0 -ai $inf $skin; }
+        
+        select -r $infArray;
+        na_holdBySelectedInfluence(0);//make sure status of added joints in unheld
+    }
+    else{ print("Requires influences to add"); }
+    
+    select -r $sel;
+}
+
+
+
+
+/**weight 1 on selected component(s) with selected influence
+@pre requires first components selected, then the influence
+requires exactly one influence selected and one or more more components
+@post weight 1 is assigned to every selected component on last element influence
+@note even for held influence this changes its weight
+@note fixed bug not expanding vtx selection
+*/
+global proc
+na_setWeightOneBySelectedComponentAndInfluence()
+{
+    string $object[] = {};
+    $object = `ls -sl`;
+    
+    //need at least a component and an influence selected prior
+    //
+    if(size($object) > 1 ){
+        
+        
+        string $influence[] = {};
+        $influence = {$object[(size($object) - 1)]};
+        string $componentSel[] = {};
+        $componentSel = $object;
+        //the last selection is the influence
+        //
+        stringArrayRemoveAtIndex( (size($componentSel) - 1), $componentSel);
+        
+        na_assertSameSkinClusterByInfluence( $influence );
+        //components share same skin
+        //        
+        select -r $componentSel;
+        string $component[] = `filterExpand -sm 28 -sm 31`;
+        na_assertSameSkinClusterByComponent( $component );
+        //influence and component share same skin
+        //
+        string $cluster[] = {};
+        $cluster = na_getSkinClusterGivenComponent($component[0]);
+        na_assertSizeEqualArg($cluster ,1);
+        
+        string $infCluster[] = {};
+        $infCluster = na_getSkinClusterGivenInfluence($influence[0]);
+        na_assertSizeEqualArg($infCluster ,1);
+        na_assertAllInList( $infCluster, $cluster );
+        
+        
+        //actual weighting
+        //
+        for($vtx in $component)
+        {
+            skinPercent -transformValue $influence[0] 1.0 $cluster[0] $vtx;
+        }
+
+    }
+    else{ print("Requires Component and an Influence Selected in that order"); }
+   
+}
+global proc
+na_setWeightOneBySelectedComponentAndInfluence_unitTest()
+{
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    select -d pCube1 ;
+    select -d;
+    joint -p 0 0 0 ;
+    select -d joint1 ;
+    select -d;
+    joint -p 1 0 0 ;
+
+    select -cl;
+    skinCluster -dr 4.5 joint1 joint2 pCube1;
+    
+    select -r pCube1.vtx[0:1] ;
+    select -tgl joint1 ;
+    na_setWeightOneBySelectedComponentAndInfluence();
+}
+
+
+/**hold weight on selected influences
+@pre selected influences
+@post error if anything selected not an influence
+@param $isHold 1 means hold weight, 0 otherwise
+@bug
+*/
+global proc
+na_holdBySelectedInfluence(int $isHold)
+{
+    
+    string $object[] = {};
+    $object = `ls -sl`;
+    
+    if(size($object) > 0 ){
+        //every selected influence needs to share same skin cluster
+        //
+        na_assertSameSkinClusterByInfluence( $object );  
+        na_setFloatAttribute("liw",$object,$isHold);
+    }
+    else{ print("Requires Influence Selected");}
+    
+}
+
+
+global proc
+na_getSkinClusterGivenInfluence_unitTest()
+{
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    select -d pCube1 ;
+    select -d;
+    joint -p 0 0 0 ;
+    select -d joint1 ;
+    select -d;
+    joint -p 1 0 0 ;
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    move -r -os -wd 3 0 0 ;
+    select -d pCube2 ;
+    select -d;
+    joint -p 3 0 0 ;
+    select -d;
+    joint -p 6 0 0 ;
+    
+    select -cl;
+    skinCluster -dr 4.5 joint1 joint2 pCube1;
+    skinCluster -dr 4.5 joint3 pCube2;
+    
+
+    print(na_getSkinClusterGivenInfluence("joint1"));
+    print("\n");
+    print(na_getSkinClusterGivenInfluence("joint2"));
+    print("\n");
+    print(na_getSkinClusterGivenInfluence("joint3"));
+    print("\n");
+    print(na_getSkinClusterGivenInfluence("joint4"));
+}
+
+
+/**given an influence return its skin cluster only gives first
+*/
+global proc string[]
+na_getSkinClusterGivenInfluence(string $influence)
+{
+    string $result[] = {};
+    string $all[] = {};
+    $all = stringArrayRemoveDuplicates(`listConnections $influence` );   
+    if( size($all) > 0 )
+    {
+        $result = getFirstHasNodeType( $all, "skinCluster");
+    }
+    return $result;
+}
+/**given an influence return its skin cluster(s)
+*/
+global proc string[]
+na_getAllSkinClusterGivenInfluence(string $influence)
+{
+    string $result[] = {};
+    $result = stringArrayRemoveDuplicates(`listConnections -type "skinCluster" $influence`);      
+    return $result;
+}
+
+/**given vertex or nurbs cv return its skin cluster name if it has one
+@param string a vertex name ex: afsf.vtx[5]
+@bug probably a simpler solution that can support selected cvs too
+like find object either poly or surface then get its skin cluster
+*/
+global proc string[]
+na_getSkinClusterGivenComponent(string $_vtx)
+{
+    string $skinClusterName[]={};
+    na_assertObjectExist( {$_vtx} );
+    na_assertTypeInList( {$_vtx}, {"mesh","nurbsSurface"} ); 
+    
+    string $shape[] = `listRelatives -parent $_vtx`;
+    
+    na_assertSizeEqualArg($shape,1);
+    na_assertTypeInList( $shape, {"mesh","nurbsSurface"} );
+    
+    string $object[] = `listRelatives -parent $shape[0]`;
+    na_assertSizeEqualArg($object,1);
+    na_assertTypeInList( $object, {"transform"} );
+    
+    string $skinArg = `findRelatedSkinCluster $object[0]`;
+
+    if( size($skinArg) > 0 ){$skinClusterName = {$skinArg};}
+    
+    return $skinClusterName;
+}
+
+
+
+
+
+/////get names in skin cluster excluding the given argument, get empty array if no other names in skin cluster
+/*
+needs arguments
+
+string array    influence names to remove
+string          skincluster name
+
+*/
+global proc string[]
+na_getNameSkinClusterRemove(string $remove[], string $skinCluster)
+{
+    string $result[];
+    string $namesAllInfluences[] = `skinCluster -q -inf $skinCluster`;
+    
+    string $influence[] = {};
+    
+    if(size($namesAllInfluences) > 0 ){
+        
+        $influence = $namesAllInfluences;
+        if(size($remove) > 0 ){
+            $influence = stringArrayRemove($remove,$namesAllInfluences);
+        }
+        $result = $influence;
+        
+    }
+    return $result;
+}
+
+
+
+
+
+/////given cluster name and vertex selection, return subset of vertex selection that also has cluster name
+/*
+in making user selections in skinning
+theres a chance that multiple skin clusters may be involved
+this make sures a set of vertices all come from the same skin cluster
+
+returning empty means none of vertex has the input argument skincluster name
+*/
+global proc
+string[]
+getVertexWithThisSkinCluster(string $_skinClusterName, string $_vtxArray[])
+{
+    string $result[];
+    string $skinClusterName = $_skinClusterName;
+    string $vtxArray[] = $_vtxArray;
+    
+    int $i=0;
+    
+    //loop vertices
+    for($i=0; $i < size($vtxArray); $i++)
+    {
+        //should we return this vertex
+        string $candidateVertex = $vtxArray[$i];
+        string $skinClusterNameArray[] = na_getSkinClusterGivenComponent($candidateVertex );
+        //vertex has same skin cluster
+        if(  `strcmp $skinClusterNameArray[0] $skinClusterName` == 0 )
+        {
+            //so save it
+            $result[size($result)] = $candidateVertex ; 
+        }
+    }
+    
+    return $result;
+}
+
+
+/**Get skin cluster given vertex,
+it does not give error if cannot find
+@param string $vertex vertex name
+*/
+global proc string[]
+na_getSkinClusterGivenVertex(string $vertex)
+{
+    string $result[]={};
+    
+    na_assertObjectExist({$vertex});
+    
+    string $poly[] = getPolyFromComponent($vertex);
+    na_assertSizeEqualArg($poly,1);
+    
+    string $skinArg = `findRelatedSkinCluster $poly[0]`;
+    //dealing with string reason for greater zero
+    if( size($skinArg) > 0 ){$result = {$skinArg};}
+   
+    return $result;
+}
+/**
+@pre empty scene
+*/
+global proc
+na_getSkinClusterGivenVertex_unitTest()
+{
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    select -d pCube1 ;
+    select -d;
+    joint -p 0 0 0 ;
+    select -d joint1 ;
+    select -d;
+    joint -p 1 0 0 ;
+
+    select -cl;
+    skinCluster -dr 4.5 joint1 joint2 pCube1;
+    
+
+    print( na_getSkinClusterGivenVertex("pCube1.vtx[0]") );
+}
+
+
+

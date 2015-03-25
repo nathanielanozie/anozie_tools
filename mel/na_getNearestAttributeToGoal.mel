@@ -1,0 +1,464 @@
+/**@file na_getNearestAttributeToGoal.mel 
+@brief v1.0.1 Compute attribute value that puts end point close to one goal position. ex:
+used for matching ik foot attributes to fk leg etc.
+@author Nathaniel O. Anozie (ogbonnawork at gmail dot com)
+@bug  not working on production rig
+@note date created: May 9, 2012
+@note How to Install
+@source naMath.mel
+@source naGeneral.mel
+@source na_assertGeneral
+@note Modify at your own risk
+@note -- working on separating configure stuff the details from code
+*/
+
+
+
+/**returns single element float, the value to use setAttr on that gets thing that moves with attribute to the goal object
+@pre everything is on scene
+@bug no error checking, not working in practice
+@param what thing to change, where is it, what range should it use if no min and max, what gets move with each change of attribute, where are we comparing it is stationary, how many iterations to use
+*/
+global proc float[]
+na_getNearestAttributeToGoal(string $attr,string $anim,float $min,float $max,string $attrMovesThisObject,string $goalObject,int $iterations)
+{
+    float $result[] = {};
+
+    //these will be changing on every iteration
+    //surround the returned attribute value
+    //here were initializing to input range for attribute
+    //
+    float $lbound = 0;
+    float $rbound = 1;
+    
+    $lbound = $min;
+    $rbound = $max;
+    
+    //our final returned value will be a midObject
+    float $mid = 0.0;
+    $mid = ($lbound + $rbound)/2;
+    
+    //here were entering our looping
+    //at each iteration we define new bounds for the final returned attribute
+    //and we try to move closer and closer to the final returned attribute
+    //the final returned attribute should one that minimizes
+    //distance from the attrMovesThisObject to the goalObject
+    
+    //begin iterations of algorithm
+    float $bound[] = {};
+    float $endPointAfterAttributeSet[] = {};
+    float $finalEndPointAfterAttributeSet[] = {};
+    float $distPrev[] = {}; //we need these so we can exit algorithm if were not getting closer to goal
+    float $distNow[] = {};
+    int $isClose = 0;
+    
+    int $i=0;
+    float $epsilon = 0.001; //won't start with iterations if this is not met
+    //make it smaller if need more precision, note you would need to increase iterations probaly too
+    
+    //even for rotations were matching attribute values which when changed could change rotation
+    float $goalPoint[] = {};
+    $goalPoint = `xform -q -worldSpace -translation $goalObject`;
+    na_assertFloatSizeEqualArg( $goalPoint, 3 );
+    
+    for( $i = 0; $i < $iterations; $i++ )
+    {
+        $bound = na_getCloserBound($attr,$anim,$mid,$lbound,$rbound,$attrMovesThisObject,$goalPoint);
+        na_assertFloatSizeEqualArg( $bound, 2 );
+        
+        $lbound = $bound[0];
+        $rbound = $bound[1];
+        $mid = ($lbound+$rbound)/2;
+        
+        //to see if what we did helped
+        $endPointAfterAttributeSet = na_getEndWorldPointAfterSetAttribute($mid, $attr, $anim, $attrMovesThisObject );
+        na_assertFloatSizeEqualArg( $endPointAfterAttributeSet, 3 );
+        
+        
+        //no need to continue with iterations if close enough already
+        $isClose = na_isDistanceClose( $endPointAfterAttributeSet, $goalPoint, $epsilon );
+        if($isClose == 1){break;}
+        
+        
+        //print($lbound+",--,"+$rbound+"\n");
+        //print( euclidDistance( $endPointAfterAttributeSet, $goalPoint ) );
+        //print("\n");
+    }
+    
+    $result = {$mid};
+    
+    return $result;
+    
+}
+
+
+
+global proc 
+na_getNearestAttributeToGoal_unitTest_2()
+{
+    select -d;
+    joint -p 0 0 0 ;
+    joint -p 4 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint1;
+    select -cl  ;
+    select -d;
+    joint -p -3.175891 2.431813 0 ;
+    
+    print("the value computed is: ");
+    print( na_getNearestAttributeToGoal("rotateZ","joint1",-360,360,"joint2","joint3", 20 ) );
+    print("\n");
+    
+    
+    print( na_getDistance_nearestAttributeToGoal(-360,"rotateZ", "joint1", "joint2",{-3.175891,2.431813,0} ) );
+print( na_getDistance_nearestAttributeToGoal(-315,"rotateZ", "joint1", "joint2",{-3.175891,2.431813,0} ) );
+print( na_getDistance_nearestAttributeToGoal(-270,"rotateZ", "joint1", "joint2",{-3.175891,2.431813,0} ) );
+print( na_getDistance_nearestAttributeToGoal(-225,"rotateZ", "joint1", "joint2",{-3.175891,2.431813,0} ) );
+print( na_getDistance_nearestAttributeToGoal(-180,"rotateZ", "joint1", "joint2",{-3.175891,2.431813,0} ) );
+
+}
+
+global proc 
+na_getNearestAttributeToGoal_unitTest_1()
+{
+    select -d;
+    joint -p 0 0 0 ;
+    joint -p 4 0 0 ;
+    select -d;
+    select -cl;                 
+    joint -p 0 4 0 ;
+    select -d;
+    select -cl;
+    
+    print("the value computed is: ");
+    print( na_getNearestAttributeToGoal("rotateZ","joint1",-360,360,"joint2","joint3", 20 ) );
+    print("\n");
+}
+
+                               
+
+
+global proc
+na_getFourSplit_unitTest()
+{
+    na_getFourSplit(0,1);
+    // Result: 0 0.25 0.5 0.75 1 // 
+    na_getFourSplit(0,10);
+    // Result: 0 2.5 5 7.5 10 // 
+    na_getFourSplit(-1,10);             
+    // Result: -1 1.75 4.5 7.25 10 // 
+}
+
+/*return interval split into four equal parts
+*/
+global proc float[]
+na_getFourSplit(float $lboundArg, float $rboundArg )
+{
+    float $result[];
+    
+    //allow equal because may have gotten to result and they could equal
+    if($lboundArg >= $rboundArg){error("check range of input");}
+    
+    float $result[] = {};
+    
+    
+    float $leftTemp = $lboundArg;
+    float $midLeftTemp = 0.0;
+    float $midTemp = ($lboundArg + $rboundArg)/2;
+    float $midRightTemp = 0.0;
+    float $rightTemp = $rboundArg;
+    
+    $midLeftTemp = ($leftTemp + $midTemp)/2;
+    $midRightTemp = ($rightTemp + $midTemp)/2;
+     
+
+    $result = {$leftTemp,$midLeftTemp,$midTemp,$midRightTemp,$rightTemp};
+
+    return $result;
+}
+/*return interval split into numSegment equal parts
+*/
+global proc
+na_getIntervalSplit_unitTest()
+{
+    print( na_getIntervalSplit(0,1,5) );
+    print( na_getIntervalSplit(0,1,2) );
+    print( na_getIntervalSplit(0,1,0) );
+    print( na_getIntervalSplit(-360,360,4));
+}
+
+global proc float[]
+na_getIntervalSplit(float $lboundArg, float $rboundArg, int $numSegment )
+{
+    float $result[];
+    
+    //allow equal because may have gotten to result and they could equal
+    if($lboundArg >= $rboundArg){error("check range of input");}
+    
+    float $result[] = {};
+
+    if($numSegment <= 0){error("Requires Number of Segments greate or equal to 1");}
+    float $div = 0.0;
+    $div = ($rboundArg-$lboundArg)/$numSegment ;
+    
+    for($i = 0; $i <= $numSegment; $i++ )
+    {
+        $result[size($result)] = $lboundArg+($i*$div);
+    }
+    return $result;
+}
+
+
+
+global proc 
+na_getBestLeftIndex_nearestAttributeToGoal_unitTest()
+{
+    select -d;
+    joint -p 0 0 0 ;
+    joint -p 4 0 0 ;
+    select -d;
+    select -cl;                 
+    joint -p 0 4 0 ;
+    select -d;
+    select -cl;
+    
+    float $goalPoint[] = {};
+    $goalPoint = `xform -q -worldSpace -translation "joint3"`;
+    
+    print( na_getBestLeftIndex_nearestAttributeToGoal({95.0,125.0,150.0,180.0}, "rotateZ","joint1", "joint2", $goalPoint) );
+    
+    print("right \n");
+    print( na_getBestRightIndex_nearestAttributeToGoal(0,{60,92,95}, "rotateZ","joint1", "joint2", $goalPoint) );
+     
+}
+
+
+/**given a list of numbers that attributes can be set to and a goal world position point give me the best number starting from
+smallest
+*/
+global proc int []
+na_getBestLeftIndex_nearestAttributeToGoal(float $attrValueSegmentMarkers[], string $attr, string $anim, string $attrMovesThisObject, float $goalPoint[])
+{
+    int $result[] = {};
+    
+    //need at least 2 segments
+    na_assertFloatSizeGreaterEqualTo($attrValueSegmentMarkers,2);
+        
+
+    float $endWorldPosition[] = {};
+    $endWorldPosition = na_getEndWorldPointAfterSetAttribute($attrValueSegmentMarkers[0], $attr, $anim, $attrMovesThisObject );
+    
+    
+    float $bestDist[]={};
+    $bestDist = na_getDistance_nearestAttributeToGoal($attrValueSegmentMarkers[0], $attr, $anim, $attrMovesThisObject ,$goalPoint);
+    na_assertFloatSizeEqualArg( $bestDist, 1 );
+    
+    float $dist[] = {};
+    //loop from left to right stop and give index when can't get better left   
+    int $index = 0;
+    
+    int $bestIndex = 0;
+    
+    for($i = 0; $i < size($attrValueSegmentMarkers); $i++ )
+    {
+        $dist = {};
+        
+        $dist = na_getDistance_nearestAttributeToGoal($attrValueSegmentMarkers[$i], $attr, $anim, $attrMovesThisObject ,$goalPoint);
+        
+        //print($i+" ");
+        //print($dist[0]+"\n");
+        na_assertFloatSizeEqualArg(  $dist, 1 );
+        
+         
+        //if($dist[0] > $bestDist[0])
+        if(roundToNearestDecimal($dist[0],3)  < roundToNearestDecimal($bestDist[0],3) ){ 
+            $bestIndex = $i;
+            
+            $bestDist = {$dist[0]};
+        }
+
+    }
+    
+    
+    $result = {0};
+    if( ($bestIndex - 1) >= 0 )
+    {
+    $result = {$bestIndex-1};
+    }
+    
+    
+    //print("found a left index\n");
+    //print($result);
+    //print("--\n");
+    
+    return $result;
+}
+
+
+
+/*
+*/
+global proc float[]
+na_getDistance_nearestAttributeToGoal(float $attrValue, string $attr, string $anim, string $attrMovesThisObject, float $goalPoint[])
+{
+    float $result[]={};
+    
+    float $endWorldPosition[] = {};
+    $endWorldPosition = na_getEndWorldPointAfterSetAttribute($attrValue, $attr, $anim, $attrMovesThisObject );
+    
+    $result= euclidDistance($endWorldPosition, $goalPoint );
+    
+    return $result;
+}
+
+
+
+
+/**given a list of numbers that attributes can be set to and a goal world position point give me the best number starting from
+largest
+*/
+global proc int []
+na_getBestRightIndex_nearestAttributeToGoal(int $leftIndex, float $attrValueSegmentMarkers[], string $attr, string $anim, string $attrMovesThisObject, float $goalPoint[])
+{
+    int $result[] = {};
+    
+    
+    int $n = size($attrValueSegmentMarkers);
+    //need at least 2 segments
+    na_assertFloatSizeGreaterEqualTo($attrValueSegmentMarkers,2);
+    if( $leftIndex < 0 ){error("Error computing LeftBound -- negative index");} 
+    if( $leftIndex >= ($n-1) ){error("Error computing LeftBound -- too large an index");} 
+    
+
+
+    //int $bestIndex = ($n-2);
+    //if($leftIndex == ($n-2)){ $bestIndex = ($n-1); }
+    //else if($leftIndex == ($n-1)){ error("left index at end"); }
+    
+    
+    int $bestIndex = ($n-1);
+    if($leftIndex == 0){ $bestIndex = ($n-2); }
+    
+    if( ($leftIndex > 0) && ( ($leftIndex+1) < $n))
+    {
+        float $bestDist[]={};
+        $bestDist=na_getDistance_nearestAttributeToGoal($attrValueSegmentMarkers[$bestIndex],$attr,$anim,$attrMovesThisObject,$goalPoint);
+        na_assertFloatSizeEqualArg( $bestDist, 1 );
+    
+        float $dist[] = {};
+        for($i = ($leftIndex+1); $i < size($attrValueSegmentMarkers); $i++ )
+        {
+            $dist = {};
+            
+            $dist = na_getDistance_nearestAttributeToGoal($attrValueSegmentMarkers[$i], $attr, $anim, $attrMovesThisObject ,$goalPoint);
+            na_assertFloatSizeEqualArg(  $dist, 1 );
+            
+            
+            //if($dist[0] > $bestDist[0])
+            if(roundToNearestDecimal($dist[0],3)  < roundToNearestDecimal($bestDist[0],3) ){ 
+                $bestIndex = $i;
+                $bestDist = {$dist[0]};
+            }
+            
+        }
+        
+    }
+    if( (($bestIndex+1) < $n) && ($leftIndex != 0) ){ $bestIndex = $bestIndex + 1; }
+  
+    $result = {$bestIndex};
+  
+    //print("found a right index\n");
+    //print($result);
+    //print("--\n");
+    
+    return $result;
+}
+
+
+
+
+
+/**this basically figures out a new left and right bound closer to the goal by setting attr
+@param it needs attribute to set and compare end and goal position, it takes the old boundary and mid, and the end and goal points
+@pre nodes on scene
+@post
+@bug ignoring somethings during cutting there is a cutting bug bounds returned not good
+@bug no checking left bound less right, no checking Objects exists, no checking position length 3, no assert distance calcs
+@see na_min
+*/
+global proc float[]
+na_getCloserBound(string $attr, string $anim, float $midArg, float $lboundArg, float $rboundArg, string $attrMovesThisObject, float $goalPoint[])
+{
+    na_assertFloatSizeEqualArg( $goalPoint, 3 );
+    na_assertObjectExist( {($anim+"."+$attr), $attrMovesThisObject} );
+
+    
+    float $result[] = {};
+    
+    //print("input is\n");
+    //print({$lboundArg,$midArg,$rboundArg});
+    
+    //10 segments that is 11 numbers in increasing order
+    int $numberSegment = 10;
+    int $numberValueToMakeSplit = $numberSegment+1;
+    
+    float $attrMarker[] = {};
+    $attrMarker = na_getIntervalSplit($lboundArg, $rboundArg, $numberSegment);
+    na_assertFloatSizeEqualArg( $attrMarker, $numberValueToMakeSplit );
+    
+
+    //what should be the new left bound
+    //if best left index > best right index give an error and exit
+    //if best left index < best right index use their corresponding segment value at index
+    //if left index == best right use any one of their value and return corresponding segment value at index
+
+    
+    int $bestLeftIndexInFourSegment[] = {};
+    $bestLeftIndexInFourSegment = na_getBestLeftIndex_nearestAttributeToGoal($attrMarker, $attr, $anim, $attrMovesThisObject,$goalPoint);
+    na_assertIntSizeEqualArg( $bestLeftIndexInFourSegment,1);
+        
+    int $bestRightIndexInFourSegment[] = {};
+    $bestRightIndexInFourSegment = na_getBestRightIndex_nearestAttributeToGoal($bestLeftIndexInFourSegment[0],$attrMarker, $attr, $anim, $attrMovesThisObject,$goalPoint);
+    na_assertIntSizeEqualArg( $bestRightIndexInFourSegment,1);
+    
+    
+    if( $bestLeftIndexInFourSegment[0] <= $bestRightIndexInFourSegment[0] ){
+        
+        float $lbound = 0.0;
+        $lbound = $attrMarker[ $bestLeftIndexInFourSegment[0] ];
+        float $rbound = 0.0;
+        $rbound = $attrMarker[ $bestRightIndexInFourSegment[0] ]; 
+        
+        $result = {$lbound,$rbound};
+    }
+    else{ error("Attribute matching requires a left and right bound"); }
+    
+    return $result;
+}
+
+global proc 
+na_getCloserBound_unitTest()
+{
+    select -d;
+    joint -p 0 0 0 ;
+    joint -p 4 0 0 ;
+    select -d;
+    select -cl;
+    joint -p 0 4 0 ;
+    select -d;
+    select -cl;
+    
+    float $goalPoint[] = `xform -q -worldSpace -translation joint3`;
+    
+    print(   na_getCloserBound("rotateZ", "joint1", 0, -225, 45,"joint2", $goalPoint) );
+    
+    print( na_getDistance_nearestAttributeToGoal(-225,"rotateZ", "joint1", "joint2", $goalPoint) );
+    print( na_getDistance_nearestAttributeToGoal(-157.5,"rotateZ", "joint1", "joint2", $goalPoint) );
+    print( na_getDistance_nearestAttributeToGoal(-90,"rotateZ", "joint1", "joint2", $goalPoint) );
+    print( na_getDistance_nearestAttributeToGoal(-22.5,"rotateZ", "joint1", "joint2", $goalPoint) );
+    print( na_getDistance_nearestAttributeToGoal(45,"rotateZ", "joint1", "joint2", $goalPoint) );
+    print( na_getDistance_nearestAttributeToGoal(40,"rotateZ", "joint1", "joint2", $goalPoint) );
+}
+
+
+
+

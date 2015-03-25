@@ -1,0 +1,306 @@
+/**@file na_sdkGeneral.mel v 1.0.1
+@Tools for retrieving set driven key frame information
+@author Nathaniel O. Anozie (ogbonnawork at gmail dot com)
+@note date created: Apr 1 2012
+@note date last modified: May 18 2012
+@see naMath.mel
+@released v 1.0.0
+@note -- fixed bug preinfinity tool for smoothing control animation curves
+first breaks the tangents and frees their weight before it changes inangle
+*@defgroup sdk Set driven Key
+*@{
+*Utilities using Maya's set driven key functions
+*
+*/
+
+
+
+
+/**set driven keys on objects using input frames, values and driver
+@param string $objectArray object
+@param string $downChainAxis ex: X
+@param float list $value set driven key values, first is default
+@param float list $frame set driven key frames, first is default
+@param string $nameFKStretchAttr  animation control's attribute controlling sdk
+@post places driven at 1.0
+*/
+global proc
+na_stretch_drivenKey(string $objectArray[], string $drivenPlusAttrArray[], string $attr, float $valueFactor[] , float $frame[], string $nameFKStretchAttr)
+{
+    float $exitValue = 1.0;//change if you want at exit to not be at 1.0
+    
+    na_stretch_drivenKey_assert($objectArray,$drivenPlusAttrArray,$attr, $valueFactor, $frame, $nameFKStretchAttr);
+    
+    //do set driven keys
+    //
+    string $drivenPlusAttr = "";
+    float $value[] ={};
+    float $defaultLen = 0.0;//might see object jumping if any bugs.
+    string $object = "";
+    
+    for( $i = 0; $i < size($objectArray); $i++ )
+    {
+        $object = $objectArray[$i];
+        $drivenPlusAttr = $drivenPlusAttrArray[$i];
+        
+        //only key what is on scene this allows us to skip stretching of missing geo
+        if(  `objExists $drivenPlusAttr` == 1 ){
+            $defaultLen = `getAttr $drivenPlusAttr`;
+            $value = {$valueFactor[0]*$defaultLen, $valueFactor[1]*1, $valueFactor[2]*$defaultLen};
+            
+            //where driven, frame, values, 
+            //assume driver is same as object will have stretch control, since length controls stretch
+            na_setSDK($drivenPlusAttr,$frame,$value,$object,$nameFKStretchAttr);
+            //so driven attribute is at exit value
+            setAttr ($object+"."+$nameFKStretchAttr) $exitValue;
+            clear($value); 
+        }
+    }
+    
+}
+/**
+*/
+global proc
+na_stretch_drivenKey_assert(string $nodeArray[],string $drivenPlusAttrArray[], string $attr, float $value[] , float $frame[], string $nameFKStretchAttr)
+{
+    for($i = 0; $i < size($nodeArray); $i++ )
+    {
+        $node= $nodeArray[$i];
+        if(`objExists  $node` == 0){ error("Sorry, Cannot find--"+$node); }
+        if(`attributeExists $attr $node` == 0){ error("attribute: "+$attr+" for--"+$node+" not found");}
+        //if(`attributeExists $nameFKStretchAttr $node` == 0){ error("attribute: "+$nameFKStretchAttr+" for--"+$node+" not found");}     
+        if(size($value) != size($frame) ){ error("size mismatch set driven key data"); }
+    }
+}
+
+
+/**make in angle at first index of curve to be equal to out angle this is so we can use MEL's preinfinity command
+@pre
+@post first index in angle changed to equal first index out angle, changes all animation curve to broken tangents
+it does this so as not to change the inangle
+@bug 
+*/
+global proc
+na_setFirstIndexInAngleToOutAngle(string $animCurve[])
+{
+    na_assertObjectExist($animCurve);
+    na_assertTypeInList($animCurve,{"animCurveUA","animCurveUL","animCurveUU"});
+    
+    string $sel[] = `ls -sl`;
+    
+    //prelim make linear and broken tangents so wont change curve angles
+    //
+    if( size($animCurve) > 0 )
+    {
+        selectKey -add -k $animCurve;
+        keyTangent -itt linear -ott linear;
+        keyTangent -edit -weightedTangents true;
+        keyTangent -weightLock off;
+        keyTangent -lock off;
+    }
+    
+    string $curve = "";
+    float $firstFrameOutAngle[]={};
+    
+	for( $i = 0; $i < size($animCurve); $i++ )
+	{
+	    $curve = $animCurve[$i];
+	    
+	    //gets first frame out angle
+	    $firstFrameOutAngle = `keyTangent -index 0 -q -outAngle $curve`;
+	    
+	    //sets the inangle to the out angle at first frame
+	    keyTangent -index 0 -inAngle $firstFrameOutAngle[0] $curve;
+	}
+	
+	select -r $sel;
+}
+
+/**
+@pre clean maya scene
+*/
+global proc
+na_setFirstIndexInAngleToOutAngle_unitTest()
+{
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    circle -c 0 0 0 -nr 0 1 0 -sw 360 -r 1 -d 3 -ut 0 -tol 0.01 -s 8 -ch 1; objectMoveCommand;
+    addAttr -ln "anim"  -at double  |nurbsCircle1;
+    setAttr -e-keyable true |nurbsCircle1.anim;
+    select -r pCube1 ;
+    setDrivenKeyframe -currentDriver nurbsCircle1.anim pCube1.translateX;
+    select -r nurbsCircle1 ;
+    setAttr "nurbsCircle1.anim" 10;
+    select -r pCube1 ;
+    setAttr "pCube1.translateX" 10;
+    setDrivenKeyframe -currentDriver nurbsCircle1.anim pCube1.translateX;
+    setAttr "nurbsCircle1.anim" 0;
+    
+    selectKey -add -k -f 0 -f 10 pCube1_translateX ;
+    keyTangent -itt linear -ott linear;
+
+    na_setFirstIndexInAngleToOutAngle({"pCube1_translateX"});
+    
+}
+
+
+/**sets keys given frames, values and an animator control
+@param string $drivenPlusAttr animator driven control and attribute
+@param string $frame frames to set key
+@param float $value values to set key on
+@param string $anim animation control to be controlling sdk
+@param string $attr animation control's attribute controlling sdk
+@note not checking input
+@note not tested
+*/
+global proc
+na_setSDK(string $drivenPlusAttr, float $frame[], float $value[], string $anim, string $attr)
+{
+    int $n = 0;
+    string $driver = "";
+    
+    //setting some variables
+    $n = size($frame);                  //number of frames
+    $driver = $anim+"."+$attr;          //full animator control with attribute
+    
+    //keying with specified value for animator control input
+    for( $i = 0; $i < $n; $i++ )
+    {
+        setDrivenKeyframe -dv $frame[$i] -v $value[$i] -cd $driver $drivenPlusAttr ;
+    }
+    
+}
+global proc
+na_setSDK_unitTest()
+{
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    polyCone -r 1 -h 2 -sx 8 -sy 1 -sz 0 -ax 0 1 0 -rcp 0 -cuv 3 -ch 1;
+    
+    //so anim curve has keys
+    na_setSDK("pCone1.translateX",{0,3},{2,5}, "pCube1", "translateX");
+    
+    
+    selectKey -clear ;
+    selectKey -add -k pCone1_translateX ;
+    keyTangent -itt linear -ott linear;   
+}
+
+
+
+
+
+
+/**return integer number of sdk frames
+@param string $curve a single animation curve
+@see na_isType()
+@note not checking input
+@return int number keyframes
+*/
+global proc int
+na_getNumberOfSDKFrames(string $curve)
+{
+    int $result = 0;
+    
+    $result = `keyframe -query -keyframeCount $curve`;	
+    
+	return $result;
+}
+
+/**return keyframes for an animation curve
+@param string $curve a single animation curve
+@see na_isType()
+@see na_getNumberOfSDKFrames()
+@note not checking input
+@return float list key frames
+*/
+global proc float[]
+na_getKeysSDK(string $curve)
+{
+    float $result[];
+    int $n = na_getNumberOfSDKFrames($curve);
+    
+    for( $i = 0; $i < $n; $i++ )
+    {
+        $result[size($result)] = eval("getAttr "+$curve+".keyTimeValue["+$i+"].keyTime");
+    }
+    
+    return $result;
+}
+
+/**return key values for an animation curve
+@param string $curve a single animation curve
+@see na_isType()
+@see na_getNumberOfSDKFrames()
+@note not checking input
+@return float list values
+*/
+global proc float[]
+na_getValuesSDK(string $curve)
+{
+    float $result[];
+    int $n = na_getNumberOfSDKFrames($curve);
+    
+    for( $i = 0; $i < $n; $i++ )
+    {
+        $result[size($result)] = eval("getAttr "+$curve+".keyTimeValue["+$i+"].keyValue");
+    }
+    
+    return $result;
+}
+
+
+
+global proc
+na_getNumberOfSDKFrames_unitTest()
+{
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    polyCone -r 1 -h 2 -sx 8 -sy 1 -sz 0 -ax 0 1 0 -rcp 0 -cuv 3 -ch 1;
+    
+    
+    setDrivenKeyframe -currentDriver pCube1.translateX pCone1.translateX;
+    
+    setAttr "pCube1.translateX" 2;
+    setAttr "pCone1.translateX" 2;
+    setDrivenKeyframe -currentDriver pCube1.translateX pCone1.translateX;
+    
+    
+    print(na_getNumberOfSDKFrames("pCone1_translateX"));
+}
+
+global proc
+na_getKeysSDK_unitTest()
+{
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    polyCone -r 1 -h 2 -sx 8 -sy 1 -sz 0 -ax 0 1 0 -rcp 0 -cuv 3 -ch 1;
+    
+    
+    setDrivenKeyframe -currentDriver pCube1.translateX pCone1.translateX;
+    
+    setAttr "pCube1.translateX" 2;
+    setAttr "pCone1.translateX" 2;
+    setDrivenKeyframe -currentDriver pCube1.translateX pCone1.translateX;
+    
+    
+    print(na_getKeysSDK("pCone1_translateX"));
+}
+
+global proc
+na_getValuesSDK_unitTest()
+{
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    polyCone -r 1 -h 2 -sx 8 -sy 1 -sz 0 -ax 0 1 0 -rcp 0 -cuv 3 -ch 1;
+    
+    
+    setDrivenKeyframe -currentDriver pCube1.translateX pCone1.translateX;
+    
+    setAttr "pCube1.translateX" 2;
+    setAttr "pCone1.translateX" 2;
+    setDrivenKeyframe -currentDriver pCube1.translateX pCone1.translateX;
+    
+    
+    print(na_getValuesSDK("pCone1_translateX"));
+}
+
+
+/**
+*@}
+*/

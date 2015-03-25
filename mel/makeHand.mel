@@ -1,0 +1,1039 @@
+//last updated: 07/08/2013 -- fixed hand bug, working on fk option
+
+global proc makeHand( int $isIK )
+{
+    string $ltElbow = "LEFT_ELBOW";
+    string $rtElbow = "RIGHT_ELBOW";
+    string $ltShoulder = "LEFT_SHOULDER";
+    string $rtShoulder = "RIGHT_SHOULDER"; 
+    string $ltWrist = "LEFT_WRIST";
+    string $rtWrist = "RIGHT_WRIST"; 
+    
+    print("[makeHand] making wrist control always !!!\n");
+    makeHand_wristControl($ltWrist, $rtWrist);
+    
+    if($isIK == 1){
+        ik_makeHand(    $ltElbow,
+        $rtElbow,
+        $ltShoulder,
+        $rtShoulder,
+        $ltWrist,
+        $rtWrist);
+    }
+    else{
+        print("Making FK Controls ... \n");
+        eval( "source \"na_fkControl.mel\";" );
+        select -r LEFT_CLAVICLE LEFT_SHOULDER LEFT_ELBOW RIGHT_CLAVICLE RIGHT_SHOULDER RIGHT_ELBOW;
+        string $sel[] = `ls -sl`;
+        for($arg in $sel){ na_fkControl($arg); }
+        print("Arm -- Completed Making FK Controls \n");
+    }
+    
+}
+
+global proc ik_makeHand(    string $ltElbow,
+string $rtElbow,
+string $ltShoulder,
+string $rtShoulder,
+string $ltWrist,
+string $rtWrist)
+{
+    //save current selection
+    string $curSel[] = `ls -sl`;
+    
+    print("COMPUTING PREFERED ANGLE FOR STRAIGHT ARMS...\n");
+    //arm
+    setAttr ($ltElbow+".rotateY") 30;
+    setAttr ($rtElbow+".rotateY") 30;
+    joint -e -spa -ch $ltElbow ;
+    joint -e -spa -ch $rtElbow ;
+    setAttr ($ltElbow+".rotateY") 0;
+    setAttr ($rtElbow+".rotateY") 0;
+    
+    string $LEFT_SHOULDER_WRIST_IK[] = `ikHandle -sj $ltShoulder -ee $ltWrist -p 2 -w .5 -sol ikRPsolver`;
+    rename $LEFT_SHOULDER_WRIST_IK[0] "LT_ARM_IK";
+    string $RIGHT_SHOULDER_WRIST_IK[] = `ikHandle -sj $rtShoulder -ee $rtWrist -p 2 -w .5 -sol ikRPsolver`;
+    rename $RIGHT_SHOULDER_WRIST_IK[0] "RT_ARM_IK";
+    print("FINISHED COMPUTING PREFERED ANGLE FOR STRAIGHT ARMS...\n");
+    
+    
+    //create controller
+    ////find out where to put controls
+    //assumes +z is towards you, in front of character
+    //assumes +y is above you, to top of character
+    
+    float $elbow_con_space_back = 1.0;
+    //get the xyz position for joint so we know where to put animator control using offset
+    float $LEFT_ELBOW_pos[] = `xform -q -ws -t $ltElbow`;
+    float $LEFT_ELBOW_CON_pos[]= {$LEFT_ELBOW_pos[0],$LEFT_ELBOW_pos[1],$LEFT_ELBOW_pos[2]-$elbow_con_space_back};//xyz
+    
+    float $RIGHT_ELBOW_pos[] = `xform -q -ws -t $rtElbow`;
+    float $RIGHT_ELBOW_CON_pos[]= {$RIGHT_ELBOW_pos[0],$RIGHT_ELBOW_pos[1],$RIGHT_ELBOW_pos[2]-$elbow_con_space_back};//xyz
+    
+    
+    
+    
+    
+    //LEFT
+    //draw con 
+    string $elbowCon = cubeIcon(0.5);
+    rename $elbowCon "LEFT_ELBOW_CON";
+    select -r LEFT_ELBOW_CON; 
+    move -r -ls -wd $LEFT_ELBOW_CON_pos[0] $LEFT_ELBOW_CON_pos[1] $LEFT_ELBOW_CON_pos[2];
+    CenterPivot;
+    makeIdentity -apply true -t 1 -r 1 -s 1 -n 0;
+    select -cl;
+    //
+    
+    
+    //RIGHT
+    //draw con 
+    string $elbowCon = cubeIcon(0.5);
+    rename $elbowCon "RIGHT_ELBOW_CON";
+    select -r RIGHT_ELBOW_CON; 
+    move -r -ls -wd $RIGHT_ELBOW_CON_pos[0] $RIGHT_ELBOW_CON_pos[1] $RIGHT_ELBOW_CON_pos[2];
+    CenterPivot;
+    makeIdentity -apply true -t 1 -r 1 -s 1 -n 0;
+    select -cl;
+    //
+    
+    
+    
+    
+    //restore user selection
+    select -r $curSel;
+    
+    
+    //add constraints
+    handControl();
+}
+
+global proc handControl()
+{
+    //makeHand(1.0)
+    
+    
+    //orient constraint  LEFT ELBOW
+    poleVectorConstraint -weight 1 LEFT_ELBOW_CON LT_ARM_IK;
+    //orient constraint  RIGHT ELBOW
+    poleVectorConstraint -weight 1 RIGHT_ELBOW_CON RT_ARM_IK;
+    
+    
+    //point constrain left elbow
+    pointConstraint -mo -weight 1 LEFT_WRIST_CON LT_ARM_IK;
+    //point contsrain right elbow
+    pointConstraint -mo -weight 1 RIGHT_WRIST_CON RT_ARM_IK;
+    
+    
+    //add curl attributes 
+    //curlHand(), spreadHand(), 
+}
+
+
+//make empty wrist animator control
+global proc makeHand_wristControl(string $ltWrist, string $rtWrist){
+    float $LEFT_WRIST_pos[] = `xform -q -ws -t $ltWrist`;
+    float $LEFT_WRIST_CON_pos[]={$LEFT_WRIST_pos[0],$LEFT_WRIST_pos[1],$LEFT_WRIST_pos[2]};//xyz
+    
+    float $RIGHT_WRIST_pos[] = `xform -q -ws -t $rtWrist`;
+    float $RIGHT_WRIST_CON_pos[]={$RIGHT_WRIST_pos[0],$RIGHT_WRIST_pos[1],$RIGHT_WRIST_pos[2]};;//xyz
+    
+    //draw con 
+    string $wristCon = cubeIcon(0.5);
+    rename $wristCon "LEFT_WRIST_CON";
+    select -r LEFT_WRIST_CON; 
+    move -r -ls -wd $LEFT_WRIST_CON_pos[0] $LEFT_WRIST_CON_pos[1] $LEFT_WRIST_CON_pos[2];
+    CenterPivot;
+    makeIdentity -apply true -t 1 -r 1 -s 1 -n 0;
+    select -cl;
+    //    
+    
+    //draw con 
+    string $wristCon = cubeIcon(0.5);
+    rename $wristCon "RIGHT_WRIST_CON";
+    select -r RIGHT_WRIST_CON; 
+    move -r -ls -wd $RIGHT_WRIST_CON_pos[0] $RIGHT_WRIST_CON_pos[1] $RIGHT_WRIST_CON_pos[2];
+    CenterPivot;
+    makeIdentity -apply true -t 1 -r 1 -s 1 -n 0;
+    select -cl;
+    //
+}
+
+
+
+/////get the default sdk values (max,min,default)
+//of form [max min default, max min default, ... , max min default]
+/*
+needs no arguments
+
+assumes user will now what attribute goes with what
+because 0,0,0 could be that there is no sdk data or
+that 0,0,0 are the sdk data
+
+the reason we have entries for all default joints is incase user removes joints
+and we still want to find things quickly
+*/
+global proc float[]
+getDefaultFingerSpreadSDK()
+{
+    //max,min,default
+    float $sdkData[] =
+    {
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        -30,20,0,
+        -25,25,0,
+        -18,20,0,
+        -20,20,0,
+        60,-45,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        -30,20,0,
+        -25,25,0,
+        -18,20,0,
+        -20,20,0,
+        60,-45,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0
+    };
+    
+    return $sdkData;
+}
+
+/////get the hand attribute names for all joints (spread)
+/*
+needs no arguments
+*/
+global proc string[] 
+getDefaultFingerSpreadAttributes()
+{
+    string $attributeData[]; //name gives the attribute name associated with finger
+    $attributeData = {
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "PINKY_L_SPREAD",
+        "INDEX_L_SPREAD",
+        "MIDDLE_L_SPREAD",
+        "RING_L_SPREAD",
+        "THUMB_L_SPREAD",
+        "PINKY_L_SPREAD",
+        "PINKY_L_SPREAD",
+        "NA",
+        "INDEX_L_SPREAD",
+        "INDEX_L_SPREAD",
+        "NA",
+        "MIDDLE_L_SPREAD",
+        "MIDDLE_L_SPREAD",
+        "NA",
+        "RING_L_SPREAD",
+        "RING_L_SPREAD",
+        "NA",
+        "THUMB_L_SPREAD",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "PINKY_R_SPREAD",
+        "INDEX_R_SPREAD",
+        "MIDDLE_R_SPREAD",
+        "RING_R_SPREAD",
+        "THUMB_R_SPREAD",
+        "PINKY_R_SPREAD",
+        "PINKY_R_SPREAD",
+        "NA",
+        "INDEX_R_SPREAD",
+        "INDEX_R_SPREAD",
+        "NA",
+        "MIDDLE_R_SPREAD",
+        "MIDDLE_R_SPREAD",
+        "NA",
+        "RING_R_SPREAD",
+        "RING_R_SPREAD",
+        "NA",
+        "THUMB_R_SPREAD",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA"            
+    };
+    
+    return $attributeData;
+}
+
+
+
+
+//start spread
+/////get mapping bettween what control is responsible for what attributes (attributes)
+/*
+needs no arguments
+*/
+global proc string[]
+getNameAttr_finger_spread()
+{
+    string $handAttribute[];
+    $handAttribute =
+    {
+        "INDEX_L_SPREAD", 
+        "MIDDLE_L_SPREAD",
+        "PINKY_L_SPREAD",
+        "RING_L_SPREAD",
+        "THUMB_L_SPREAD",
+        "INDEX_R_SPREAD",
+        "MIDDLE_R_SPREAD", 
+        "PINKY_R_SPREAD",
+        "RING_R_SPREAD",
+        "THUMB_R_SPREAD"
+    };
+    
+    return $handAttribute;
+}
+
+/////get mapping bettween what control is responsible for what attributes (animator controls)
+/*
+needs no arguments
+length and order matters needs to match order of attribute names
+*/
+global proc string[]
+getControlNamePerAttr_finger_spread()
+{
+    string $controllerForAttribute[];
+    $controllerForAttribute =
+    {
+        "LEFT_WRIST_CON",
+        "LEFT_WRIST_CON",
+        "LEFT_WRIST_CON",
+        "LEFT_WRIST_CON",
+        "LEFT_WRIST_CON",
+        "RIGHT_WRIST_CON",
+        "RIGHT_WRIST_CON",
+        "RIGHT_WRIST_CON",
+        "RIGHT_WRIST_CON",
+        "RIGHT_WRIST_CON"
+    };
+    
+    return $controllerForAttribute;  
+}
+//end spread
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//start curl
+
+
+/////get the default sdk values (max,min,default)
+//of form [max min default, max min default, ... , max min default]
+/*
+needs no arguments
+
+assumes user will now what attribute goes with what
+because 0,0,0 could be that there is no sdk data or
+that 0,0,0 are the sdk data
+
+the reason we have entries for all default joints is incase user removes joints
+and we still want to find things quickly
+*/
+global proc float[]
+getDefaultFingerCurlSDK()
+{
+    //max,min,default
+    float $sdkData[] =
+    {
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        90,-10,0,
+        90,-10,0,
+        90,-10,0,
+        90,-10,0,
+        60,-30,0,
+        100,0,0,
+        50,0,0,
+        0,0,0,
+        100,0,0,
+        50,0,0,
+        0,0,0,
+        100,0,0,
+        50,0,0,
+        0,0,0,
+        100,0,0,
+        50,0,0,
+        0,0,0,
+        100,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        90,-10,0,
+        90,-10,0,
+        90,-10,0,
+        90,-10,0,
+        60,-30,0,
+        100,0,0,
+        50,0,0,
+        0,0,0,
+        100,0,0,
+        50,0,0,
+        0,0,0,
+        100,0,0,
+        50,0,0,
+        0,0,0,
+        100,0,0,
+        50,0,0,
+        0,0,0,
+        100,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0,
+        0,0,0
+    };
+    
+    return $sdkData;
+}
+/////get the hand attribute names for all joints (curl)
+/*
+needs no arguments
+*/
+global proc string[] 
+getDefaultFingerCurlAttributes()
+{
+    string $attributeData[]; //name gives the attribute name associated with finger
+    $attributeData = {
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "PINKY_L_CURL",
+        "INDEX_L_CURL",
+        "MIDDLE_L_CURL",
+        "RING_L_CURL",
+        "THUMB_L_CURL",
+        "PINKY_L_CURL",
+        "PINKY_L_CURL",
+        "NA",
+        "INDEX_L_CURL",
+        "INDEX_L_CURL",
+        "NA",
+        "MIDDLE_L_CURL",
+        "MIDDLE_L_CURL",
+        "NA",
+        "RING_L_CURL",
+        "RING_L_CURL",
+        "NA",
+        "THUMB_L_CURL",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "PINKY_R_CURL",
+        "INDEX_R_CURL",
+        "MIDDLE_R_CURL",
+        "RING_R_CURL",
+        "THUMB_R_CURL",
+        "PINKY_R_CURL",
+        "PINKY_R_CURL",
+        "NA",
+        "INDEX_R_CURL",
+        "INDEX_R_CURL",
+        "NA",
+        "MIDDLE_R_CURL",
+        "MIDDLE_R_CURL",
+        "NA",
+        "RING_R_CURL",
+        "RING_R_CURL",
+        "NA",
+        "THUMB_R_CURL",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA",
+        "NA"           
+    };
+    
+    
+    return $attributeData;
+}
+
+/////get mapping bettween what control is responsible for what attributes (attributes)
+/*
+needs no arguments
+*/
+global proc string[]
+getNameAttr_finger_curl()
+{
+    string $handAttribute[];
+    $handAttribute =
+    {
+        "INDEX_L_CURL", 
+        "MIDDLE_L_CURL",
+        "PINKY_L_CURL",
+        "RING_L_CURL",
+        "THUMB_L_CURL",
+        "INDEX_R_CURL",
+        "MIDDLE_R_CURL", 
+        "PINKY_R_CURL",
+        "RING_R_CURL",
+        "THUMB_R_CURL"
+    };
+    
+    return $handAttribute;
+}
+
+
+/////get mapping bettween what control is responsible for what attributes (animator controls)
+/*
+needs no arguments
+length and order matters needs to match order of attribute names
+*/
+global proc string[]
+getControlNamePerAttr_finger_curl()
+{
+    string $controllerForAttribute[];
+    $controllerForAttribute =
+    {
+        "LEFT_WRIST_CON",
+        "LEFT_WRIST_CON",
+        "LEFT_WRIST_CON",
+        "LEFT_WRIST_CON",
+        "LEFT_WRIST_CON",
+        "RIGHT_WRIST_CON",
+        "RIGHT_WRIST_CON",
+        "RIGHT_WRIST_CON",
+        "RIGHT_WRIST_CON",
+        "RIGHT_WRIST_CON"
+    };
+    
+    return $controllerForAttribute;  
+}
+
+
+
+//end curl
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*
+//length shoulder to elbow
+//allow palm to finger root
+
+global proc makeHand(float $user_len_shoulder_elbow, float $user_palm_finger_root)
+{
+
+// z towards you, x to the right, y up, positive directions
+
+
+//allow palm to finger root
+float $palm_pinky= $user_palm_finger_root;
+//float $palm_pinky= 0.5;
+float $thumb_pos = 0.5;
+float $pinky_ring_space = 0.2;
+float $ring_middle_space = 0.4;
+float $middle_index_space= 0.3;
+float $index_thumb_space= 0.5;
+
+//control rotation of fingers
+float $rotation_pinky =20;
+float $rotation_index= 2;
+float $rotation_middle= 0;
+float $rotation_ring= 4;
+float $rotation_thumb= -20;
+
+
+float $wrist_palm = 0.5;
+
+
+
+//how long shoulder to elbow
+float $len_shoulder_elbow = $user_len_shoulder_elbow;
+//float $len_shoulder_elbow = 2.0;
+float $len_elbow_wrist= 2.0;
+
+
+float $mirrorx = -4;
+float $xpos_clavicle= ($mirrorx)*(-1);
+
+
+//position
+float $pos_shoulder = 1.0+$xpos_clavicle;
+
+//z towards you, x to the right, y is up
+//clavicle
+//shoulder
+//elbow
+//wrist
+//palm
+//pinky ,1,2,end
+//ring  ,1,2,end
+//middle ,1,2,end
+//index ,1,2,end
+//thumb  1,end
+
+
+
+
+//put in JOINT ORIENTATION !!!
+
+
+//MAKE THE ARM
+//CLAVICLE
+//SHOULDER
+//ELBOW
+//WRIST
+//PALM
+
+float $x_elbow = ($pos_shoulder+$len_shoulder_elbow)+$xpos_clavicle;
+float $y_elbow = 0.0;
+float $z_elbow = -0.5;
+
+float $x_wrist = (($pos_shoulder+$len_shoulder_elbow)+$len_elbow_wrist)+$xpos_clavicle;
+float $y_wrist= 0.0;
+float $z_wrist= 0.0;
+
+float $x_palm = $x_wrist+$wrist_palm+$xpos_clavicle;
+
+
+//how long the fingers are
+float $len_pinky_root_1 = 1.0;
+float $len_pinky_1_2 = 1.0;
+//position
+float $pos_pinky_root = $x_palm+$palm_pinky;
+
+
+
+
+
+float $lx[]={$xpos_clavicle,$pos_shoulder,$x_elbow,$x_wrist,$x_palm};
+float $ly[]= {0.0,0.0,$y_elbow,$y_wrist,0.0};
+float $lz[] ={1.0,0.0,$z_elbow,$z_wrist,0.0};
+string $LEFT_CLAVICLE =` joint -p $lx[0] $ly[0] $lz[0] `;
+string $LEFT_SHOULDER =` joint -p $lx[1] $ly[1] $lz[1] `;
+string $LEFT_ELBOW =` joint -p $lx[2] $ly[2] $lz[2] `;
+string $LEFT_WRIST =` joint -p $lx[3] $ly[3] $lz[3] `;
+string $LEFT_PALM =` joint -p $lx[4] $ly[4] $lz[4] `;
+
+
+
+//MAKE THE HAND
+//fingers z space added from thumb
+
+
+//joint 
+select -cl;
+float $hdx4[]={$pos_pinky_root,($pos_pinky_root+$len_pinky_root_1),(($pos_pinky_root+$len_pinky_root_1)+$len_pinky_1_2)};
+float $hdy4[]={0.0,0.0,0.0};
+float $hdz4[]={$thumb_pos,$thumb_pos,$thumb_pos};
+
+string $THUMB_LEFT = ` joint -p $hdx4[0] $hdy4[0] $hdz4[0] `;
+string $Thumb_1_LEFT = ` joint -p $hdx4[1] $hdy4[1] $hdz4[1] `;
+string $Thumb_end_LEFT = ` joint -p $hdx4[2] $hdy4[2] $hdz4[2] `;
+
+//joint 
+select -cl;
+float $hdx1[]={$pos_pinky_root,($pos_pinky_root+$len_pinky_root_1),(($pos_pinky_root+$len_pinky_root_1)+$len_pinky_1_2),
+(($pos_pinky_root+$len_pinky_root_1)+$len_pinky_1_2+0.5)};
+float $hdy1[]={0.0,0.0,0.0,0.0};
+float $hdz1[]={$thumb_pos-$index_thumb_space,$thumb_pos-$index_thumb_space,$thumb_pos-$index_thumb_space,$thumb_pos-$index_thumb_space};
+
+string $INDEX_LEFT = ` joint -p $hdx1[0] $hdy1[0] $hdz1[0] `;
+string $Index_1_LEFT = ` joint -p $hdx1[1] $hdy1[1] $hdz1[1] `;
+string $Index_2_LEFT = ` joint -p $hdx1[2] $hdy1[2] $hdz1[2] `;
+string $Index_end_LEFT = ` joint -p $hdx1[3] $hdy1[3] $hdz1[3] `;
+
+//joint 
+select -cl;
+float $hdx2[]={$pos_pinky_root,($pos_pinky_root+$len_pinky_root_1),(($pos_pinky_root+$len_pinky_root_1)+$len_pinky_1_2),
+(($pos_pinky_root+$len_pinky_root_1)+$len_pinky_1_2+0.5)};
+float $hdy2[]={0.0,0.0,0.0,0.0};
+float $hdz2[]={$thumb_pos-$index_thumb_space-$middle_index_space,
+$thumb_pos-$index_thumb_space-$middle_index_space,
+$thumb_pos-$index_thumb_space-$middle_index_space,
+$thumb_pos-$index_thumb_space-$middle_index_space};
+
+string $MIDDLE_LEFT = ` joint -p $hdx2[0] $hdy2[0] $hdz2[0] `;
+string $Middle_1_LEFT = ` joint -p $hdx2[1] $hdy2[1] $hdz2[1] `;
+string $Middle_2_LEFT = ` joint -p $hdx2[2] $hdy2[2] $hdz2[2] `;
+string $Middle_end_LEFT = ` joint -p $hdx2[3] $hdy2[3] $hdz2[3] `;
+
+//joint 
+select -cl;
+float $hdx3[]={$pos_pinky_root,($pos_pinky_root+$len_pinky_root_1),(($pos_pinky_root+$len_pinky_root_1)+$len_pinky_1_2),
+(($pos_pinky_root+$len_pinky_root_1)+$len_pinky_1_2+0.5)};
+float $hdy3[]={0.0,0.0,0.0,0.0};
+float $hdz3[]={$thumb_pos-$index_thumb_space-$middle_index_space-$ring_middle_space,
+$thumb_pos-$index_thumb_space-$middle_index_space-$ring_middle_space,
+$thumb_pos-$index_thumb_space-$middle_index_space-$ring_middle_space,
+$thumb_pos-$index_thumb_space-$middle_index_space-$ring_middle_space};
+
+string $RING_LEFT = ` joint -p $hdx3[0] $hdy3[0] $hdz3[0] `;
+string $Ring_1_LEFT = ` joint -p $hdx3[1] $hdy3[1] $hdz3[1] `;
+string $Ring_2_LEFT = ` joint -p $hdx3[2] $hdy3[2] $hdz3[2] `;
+string $Ring_end_LEFT = ` joint -p $hdx3[3] $hdy3[3] $hdz3[3] `;
+
+//joint 
+select -cl;
+float $hdx[]={$pos_pinky_root,($pos_pinky_root+$len_pinky_root_1),(($pos_pinky_root+$len_pinky_root_1)+$len_pinky_1_2),
+(($pos_pinky_root+$len_pinky_root_1)+$len_pinky_1_2+0.5)};
+float $hdy[]={0.0,0.0,0.0,0.0};
+float $hdz[]={$thumb_pos-$index_thumb_space-$middle_index_space-$ring_middle_space-$pinky_ring_space,
+$thumb_pos-$index_thumb_space-$middle_index_space-$ring_middle_space-$pinky_ring_space,
+$thumb_pos-$index_thumb_space-$middle_index_space-$ring_middle_space-$pinky_ring_space,
+$thumb_pos-$index_thumb_space-$middle_index_space-$ring_middle_space-$pinky_ring_space};
+
+string $PINKY_LEFT = ` joint -p $hdx[0] $hdy[0] $hdz[0] `;
+string $Pinky_1_LEFT = ` joint -p $hdx[1] $hdy[1] $hdz[1] `;
+string $Pinky_2_LEFT = ` joint -p $hdx[2] $hdy[2] $hdz[2] `;
+string $Pinky_end_LEFT = ` joint -p $hdx[3] $hdy[3] $hdz[3] `;
+
+
+
+
+
+
+
+
+
+//rotate fingers
+rename $PINKY_LEFT "PINKY_LEFT";
+rename $INDEX_LEFT "INDEX_LEFT";
+rename $MIDDLE_LEFT "MIDDLE_LEFT";
+rename $RING_LEFT "RING_LEFT";
+rename $THUMB_LEFT "THUMB_LEFT";
+
+rename $Pinky_1_LEFT "Pinky_1_LEFT"; 
+rename $Pinky_2_LEFT "Pinky_2_LEFT";
+rename $Pinky_end_LEFT "Pinky_end_LEFT";
+rename $Index_1_LEFT "Index_1_LEFT";
+rename $Index_2_LEFT "Index_2_LEFT";
+rename $Index_end_LEFT "Index_end_LEFT";
+rename $Middle_1_LEFT "Middle_1_LEFT";
+rename $Middle_2_LEFT "Middle_2_LEFT";
+rename $Middle_end_LEFT "Middle_end_LEFT";
+rename $Ring_1_LEFT "Ring_1_LEFT";
+rename $Ring_2_LEFT "Ring_2_LEFT";
+rename $Ring_end_LEFT "Ring_end_LEFT";
+rename $Thumb_1_LEFT "Thumb_1_LEFT";
+rename $Thumb_end_LEFT "Thumb_end_LEFT";
+rename $LEFT_CLAVICLE "LEFT_CLAVICLE";
+rename $LEFT_SHOULDER "LEFT_SHOULDER";
+rename $LEFT_ELBOW "LEFT_ELBOW";
+rename $LEFT_WRIST "LEFT_WRIST";
+rename $LEFT_PALM "LEFT_PALM";
+
+
+//parent fingers to palm
+parent PINKY_LEFT INDEX_LEFT MIDDLE_LEFT RING_LEFT THUMB_LEFT LEFT_PALM;
+
+setAttr "PINKY_LEFT.jointOrientY" $rotation_pinky $PINKY_LEFT;
+setAttr "INDEX_LEFT.jointOrientY" $rotation_index $INDEX_LEFT;
+setAttr "MIDDLE_LEFT.jointOrientY" $rotation_middle $MIDDLE_LEFT;
+setAttr "RING_LEFT.jointOrientY" $rotation_ring $RING_LEFT;
+setAttr "THUMB_LEFT.jointOrientY" $rotation_thumb $THUMB_LEFT;
+
+
+
+
+
+
+//orient LEFT CLAVICLE SHOULDER ELBOW
+select -cl  ;
+select -r LEFT_CLAVICLE ;
+select -tgl LEFT_SHOULDER ;
+select -tgl LEFT_ELBOW ;
+joint -e -oj xzy -secondaryAxisOrient ydown -zso;
+select -cl;
+
+
+//orient LEFT THUMB THUMB_1
+select -cl  ;
+select -r Thumb_1_LEFT ;
+select -tgl THUMB_LEFT ;
+joint -e -oj xzy -secondaryAxisOrient yup -zso;
+select -cl;
+
+//orient non ends non thumb LEFT
+select -cl  ;
+select -r PINKY_LEFT ;
+select -tgl Pinky_1_LEFT ;
+select -tgl Pinky_2_LEFT ;
+select -tgl INDEX_LEFT ;
+select -tgl Index_1_LEFT ;
+select -tgl Index_2_LEFT ;
+select -tgl MIDDLE_LEFT ;
+select -tgl Middle_1_LEFT ;
+select -tgl Middle_2_LEFT ;
+select -tgl RING_LEFT ;
+select -tgl Ring_1_LEFT ;
+select -tgl Ring_2_LEFT ;
+joint -e -oj xyz -secondaryAxisOrient ydown -zso;
+select -cl  ;
+
+
+//mirror joint and place controllers
+
+
+
+select -cl;
+select -r LEFT_CLAVICLE;
+mirrorJoint -mirrorYZ -mirrorBehavior -searchReplace "LEFT" "RIGHT";
+select -cl;
+select -r RIGHT_CLAVICLE; //position mirrored copy
+move -r -ls -wd 0 0 0;
+select -cl;
+
+
+
+
+//elbow con gets position of the elbow
+//position animation controls
+float $elbow_con_space_back = 1.0;
+
+float $LEFT_ELBOW_CON_pos[]= {$x_elbow,$y_elbow,$z_elbow-$elbow_con_space_back};//xyz
+float $RIGHT_ELBOW_CON_pos[]= {$mirrorx-$x_elbow,$y_elbow,$z_elbow-$elbow_con_space_back};//xyz
+
+float $LEFT_WRIST_CON_pos[]={$x_wrist,$y_wrist,$z_wrist};//xyz
+float $RIGHT_WRIST_CON_pos[]={$mirrorx-$x_wrist,$y_wrist,$z_wrist};;//xyz
+
+
+//left elbow con
+cubeIcon(1.0);
+string $elbowCon = "cube";
+rename $elbowCon "LEFT_ELBOW_CON";
+//position
+select -cl;
+select -r LEFT_ELBOW_CON; 
+move -r -ls -wd $LEFT_ELBOW_CON_pos[0] $LEFT_ELBOW_CON_pos[1] $LEFT_ELBOW_CON_pos[2];
+CenterPivot;
+makeIdentity -apply true -t 1 -r 1 -s 1 -n 0;
+select -cl;
+//
+
+//left wrist con
+cubeIcon(1.0);
+string $wristCon = "cube";
+rename $wristCon "LEFT_WRIST_CON";
+//position
+select -cl;
+select -r LEFT_WRIST_CON; 
+move -r -ls -wd $LEFT_WRIST_CON_pos[0] $LEFT_WRIST_CON_pos[1] $LEFT_WRIST_CON_pos[2];
+CenterPivot;
+makeIdentity -apply true -t 1 -r 1 -s 1 -n 0;
+select -cl;
+//
+
+
+//RIGHT
+// elbow con
+cubeIcon(1.0);
+string $elbowCon = "cube";
+rename $elbowCon "RIGHT_ELBOW_CON";
+//position
+select -cl;
+select -r RIGHT_ELBOW_CON; 
+move -r -ls -wd $RIGHT_ELBOW_CON_pos[0] $RIGHT_ELBOW_CON_pos[1] $RIGHT_ELBOW_CON_pos[2];
+CenterPivot;
+makeIdentity -apply true -t 1 -r 1 -s 1 -n 0;
+select -cl;
+//
+
+// wrist con
+cubeIcon(1.0);
+string $wristCon = "cube";
+rename $wristCon "RIGHT_WRIST_CON";
+//position
+select -cl;
+select -r RIGHT_WRIST_CON; 
+move -r -ls -wd $RIGHT_WRIST_CON_pos[0] $RIGHT_WRIST_CON_pos[1] $RIGHT_WRIST_CON_pos[2];
+CenterPivot;
+makeIdentity -apply true -t 1 -r 1 -s 1 -n 0;
+select -cl;
+//
+
+
+
+
+
+
+
+//left and right ik schouder to wrist 
+//create ik handle
+string $LEFT_SHOULDER_WRIST_IK[] = `ikHandle -sj LEFT_SHOULDER -ee LEFT_WRIST -p 2 -w .5 -sol ikRPsolver`;
+string $RIGHT_SHOULDER_WRIST_IK[] = `ikHandle -sj RIGHT_SHOULDER -ee RIGHT_WRIST -p 2 -w .5 -sol ikRPsolver`;
+rename $LEFT_SHOULDER_WRIST_IK[0] "LT_ARM_IK";
+rename $RIGHT_SHOULDER_WRIST_IK[0] "RT_ARM_IK";
+
+
+
+
+
+}
+
+*/
+

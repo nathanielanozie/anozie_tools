@@ -1,0 +1,520 @@
+/**@file na_segment.mel v1.0.1 Auto creation of joints, most tools ignore the local rotation axis factor.
+*@author Nathaniel O. Anozie (ogbonnawork at gmail dot com)
+*@note date created: March 20, 2012
+*@note -- made auto joints non parented
+*@note Modify at your own risk
+*d
+*@defgroup jointDraw Joint Drawing
+*@{
+*Techniques to build hierarchies for things like arm,legs,torso,tail for bipeds,quadpeds etc.
+*
+*Example Applications: Make the torso have 5 segments, or make an arm with 2 segments etc
+The idea of using halfway child joints and value of joint draw tools Inspired by Jason Schleifer's Animator Friendly Rigging.
+*/
+
+//updated 04-24-2014 nate --- added orientation support if selected is a transform or joint
+//updated 06-19-2013 nate --- added lattice point support
+//updated 06-12-2013 nate --- added create circle at selected
+
+
+
+/**Insert number of segments between specified start and end joint
+@param int $numSegments     -- number segments
+@param string $startJoint -- the start joint
+@param string $endJoint -- the end joint
+@parma string $prefix -- prefix to use on all created joints ex: arm yield arm_joint1_#_joint ...
+@note a possible solution is to put a user prefix in front which can easily be changed each tim
+*/
+global proc 
+na_segment(int $numSegments, string $startJoint, string $endJoint, string $prefix)
+{    
+    
+    if( (`objExists $startJoint` == 0) || (`objExists $endJoint` == 0) ){error("cannot find input on scene");}
+    if( na_isNodeBetweenSameHierarchy($startJoint,$endJoint) == 1 ){error("expecting no joints in between where we add segments");} 
+    
+    //get insert points
+    float $insertPoints[] = {};
+    
+    $insertPoints = na_getEvenSpacedPosFromStartAndEndComponent($numSegments,$startJoint,$endJoint);
+    
+    //use input to chain and put new joints at insert points
+    na_insertJointAtPoints($startJoint,$insertPoints,$prefix);
+}
+
+
+
+/**Insert joint and return name of inserted joint
+*/
+proc string 
+na_insertJointAtPointsHelper(int $i, string $startArg, float $insertPoints[], string $jointName)
+{
+    //for naming of new joints, ex: oldName_#_joint, 1 is first inserted joint
+    string $prefix = "";
+    string $suffix = "";
+    string $name;
+    string $start = "";
+    string $newTempName = "";
+    float $radius = 1.0;
+    float $pos[]={};
+    
+    
+    $start = $startArg; //begin from argument
+    $radius = `getAttr ($start+".radius")`;
+    $name = $jointName; //changes during loop so we have new names
+    $pos = {$insertPoints[($i*3+0)], $insertPoints[($i*3+1)], $insertPoints[($i*3+2)] };//ex: 3.0,5,2.0 a world position
+    $newTempName = `insertJoint $start`; //i could not find how to rename on the command so we do it next
+    rename $newTempName $name;
+    joint -e -co -p $pos[0] $pos[1] $pos[2] $name; //move it in place
+    setAttr ($name+".radius") $radius;
+    
+    return $name;
+}
+
+/**Insert joint at specified world positions starting from given joint
+@param $joint -- joint
+@param $insertPoints -- world positions each 3 elements in order x then y then z, each trio comes after next trio
+@param $prefix -- for newly created joints
+*/
+global proc
+na_insertJointAtPoints(string $joint, float $insertPoints[], string $prefix)
+{   
+    
+    int $status = 0;
+    $status = na_insertJointAtPoints_ErrorCheck($joint,$insertPoints);
+    string $sel[] = `ls -sl`;
+    int $n = (size($insertPoints))/3;
+    
+    select -cl;
+    
+    string $new = "";
+    string $jointName = "";
+    
+    $jointName = $prefix+"_"+$joint+"_"+1+"_"+"joint";
+    
+    $new = na_insertJointAtPointsHelper(0,$joint,$insertPoints,$jointName);
+    
+    //match rotate orders
+    int $parentRotateOrder = `getAttr ($joint+".rotateOrder")`;
+    setAttr ($new+".rotateOrder") $parentRotateOrder;
+    
+    for($i=1; $i < $n; $i++)
+    {
+        $jointName = $prefix+"_"+$joint+"_"+($i+1)+"_"+"joint";
+        $new = na_insertJointAtPointsHelper($i,$new,$insertPoints,$jointName);
+        
+        //match rotate orders
+        setAttr ($new+".rotateOrder") $parentRotateOrder;
+    }
+    
+    select -r $sel;
+}
+
+
+
+/**return 1 if insert joint at specified world positions starting from given joint can use input
+*/
+global proc int
+na_insertJointAtPoints_ErrorCheck(string $joint, float $insertPoints[])
+{
+    int $status = 0;
+    
+    //do things exist
+    if(  `objExists $joint` == 0 ){error("cannot find: "+$joint);}
+    
+    //are we dealing with a position array
+    int $isPosition = 0;
+    $isPosition = isDivisibleByThis( size($insertPoints),3);
+    
+    //is object a joint
+    int $isJoint = 0;
+    $isJoint = na_isType($joint,"joint");
+    
+    if( ($isPosition == 0) || ($isJoint == 0) ){error("skipping check input");};
+    
+    return $status;
+}
+
+
+
+
+
+
+
+
+/**Draw a joint halfway inbetween two input joints and name them with suffix
+@note halfway joint should get same local rotation axis, and rotate order as start joint
+@see na_selectJointsInHierarchySubset
+@see na_getEvenSpacedPosFromStartAndEndComponent
+*/
+global proc
+na_insertHalfWayJoint(string $startJoint, string $endJoint, string $suffix)
+{
+    string $sel[] = `ls -sl`;
+    
+    if( (`objExists $startJoint` == 0) || (`objExists $endJoint` == 0) ){error("cannot find input on scene\n");}
+    
+    //assume input same hierarchy
+    string $jointArray[] = {};
+    $jointArray = na_selectJointsInHierarchySubset($startJoint,$endJoint);
+    //need 2 or more joints in hierarchy
+    if(size($jointArray) < 2){ error("expecting two or more joints for computations\n");}
+
+    print("[na_insertHalfWayJoint] Completed na_selectJointsInHierarchySubset ...\n");
+    
+    //use this and next joint to compute midpoint between them (world space)
+    float $midPoint[] = {};
+    string $jointName="";
+    for($i = 0; $i < (size($jointArray)-1); $i++)
+    {
+        print("[na_insertHalfWayJoint] Computing Midpoint for --->"+$jointArray[$i]+"...\n");
+        $midPoint = na_getEvenSpacedPosFromStartAndEndComponent(2,$jointArray[$i],$jointArray[$i+1]);
+        
+        if(size($midPoint)==3){
+            //make a new name that has a number with it
+            //it may be nice having its name according to its parent
+            //
+            $jointName = ($jointArray[$i])+"_"+$i+"_"+$suffix;
+            
+            //create a new joint for every saved mid world position
+            //
+            select -cl;
+            joint -p $midPoint[0] $midPoint[1] $midPoint[2] -n $jointName;
+            
+            //parent new joint to appropriate input joint
+            //
+            na_parent({$jointName},{$jointArray[$i]} );
+        }
+        else{print("skipping error midPoint calculation\n");}
+        
+        clear($midPoint);
+    }
+    
+    
+    select -r $sel;
+}
+
+/**
+@pre expects empty scene
+*/
+global proc
+na_insertHalfWayJoint_unitTest_1()
+{
+    select -d;
+    joint -p 0 0 0 ;
+    joint -p 11 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint1;
+    select -d joint1 ;
+    insertJoint joint1;
+    joint -e -co -p 1.27886 0 0 joint3;
+    select -cl  ;
+    insertJoint joint3;
+    joint -e -co -p 7.33112 0 0 joint4;
+    
+    print( na_insertHalfWayJoint("joint1","joint2","halfWay_joint") );
+}
+
+/**
+@pre expects empty scene
+*/
+global proc
+na_insertHalfWayJoint_unitTest_2()
+{
+    
+    joint -p 0 0 0 ;
+    joint -p 3 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint1;
+    
+    print( na_insertHalfWayJoint("joint1","joint2","halfWay_joint") );
+}
+
+
+
+
+
+
+
+/**
+*@}
+*/
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/**Returns 0 if there are no joints in between two joints of same hierarchy
+@param string $startNode -- start Node
+@param string $endNode -- end Node
+@result 0 if no Nodes in between, 1 otherwise
+@note otherwise is anything other than next child is not end Node
+@note it may be nice to 
+*/
+global proc int
+na_isNodeBetweenSameHierarchy( string $startNode, string $endNode)
+{
+    string $sel[] = `ls -sl`;
+    int $result = 1;
+    
+    //returns 0 if there are no Nodes in between two Nodes of same hierarchy
+    //found one joint node child
+    if( size( `listRelatives -type "joint" -children $startNode` ) == 1 ){
+        select -r $startNode;
+        string $next[] = `pickWalk -direction down`;
+        if(`strcmp $next[0] $endNode` == 0){$result = 0;}
+        else{ print("found an inbetween node"); }
+    }
+    else{ print("found either multiple or no joint node children") ;}
+    select -r $sel;
+    return $result;
+}
+
+
+
+/**Get evenly spaced world positions given a number of segments and start and end world position
+@param int $numSegments     -- number segments
+@param string $startNode -- the start node ex: a joint, or null or cv ...
+@param string $endNode -- the end node
+@pre assumes nodes exist on scene
+*/
+global proc float[]
+na_getEvenSpacedPosFromStartAndEndComponent(int $numSegments, string $startNode, string $endNode)
+{    
+    string $sel[] = `ls -sl`;
+    
+    float $result[] = {};
+    float $startPos[] = {};
+    float $endPos[] = {};
+    int $num_cv = 0;
+    string $curveName = "";
+    
+    $startPos = getComponentWorldPosition({$startNode});
+    $endPos = getComponentWorldPosition({$endNode});
+    
+    //make a helper curve to give us evenly spaced positions
+    //this way we don't need to deal with axis stuff
+    $curveName = "naTempCurve";
+    na_drawCurveBySegment($numSegments, $curveName, $startPos, $endPos);
+    
+    int $num_cvArray[] ={};
+    $num_cvArray = na_getNumberCurveCV($curveName);
+    if(size($num_cvArray)==0){error("error computing even spacing");}
+    $num_cv = $num_cvArray[0];
+    
+    //i ran into 5 cvs in curve instead of 3 when i rebuild with three segments
+    //this is a small work around
+    if($numSegments == 2){
+        $result = getComponentWorldPosition( {($curveName+".cv["+2+"]")} );
+    }
+    else{
+        
+        //after excluding start, and end cv, are there any other cvs of helper curve
+        if($num_cv > 2)
+        {
+            //select all but first and last cv
+            select -r ($curveName+".cv["+1+":"+($num_cv-2)+"]");
+            //expand selection
+            string $cvArray[] = `filterExpand  -ex true -sm 28`;
+            ///save the evenly spaced positions
+            $result = getComponentWorldPosition($cvArray);
+        }
+    }
+    
+    delete $curveName;
+    
+    //return selection
+    select -r $sel;
+    
+    return $result;
+}
+
+
+/**Draw a curve using specified number of segments, and start and end position
+@param int $numSegments     -- number segments
+@param string $curveName    -- curve name
+@param float $startPos[]    -- 3 elements for world position start curve
+@param float $endPos[]      -- 3 elements for world position end curve
+*/
+global proc na_drawCurveBySegment(int $numSegments, string $curveName, float $startPos[], float $endPos[])
+{
+    if( (size($startPos)==3) && (size($endPos)==3) && ($numSegments > 0) ){
+        curve -d 1 -p $startPos[0] $startPos[1] $startPos[2] -p $endPos[0] $endPos[1] $endPos[2] -k 0 -k 1 -n $curveName;
+        // change curve to specified number of segments
+        rebuildCurve -ch 0 -rpo 1 -rt 0 -end 1 -kr 0 -kcp 0 -kep 1 -kt 0 -s $numSegments -d 1 -tol 0.01 $curveName;
+    }
+    else{print("skipping cannot recognize position input");}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/**Draw joint at selected 
+*/
+global proc
+na_makeJointAtSelectedComponent()
+{
+    int $hierarchy = 0;
+    na_makeTransformAtSelectedComponent("-j",$hierarchy);
+}
+/**Draw joint hierarchy using order of selection
+*/
+global proc
+na_makeJointHierarchyAtSelectedComponent()
+{
+    int $hierarchy = 1;
+    na_makeTransformAtSelectedComponent("-j",$hierarchy);
+}
+
+/**Draw locator at selected
+*/                                                                                                     
+global proc
+na_makeLocatorAtSelectedComponent()
+{
+    int $hierarchy = 0;
+    na_makeTransformAtSelectedComponent("-l",$hierarchy);
+}
+
+/**Draw circle curve at selected
+*/                                                                                                     
+global proc
+na_makeCircleAtSelectedComponent()
+{
+    int $hierarchy = 0;
+    na_makeTransformAtSelectedComponent("-c",$hierarchy);
+}
+
+
+/**Draw object at selection where supports different object and whether to use hierarchy.  Supports locator "-l",  joint "-j" 
+@note default xyz rotate order, unparented joints all with same default
+@pre selected objects supports transform, mesh, joint, nurbsurface
+@bug doesn't support selected follicle,locator so provide their transform instead
+*/
+global proc
+na_makeTransformAtSelectedComponent(string $arg, int $isHierarchy)
+{
+    string $jointTag = "-j";
+    string $locatorTag = "-l";
+    string $circleTag = "-c";
+    
+    string $jointOrientation = "xzy";//change this if we want different default orientation
+    
+    string $supportedArg[] = {$locatorTag,$jointTag,$circleTag};
+    na_assertAllInList( {$arg}, $supportedArg );
+    
+    string $sel[] = {};
+    $sel = `ls -sl`;
+
+    na_assertObjectExist($sel);
+       
+    string $supportedType[] = {"transform","mesh","nurbsSurface","joint","clusterHandle","nurbsCurve","lattice"};
+    na_assertTypeInList( $sel, $supportedType );
+   
+    string $object[] = na_getExpanded($sel);
+    
+    //dont do anything if input not recognized
+    for($obj in $object)
+    {
+        if( `strcmp $arg $jointTag` == 0){}
+        else if( `strcmp $arg $locatorTag` == 0){}
+        else if( `strcmp $arg $circleTag` == 0){}
+        else{error("Requires -- joint, locator, or circle tag "+$jointTag+","+$locatorTag);}
+    }
+    
+    //go through selected and put transform there
+    string $madeJointArray[] = {};//this will hold all the new ifany joints
+    select -cl;
+    for($obj in $object)
+    {
+	//if object is a transform or joint then use its information to orient
+	if( `objectType $obj` == "transform" || `objectType $obj` == "joint"){
+        if( `strcmp $arg $jointTag` == 0){
+            $madeJoint = `joint -p 0 0 0`;
+            setAttr ($madeJoint+"."+"radius") 0.08;
+            $madeJointArray[size($madeJointArray)] = $madeJoint;
+            if( $isHierarchy == 0 ){select -cl;}
+	    //do constraining
+	    delete( `parentConstraint $obj $madeJoint` ); //going to, then our thing
+        }
+        else if( `strcmp $arg $locatorTag` == 0){
+            string $locatorArray[] = `spaceLocator -p 0 0 0`;
+            na_assertSizeEqualArg($locatorArray,1);
+            //select -r $locatorArray[0];
+            delete( `parentConstraint $obj $locatorArray[0]` ) ;
+        }
+        else if( `strcmp $arg $circleTag` == 0){
+            string $circleArray[] = `circle -ch 0`;
+            na_assertSizeEqualArg($circleArray,1);
+            //select -r $circleArray[0];
+            delete( `parentConstraint $obj $circleArray[0]` );
+        }
+
+	}
+	else{
+
+        float $positionPerComponent[] = {};
+        if(na_isType($obj,"clusterHandle")==1){$positionPerComponent = `getAttr ($obj+".origin")`;}
+        else{ $positionPerComponent = `xform -q -ws -t $obj`; }
+        
+        na_assertFloatSizeEqualArg( $positionPerComponent,3);
+        
+        
+        if( `strcmp $arg $jointTag` == 0){
+            $madeJoint = `joint -p $positionPerComponent[0] $positionPerComponent[1] $positionPerComponent[2]`;
+            setAttr ($madeJoint+"."+"radius") 0.08;
+            $madeJointArray[size($madeJointArray)] = $madeJoint;
+            if( $isHierarchy == 0 ){select -cl;}
+        }
+        else if( `strcmp $arg $locatorTag` == 0){
+            string $locatorArray[] = `spaceLocator -p 0 0 0`;
+            na_assertSizeEqualArg($locatorArray,1);
+            select -r $locatorArray[0];
+            move -rpr -x $positionPerComponent[0] -y $positionPerComponent[1] -z $positionPerComponent[2];
+        }
+        else if( `strcmp $arg $circleTag` == 0){
+            string $circleArray[] = `circle -ch 0`;
+            na_assertSizeEqualArg($circleArray,1);
+            select -r $circleArray[0];
+            move -rpr -x $positionPerComponent[0] -y $positionPerComponent[1] -z $positionPerComponent[2];
+        }
+
+	}//end else for selected on component
+        
+        
+    }  
+    
+    //fix orientation for hierarchy option, trick to temporarily double end joint so orient at all joints
+    if( (`strcmp $arg $jointTag` == 0) && ($isHierarchy == 1) && (size($madeJointArray) >=2) ){ 
+        $obj = $madeJointArray[size($madeJointArray)-1];//last made joint
+        float $positionPerComponent[] = {};
+        $positionPerComponent = `xform -q -ws -t $obj`;
+        select -r $obj;
+        $extraJnt = `joint -p $positionPerComponent[0] $positionPerComponent[1] $positionPerComponent[2]`;
+        $firstJnt = $madeJointArray[0];
+        joint -e -oj $jointOrientation -secondaryAxisOrient yup -ch -zso $firstJnt;
+        delete $extraJnt;//not needed anymore
+    }
+    
+    select -r $sel;
+}

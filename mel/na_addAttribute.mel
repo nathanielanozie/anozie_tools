@@ -1,0 +1,1370 @@
+/**@file na_addAttribute.mel v 1.0.2 for helping with hiding channels, creating float attriubtes ...
+@author Nathaniel O. Anozie (ogbonnawork at gmail dot com)
+@bug functions few assert checks
+@note date created: Apr 08 2012 - 
+*/
+
+
+// 08-29-2014  -- making it more robust and less dependent -- removing error checking dependency
+// 02-18-2013-02-19-2013 -- fixing some ui labels, fixed some ui function names
+// 02-12-2013 -- 1.0.2 release ... improved UI
+// 02-11-2013 -- working on improving ui (working on reformatting into a create, edit, transfer sections)
+// 02-08-2013 -- 1.0.1 initial release .. can hide attributes or add attributes
+// -- make attributes like fk and ik controls
+// -- working on adding ui for getting attributes between controls
+// -- working on adding some quick unLock and delete attribute tools
+// -- working on tool to create locator from enum, by default locator moved to object with enum
+//note Modify at your own risk
+
+
+
+
+global string $gl_attribute = "gl_attribute";
+global string $gl_anim = "gl_anim";
+//
+global string $gl_fromAnim = "gl_fromAnim";
+global string $gl_toAnim = "gl_toAnim";
+global string $gl_attrType_1 = "gl_attrType_1";
+global string $gl_attrType_2 = "gl_attrType_2";
+global string $gl_attrType_3 = "gl_attrType_3";
+global string $gl_attrType_3 = "gl_attrType_4";
+
+/**ui
+*/
+global proc
+na_addAttributeUI()
+{
+    
+    global string $gl_attribute;
+    global string $gl_anim;
+    //
+    global string $gl_fromAnim;
+    global string $gl_toAnim;
+    global string $gl_prefix;
+    global string $gl_attrType_1;
+    global string $gl_attrType_2;
+    global string $gl_attrType_3;
+    global string $gl_attrType_4;    
+    
+    //setup up title for gui
+    string $titleWindow = "na_addAttribute.mel  Add new anim attribute";
+    string $mainWindowName = "mainWindowA";
+    int $windowWidth = 500;
+    int $insideWidth = 480;
+    na_windowRemoveIfExist($mainWindowName);
+ window -title $titleWindow -widthHeight $windowWidth 500 $mainWindowName;
+    columnLayout -columnAttach "both" 5 -rowSpacing 5 -columnWidth $windowWidth;
+    
+        //Add Attribute UI
+        frameLayout -label "Add" -borderStyle "etchedIn" -collapsable true;
+            columnLayout -columnAttach "both" 5 -rowSpacing 5 -columnWidth $insideWidth;
+            //set up ui widgets
+            na_addAttribute_textFieldGrp($mainWindowName,"attribute(s) space separated", $gl_attribute);
+            na_addAttribute_textFieldGrp($mainWindowName,"animator controls(s) space separated", $gl_anim);
+            na_addAttribute_button($mainWindowName,"ok","button","na_addAttribute_cmd");
+            setParent ..;
+        setParent ..;
+    
+        //Transfer UI
+        frameLayout -label "Transfer" -borderStyle "etchedIn" -collapsable true;
+            columnLayout -columnAttach "both" 5 -rowSpacing 5 -columnWidth $insideWidth;
+            na_addAttribute_textFieldGrp($mainWindowName,"from anim", $gl_fromAnim);
+            na_addAttribute_textFieldGrp($mainWindowName,"to anim", $gl_toAnim);
+            na_addAttribute_textFieldGrp($mainWindowName,"prefix", $gl_prefix);
+         
+                rowLayout -numberOfColumns 4
+            -columnWidth4 ($insideWidth/4) ($insideWidth/4) ($insideWidth/4) ($insideWidth/4)
+            -adjustableColumn 2
+            -columnAlign  1 "right"
+            -columnAttach 1 "both"     0
+            -columnAttach 2 "both"  0
+            -columnAttach 3 "both"  0
+            -columnAttach 4 "both"  0;   
+            
+                na_addAttribute_checkBox($mainWindowName,"enum","attrType_pickTypeOn_cmd(1)","attrType_pickTypeOff_cmd(1)");
+                na_addAttribute_checkBox($mainWindowName,"float","attrType_pickTypeOn_cmd(2)","attrType_pickTypeOff_cmd(2)");
+                na_addAttribute_checkBox($mainWindowName,"int","attrType_pickTypeOn_cmd(3)","attrType_pickTypeOff_cmd(3)");
+                na_addAttribute_checkBox($mainWindowName,"boolean","attrType_pickTypeOn_cmd(4)","attrType_pickTypeOff_cmd(4)");
+                setParent ..;
+            na_addAttribute_button($mainWindowName,"ok","buttonA","na_addAttributeBetweenAnim_cmd");
+            setParent ..;
+        setParent ..;
+         
+        //Edit UI
+        frameLayout -label "Edit" -borderStyle "etchedIn" -collapsable true;
+            columnLayout -columnAttach "both" 5 -rowSpacing 5 -columnWidth $insideWidth;
+            //set up ui widgets
+            na_addAttribute_button($mainWindowName,"FK","buttonB","na_cleanFKAttributeOfSelected()");
+            na_addAttribute_button($mainWindowName,"IK","buttonC","na_cleanIKAttributeOfSelected()");
+            na_addAttribute_button($mainWindowName,"Restore","buttonD","na_restoreAttributeOfSelected();");
+            setParent ..;
+        setParent ..;         
+        
+    
+    showWindow $mainWindowName;
+    
+    
+}
+
+/**ui command
+*/
+global proc
+na_addAttribute_cmd()
+{
+    global string $gl_attribute;
+    global string $gl_anim;
+ 
+    //temp
+    string $attribute="";
+    string $anim = "";
+    
+    //used
+    string $attributeArray[] = {};
+    string $animArray[] = {};
+    
+    $attribute = `textFieldGrp -query -text $gl_attribute`;
+    $anim= `textFieldGrp -query -text $gl_anim`; 
+    
+    $attributeArray = stringToStringArray($attribute," ");
+    $animArray = stringToStringArray($anim," ");
+    
+    
+    na_addAttribute($attributeArray, $animArray);
+}
+
+/**ui command
+*/
+
+global proc na_addAttributeBetweenAnim_cmd()
+{
+    
+    global string $gl_fromAnim;
+    global string $gl_toAnim;
+    global string $gl_prefix;
+    global string $gl_attrType_1;
+    global string $gl_attrType_2;
+    global string $gl_attrType_3;
+    global string $gl_attrType_4;
+    
+    
+    //main variables used by script
+    string $fromAnim = "";
+    string $toAnim = "";
+    string $prefix = "";
+    string $attrType[] = {};
+    
+    //get main variables
+    $fromAnim = `textFieldGrp -query -text $gl_fromAnim`;
+    $toAnim = `textFieldGrp -query -text $gl_toAnim`;
+    $prefix = `textFieldGrp -query -text $gl_prefix`;
+    
+    //widget command string
+    string $attrType_pickType_on_str = "on";
+    
+    if( `strcmp $gl_attrType_1 $attrType_pickType_on_str` == 0 ){ $attrType[size($attrType)] = "enum"; }
+    if( `strcmp $gl_attrType_2 $attrType_pickType_on_str` == 0 ){ $attrType[size($attrType)] = "double"; }
+    if( `strcmp $gl_attrType_3 $attrType_pickType_on_str` == 0 ){ $attrType[size($attrType)] = "long"; }
+    if( `strcmp $gl_attrType_4 $attrType_pickType_on_str` == 0 ){ $attrType[size($attrType)] = "bool"; }
+
+    
+    //main command
+    na_addAttributeBetweenAnim( $fromAnim,$toAnim,$attrType,$prefix );
+
+}
+/**widget commands
+*/
+global proc attrType_pickTypeOn_cmd(int $type)
+{
+    global string $gl_attrType_1;
+    global string $gl_attrType_2;
+    global string $gl_attrType_3;
+    global string $gl_attrType_4;
+    
+    //widget command string
+    string $attrType_pickType_on_str = "on";
+    
+    if($type == 1){ $gl_attrType_1 = $attrType_pickType_on_str; }
+    if($type == 2){ $gl_attrType_2 = $attrType_pickType_on_str; }
+    if($type == 3){ $gl_attrType_3 = $attrType_pickType_on_str; }
+    if($type == 4){ $gl_attrType_4 = $attrType_pickType_on_str; }
+}
+global proc attrType_pickTypeOff_cmd(int $type)
+{
+    global string $gl_attrType_1;
+    global string $gl_attrType_2;
+    global string $gl_attrType_3;
+    global string $gl_attrType_4;
+    
+    //widget command string
+    string $attrType_pickType_off_str = "off";
+    
+    if($type == 1){ $gl_attrType_1 = $attrType_pickType_off_str; }
+    if($type == 2){ $gl_attrType_2 = $attrType_pickType_off_str; }
+    if($type == 3){ $gl_attrType_3 = $attrType_pickType_off_str; }
+    if($type == 4){ $gl_attrType_4 = $attrType_pickType_off_str; }
+}
+
+/**create an empty window
+@param string $mainWindowName window global name
+@param string $titleWindow
+@param float $width
+@param float $height
+@bug sizeable fixed
+*/
+global proc na_window(string $mainWindowName, string $titleWindow, float $width, float $height)
+{
+    
+    na_windowRemoveIfExist($mainWindowName);
+    window -t $titleWindow -width $width -height $height -sizeable true $mainWindowName;
+    
+}
+
+/**remove window and windows preferences if it exists
+@param string $mainWindowName window global name
+*/
+global proc na_windowRemoveIfExist(string $mainWindowName)
+{
+    //delete window pref for this window if it exists
+    if(`windowPref -exists $mainWindowName`){ windowPref -remove $mainWindowName;}
+    
+    if( `window -exists $mainWindowName`  )
+    {
+        deleteUI $mainWindowName;
+    }
+}
+/**add a text field to a window
+@parm string $form -- name of form
+@param string $winName -- name of window
+@param string $label -- ?should be label
+@param float $top  position top
+@param float $left position left
+@param string $globalName  global variable to hold value
+*/
+global proc na_addAttribute_textFieldGrp(string $winName, string $label, string $globalName)
+{
+    if( `window -exists $winName`  )
+    {       
+        textFieldGrp -label $label $globalName;
+    }
+    else{
+        ui_errorMessage();
+    }
+}
+/**add a button to a window
+@parm string $form -- name of form
+@param string $winName -- name of window
+@param string $label -- ?should be label
+@param float $top  position top
+@param float $left position left
+@param string $globalName  global variable to hold value
+@param string $cmd command for button
+*/
+global proc na_addAttribute_button(string $winName, string $label,string $globalName, string $cmd)
+{
+    if( `window -exists $winName`  )
+    {       
+        button -label $label -command $cmd $globalName;
+    }
+    else{
+        ui_errorMessage();
+    }
+}
+/**add a single check box to a window
+@parm string $form -- name of form
+@param string $winName -- name of window
+@param string $label -- label
+@param float $top  position top
+@param float $left position left
+@param string $onCommand on command for button
+@param string $offCommand off command for button
+*/
+global proc 
+na_addAttribute_checkBox(string $winName, string $label, string $onCommand, string $offCommand)
+{
+    
+    if( `window -exists $winName`  )
+    {       
+        string $val = `checkBox -label $label -onc $onCommand -ofc $offCommand`;
+    }
+    else{
+        ui_errorMessage();
+    }
+}
+
+/**print error message
+*/
+global proc ui_errorMessage()
+{
+    print("skipping, error creating window");
+}
+
+
+
+
+
+
+
+
+/**useful in creating one locator per every enum item where its name is 
+anim_enumItemName_suffix
+@post all locators moved to world position of anim
+*/
+global proc
+na_makeLocatorAtAnimFromEnum(string $anim, string $attr, string $suffix)
+{
+    //na_assertObjectExist({$anim+"."+$attr});
+    
+    if( na_isAttrType($anim, $attr,"enum") == 1 )
+    {
+        string $sel[] = `ls -sl`;
+        
+        //get the items from animator control
+        //
+        string $fromPick[] = {};
+        $fromPick = `attributeQuery -node $anim -listEnum $attr`;
+        //na_assertSizeEqualArg($fromPick,1);
+        string $item[] = {};
+        $item = stringToStringArray($fromPick[0],":");
+
+        //make sure were not overwriting something that exists
+        //
+        string $namePrefix="";
+        $namePrefix = $anim;
+        string $nameSuffix = "";
+        string $name = "";
+        for($it in $item)
+        {
+            $nameSuffix = "";
+            $nameSuffix = $it+"_"+$suffix;
+            $name = ($namePrefix+"_"+$nameSuffix);
+            //na_assertObjectDoesNotExist({$name});
+        }
+        
+        //draw here
+        //
+        float $animLocation[] = {};
+        $animLocation = `xform -q -ws -translation $anim`;
+        for($it in $item)
+        {
+            $nameSuffix = "";
+            $nameSuffix = $it+"_"+$suffix;
+            $name = ($namePrefix+"_"+$nameSuffix);
+            spaceLocator -p 0 0 0 -n $name;
+            xform -ws -translation $animLocation[0] $animLocation[1] $animLocation[2] $name;
+        }
+  
+        
+        select -r $sel;
+    }
+    else{print("Skipping"+$attr+"--not of type enum\n"); }
+    
+}
+
+
+/**expects empty scene
+*/
+global proc
+na_addAttributeBetweenAnim_unitTest_1()
+{
+    circle -c 0 0 0 -nr 0 1 0 -sw 360 -r 1 -d 3 -ut 0 -tol 0.01 -s 8 -ch 1; objectMoveCommand;
+    setAttr -lock true -keyable false "nurbsCircle1.tx";
+    setAttr -lock true -keyable false "nurbsCircle1.ty";
+    setAttr -lock true -keyable false "nurbsCircle1.tz";
+    setAttr -lock true -keyable false "nurbsCircle1.rx";
+    setAttr -lock true -keyable false "nurbsCircle1.ry";
+    setAttr -lock true -keyable false "nurbsCircle1.rz";
+    setAttr -lock true -keyable false "nurbsCircle1.sx";
+    setAttr -lock true -keyable false "nurbsCircle1.sy";
+    setAttr -lock true -keyable false "nurbsCircle1.sz";
+    addAttr -ln "e1"  -at "enum" -en "fk:ik:vis:"  |nurbsCircle1;
+    setAttr -e-keyable true |nurbsCircle1.e1;
+    addAttr -ln "f1"  -at double  -min 0 |nurbsCircle1;
+    setAttr -e-keyable true |nurbsCircle1.f1;
+    circle -c 0 0 0 -nr 0 1 0 -sw 360 -r 1 -d 3 -ut 0 -tol 0.01 -s 8 -ch 1; objectMoveCommand;
+    move -r -os -wd -3.443394 0 0 ;
+    
+    na_addAttributeBetweenAnim( "nurbsCircle1","nurbsCircle2",{"enum","bool","long","double"},"" );
+}
+global proc
+na_addAttributeBetweenAnim_unitTest_2()
+{
+    circle -c 0 0 0 -nr 0 1 0 -sw 360 -r 1 -d 3 -ut 0 -tol 0.01 -s 8 -ch 1; objectMoveCommand;
+    setAttr -lock true -keyable false "nurbsCircle1.tx";
+    setAttr -lock true -keyable false "nurbsCircle1.ty";
+    setAttr -lock true -keyable false "nurbsCircle1.tz";
+    setAttr -lock true -keyable false "nurbsCircle1.rx";
+    setAttr -lock true -keyable false "nurbsCircle1.ry";
+    setAttr -lock true -keyable false "nurbsCircle1.rz";
+    setAttr -lock true -keyable false "nurbsCircle1.sx";
+    setAttr -lock true -keyable false "nurbsCircle1.sy";
+    setAttr -lock true -keyable false "nurbsCircle1.sz";
+    addAttr -ln "e1"  -at "enum" -en "fk:ik:vis:"  |nurbsCircle1;
+    setAttr -e-keyable true |nurbsCircle1.e1;
+    addAttr -ln "f1"  -at double  -min 0 |nurbsCircle1;
+    setAttr -e-keyable true |nurbsCircle1.f1;
+    addAttr -e -minValue `min 0.0 0.0`  "nurbsCircle1.f1";
+    
+    na_addAttributeBetweenAnim( "nurbsCircle1","nurbsCircle1",{"enum","bool","long","double"},"l_" );
+}
+
+
+/**in order to put rig on opposite side this helps to put
+on new side all the user defined attributes that were made. note
+it only makes attr it doesn't do anything else.
+@param $toPrefix if wanted to put on same control could change names here
+@note only supports double (float), bool (boolean), enum and long (ints)
+@note example of $supported is: {"double","bool","enum","long"}
+@note example of $toPrefix is: ""
+@bug no exist attr assert like we don't want to overwrite existing attr
+no getting the locked status, no getting min and max status
+@see na_addAttributeByType
+*/
+global proc
+na_addAttributeBetweenAnim(string $fromAnim, string $toAnim, string $supported[], string $toPrefix)
+{
+    //na_assertObjectExist({$fromAnim,$toAnim});
+    
+    string $attrArray[] = {};
+    $attrArray = `listAttr -ud $fromAnim`;
+    
+    string $toAttr = "";
+    for( $attr in $attrArray )
+    {
+        $toAttr = $toPrefix+$attr; 
+        na_addAttributeByType($fromAnim,$toAnim,$attr,$toAttr,$supported);
+    }
+}
+
+/**so we can have a new control with all the same attributes as an older control
+@note makes all added keyable
+@bug enum not asserting length, no existence assert on nodes, and from attribute, no setting of defaults,
+@bug working on setting to current value
+*/
+global proc 
+na_addAttributeByType(string $fromAnim, string $toAnim, string $attr, string $toAttr, string $supported[])
+{
+    //na_assertObjectExist({$fromAnim,$toAnim,($fromAnim+"."+$attr)});
+    
+    //so were not making it if its there already
+    if( `objExists ($toAnim+"."+$toAttr)` == 0 ){
+        for($type in $supported){
+            
+            if( `strcmp $type "double"` == 0 ){
+                if( na_isAttrType($fromAnim, $attr,"double") == 1 )
+                {                    
+                    addAttr -ln $toAttr  -at double $toAnim;
+                    setAttr -e-keyable true ($toAnim+"."+$toAttr);
+                    
+                    //min and max
+                    float $minArray[] = {};
+                    $minArray = na_getMinFloatAttr($fromAnim,$attr);
+                    if(size($minArray)==1){ addAttr -e -minValue `min $minArray[0] 0.0`  ($toAnim+"."+$toAttr); }
+                    float $maxArray[] = {};
+                    $maxArray = na_getMaxFloatAttr($fromAnim,$attr);
+                    if(size($maxArray)==1){ addAttr -e -maxValue `min $maxArray[0] 0.0`  ($toAnim+"."+$toAttr); }
+                    
+                    //current value
+                    float $toValue_float = `getAttr ($fromAnim+"."+$attr)`;
+                    setAttr ($toAnim+"."+$toAttr) $toValue_float;
+                }
+            }
+            else if( `strcmp $type "bool"` == 0 ){
+                if( na_isAttrType($fromAnim, $attr,"bool") == 1 )
+                {
+                    addAttr -ln $toAttr  -at bool $toAnim;
+                    setAttr -e-keyable true ($toAnim+"."+$toAttr);
+                    
+                    //current value
+                    int $toValue_int = `getAttr ($fromAnim+"."+$attr)`;
+                    setAttr ($toAnim+"."+$toAttr) $toValue_int;
+                }
+            }
+            else if( `strcmp $type "enum"` == 0 ){
+                if( na_isAttrType($fromAnim, $attr,"enum") == 1 )
+                {
+                    string $fromPick[] = {};
+                    $fromPick = `attributeQuery -node $fromAnim -listEnum $attr`;
+                    //na_assertSizeEqualArg($fromPick,1);
+                    addAttr -ln $toAttr  -at "enum" -en ($fromPick[0]+":") $toAnim;
+                    setAttr -e-keyable true ($toAnim+"."+$toAttr);
+                    
+                    //current value
+                    int $toValue_int = `getAttr ($fromAnim+"."+$attr)`;
+                    setAttr ($toAnim+"."+$toAttr) $toValue_int;
+                }
+            }
+            else if( `strcmp $type "long"` == 0 ){
+                if( na_isAttrType($fromAnim, $attr,"long") == 1 )
+                {
+                    addAttr -ln $toAttr  -at long $toAnim;
+                    setAttr -e-keyable true ($toAnim+"."+$toAttr);
+                    
+                    //min and max
+                    int $minArrayInt[] = {};
+                    $minArrayInt = na_getMinIntAttr($fromAnim,$attr);
+                    if(size($minArrayInt)==1){ addAttr -e -minValue `min $minArrayInt[0] 0.0`  ($toAnim+"."+$toAttr); }
+                    int $maxArrayInt[] = {};
+                    $maxArrayInt = na_getMaxIntAttr($fromAnim,$attr);
+                    if(size($maxArrayInt)==1){ addAttr -e -maxValue `min $maxArrayInt[0] 0.0`  ($toAnim+"."+$toAttr); }
+                    
+                    //current value
+                    int $toValue_int = `getAttr ($fromAnim+"."+$attr)`;
+                    setAttr ($toAnim+"."+$toAttr) $toValue_int;
+                }
+            }    
+            else{ print("skipping--unsupported type for--"+$attr); }
+            
+        }
+        
+    }
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+/**add float attributes to given animator controls
+@note each control receives all attributes
+*/
+global proc 
+na_addAttribute(string $attributes[], string $anim[])
+{
+    na_addAttribute_assert( $attributes, $anim );
+    //loop animator controls
+    for($i = 0; $i < size($anim); $i ++){na_addAttribute_floatSingle($attributes, $anim[$i]);} 
+    print("successfully added all attributes\n");
+}
+/**existence checks for node and attribute
+@see na_addAttribute_floatSingle_assert
+*/
+global proc 
+na_addAttribute_assert( string $attributes[], string $anim[] )
+{
+    //loop animator controls
+    for($i = 0; $i < size($anim); $i ++){na_addAttribute_floatSingle_assert( $attributes, $anim[$i] );}   
+}
+
+/**assumes clean scene
+*/
+global proc 
+na_addAttribute_unitTest()
+{   
+    circle -c 0 0 0 -nr 0 1 0 -sw 360 -r 1 -d 3 -ut 0 -tol 0.01 -s 8 -ch 1; 
+    circle -c 0 0 0 -nr 0 1 0 -sw 360 -r 1 -d 3 -ut 0 -tol 0.01 -s 8 -ch 1; 
+    na_addAttribute({"nozo1","nozo2"}, {"nurbsCircle1","nurbsCircle2"});
+}
+/**add float attributes to one animator control
+*/
+global proc 
+na_addAttribute_floatSingle(string $attributes[], string $anim)
+{
+    na_addAttribute_floatSingle_assert( $attributes, $anim );
+    
+    string $attr = "";
+    for($j = 0; $j < size($attributes); $j ++)
+    {
+        $attr = $attributes[$j];
+        addAttr -longName $attr -at double $anim;
+        setAttr -e-keyable true ($anim+"."+$attr);   
+    }
+}
+global proc 
+na_addAttribute_floatSingle_assert( string $attributes[], string $anim )
+{
+    //existence
+    if( `objExists $anim` == 0 ){error("object--"+$anim+"--doesn't exist");}
+    
+    //is any attribute already on control
+    for($j = 0; $j < size($attributes); $j ++)
+    {
+        
+        if( `attributeExists $attributes[$j] $anim` == 1 ){error( "attribute --"+$attributes[$j]+"--already exists on--"+$anim);}
+    } 
+}
+/**assumes clean scene
+*/
+global proc 
+na_addAttribute_floatSingle_unitTest()
+{
+    circle -c 0 0 0 -nr 0 1 0 -sw 360 -r 1 -d 3 -ut 0 -tol 0.01 -s 8 -ch 1; 
+    na_addAttribute_floatSingle({"nozo1","nozo2"}, "nurbsCircle1");
+}
+
+
+
+
+
+
+/**delete user defined attributes of selected objects
+*/
+global proc
+na_deleteUserDefinedAttrOfSelected()
+{
+    //keyboard shortcut to delete user defined attributes
+    string $sel[] = `ls -sl`;
+    string $attrArray[] = {};
+    
+    for( $object in $sel )
+    {
+        na_unLockUserDefinedAttrOfSelected();
+        $attrArray = {};
+        //get user defined attributes for object and remember to clear storage
+        $attrArray = `listAttr -ud $object`;
+        for($attr in $attrArray){
+            select -r $object;
+            
+            deleteAttr -at $attr $object; 
+        }
+    }
+    
+    select -r $sel;
+    
+}
+
+
+/**get all attributes of object restored
+*/
+global proc 
+na_restoreAttributeOfSelected()
+{   
+    //unLock
+    na_unLockTranslationOfSelected();
+    na_unLockRotationOfSelected();
+    na_unLockScaleOfSelected();
+    na_unLockVisibilityOfSelected();
+    na_unLockUserDefinedAttrOfSelected();
+    
+    //show
+    na_unHideTranslationOfSelected();
+    na_unHideRotationOfSelected();
+    na_unHideScaleOfSelected();   
+    na_unHideVisibilityOfSelected();
+    na_unHideUserDefinedAttrOfSelected();
+}
+
+
+
+
+/**get fk control in more appropriate form
+*/
+global proc 
+na_cleanFKAttributeOfSelected()
+{
+    //lock translation
+    na_lockTranslationOfSelected();
+    
+    //hide translation
+    na_hideTranslationOfSelected();
+    
+    //lock radius
+    na_lockRadiusOfSelected();
+    //hide radius
+    na_hideRadiusOfSelected();
+      
+    //unLock rotation
+    na_unLockRotationOfSelected();
+    
+    //unhide rotation
+    na_unHideRotationOfSelected();
+    
+    //unLock scale
+    na_unLockScaleOfSelected();
+    
+    //hide scale
+    na_hideScaleOfSelected();
+}
+
+
+
+/**get ik control attributes in more appropriate form
+*/
+global proc 
+na_cleanIKAttributeOfSelected()
+{
+    //lock rotation
+    na_lockRotationOfSelected();
+    
+    //hide rotation
+    na_hideRotationOfSelected();
+    
+    //lock radius
+    na_lockRadiusOfSelected();
+    //hide radius
+    na_hideRadiusOfSelected();
+    
+    
+    //unLock translation
+    na_unLockTranslationOfSelected();
+    
+    //unhide translation
+    na_unHideTranslationOfSelected();
+    
+    //unLock scale
+    na_unLockScaleOfSelected();
+    
+    //hide scale
+    na_hideScaleOfSelected();
+}
+
+
+
+
+
+/*unLock rotation of selected objects
+*/
+global proc
+na_unLockRotationOfSelected()
+{
+    string $sel[] = `ls -sl`;
+    for( $object in $sel ){na_setAttributeLockOfAnim( $object, 0, {"rotateX","rotateY","rotateZ"} );}
+    select -r $sel;
+}
+global proc
+na_unHideRotationOfSelected()
+{
+    string $sel[] = `ls -sl`;
+    for( $object in $sel ){na_setAttributeKeyableOfAnim( $object, 1, {"rotateX","rotateY","rotateZ"} );}
+    select -r $sel;
+}
+
+/**lock rotation of selected objects
+*/
+global proc
+na_lockRotationOfSelected()
+{
+    string $sel[] = `ls -sl`;
+    for( $object in $sel ){na_setAttributeLockOfAnim( $object, 1, {"rotateX","rotateY","rotateZ"} );}
+    select -r $sel;
+}
+global proc
+na_hideRotationOfSelected()
+{
+    string $sel[] = `ls -sl`;
+    for( $object in $sel ){na_setAttributeKeyableOfAnim( $object, 0, {"rotateX","rotateY","rotateZ"} );}
+    select -r $sel;
+}
+
+/**unLock rotation of selected objects
+*/
+global proc
+na_unLockTranslationOfSelected()
+{
+    string $sel[] = `ls -sl`;
+    for( $object in $sel ){na_setAttributeLockOfAnim( $object, 0, {"translateX","translateY","translateZ"} );}
+    select -r $sel;
+}
+global proc
+na_unHideTranslationOfSelected()
+{
+    string $sel[] = `ls -sl`;
+    for( $object in $sel ){na_setAttributeKeyableOfAnim( $object, 1, {"translateX","translateY","translateZ"} );}
+    select -r $sel;
+}
+/*
+*/
+global proc
+na_lockTranslationOfSelected()
+{
+    string $sel[] = `ls -sl`;
+    for( $object in $sel ){na_setAttributeLockOfAnim( $object, 1, {"translateX","translateY","translateZ"} );}
+    select -r $sel;
+}
+global proc
+na_hideTranslationOfSelected()
+{
+    string $sel[] = `ls -sl`;
+    for( $object in $sel ){na_setAttributeKeyableOfAnim( $object, 0, {"translateX","translateY","translateZ"} );}
+    select -r $sel;
+}
+
+/**scale
+*/
+global proc
+na_lockScaleOfSelected()
+{
+    string $sel[] = `ls -sl`;
+    for( $object in $sel ){na_setAttributeLockOfAnim( $object, 1, {"scaleX","scaleY","scaleZ"} );}
+    select -r $sel;
+}
+global proc
+na_hideScaleOfSelected()
+{
+    string $sel[] = `ls -sl`;
+    for( $object in $sel ){na_setAttributeKeyableOfAnim( $object, 0, {"scaleX","scaleY","scaleZ"} );}
+    select -r $sel;
+}
+global proc
+na_unLockScaleOfSelected()
+{
+    string $sel[] = `ls -sl`;
+    for( $object in $sel ){na_setAttributeLockOfAnim( $object, 0, {"scaleX","scaleY","scaleZ"} );}
+    select -r $sel;
+}
+global proc
+na_unHideScaleOfSelected()
+{
+    string $sel[] = `ls -sl`;
+    for( $object in $sel ){na_setAttributeKeyableOfAnim( $object, 1, {"scaleX","scaleY","scaleZ"} );}
+    select -r $sel;
+}
+
+
+
+
+/**visibility
+*/
+global proc
+na_lockVisibilityOfSelected()
+{
+    string $sel[] = `ls -sl`;
+    for( $object in $sel ){na_setAttributeLockOfAnim( $object, 1, {"visibility"} );}
+    select -r $sel;
+}
+global proc
+na_hideVisibilityOfSelected()
+{
+    string $sel[] = `ls -sl`;
+    for( $object in $sel ){na_setAttributeKeyableOfAnim( $object, 0, {"visibility"} );}
+    select -r $sel;
+}
+global proc
+na_unLockVisibilityOfSelected()
+{
+    string $sel[] = `ls -sl`;
+    for( $object in $sel ){na_setAttributeLockOfAnim( $object, 0, {"visibility"} );}
+    select -r $sel;
+}
+global proc
+na_unHideVisibilityOfSelected()
+{
+    string $sel[] = `ls -sl`;
+    for( $object in $sel ){na_setAttributeKeyableOfAnim( $object, 1, {"visibility"} );}
+    select -r $sel;
+}
+
+
+
+
+/**radius
+*/
+global proc
+na_lockRadiusOfSelected()
+{
+    string $sel[] = `ls -sl`;
+    for( $object in $sel ){
+        if( `objExists ($object+"."+"radius")`){
+            na_setAttributeLockOfAnim( $object, 1, {"radius"} );
+        } 
+    }
+    select -r $sel;
+}
+global proc
+na_hideRadiusOfSelected()
+{
+    string $sel[] = `ls -sl`;
+    for( $object in $sel ){
+        if( `objExists ($object+"."+"radius")`){
+            na_setAttributeKeyableOfAnim( $object, 0, {"radius"} );
+        }
+    }
+    select -r $sel;
+}
+global proc
+na_unLockRadiusOfSelected()
+{
+    string $sel[] = `ls -sl`;
+    for( $object in $sel ){
+        if( `objExists ($object+"."+"radius")`){
+            na_setAttributeLockOfAnim( $object, 0, {"radius"} );
+        }
+    }
+    select -r $sel;
+}
+global proc
+na_unHideRadiusOfSelected()
+{
+    string $sel[] = `ls -sl`;
+    for( $object in $sel ){
+        if( `objExists ($object+"."+"radius")`){
+            na_setAttributeKeyableOfAnim( $object, 1, {"radius"} );
+        }
+    }
+    select -r $sel;
+}
+
+
+
+
+
+
+
+
+/**lock all user defined attributes of selected objects
+*/
+global proc
+na_lockUserDefinedAttrOfSelected()
+{
+    string $sel[] = `ls -sl`;
+    for( $object in $sel )
+    {
+        na_setLockUserDefinedAttrOfSelectedByList( `listAttr -ud $object`, 1  );
+    }
+}
+global proc
+na_lockUserDefinedAttrOfSelected_unitTest()
+{
+    circle -c 0 0 0 -nr 0 1 0 -sw 360 -r 1 -d 3 -ut 0 -tol 0.01 -s 8 -ch 1;
+    addAttr -ln "attr_naOne"  -at double  |nurbsCircle1;
+    setAttr -e-keyable true |nurbsCircle1.attr_naOne;
+    addAttr -ln "attr_naTwo"  -at double  |nurbsCircle1;
+    setAttr -e-keyable true |nurbsCircle1.attr_naTwo;
+    rename "nurbsCircle1" "hand";
+    
+    select -r hand;
+    
+    na_lockUserDefinedAttrOfSelected();
+}
+
+/**set lock state on subset of user defined attributes of selected objects
+@param attribute list to consider for locking
+@param result lock state 1 means lock it, 0 means un lock it
+*/
+global proc 
+na_setLockStateUserDefinedAttrOfSelectedByList( string $attrAllowed[], int $state  )
+{
+    //na_assertBinaryInteger({$state});
+    //na_assertSizeGreaterEqualTo( $attrAllowed , 1 );
+    
+    //keyboard shortcut to delete user defined attributes
+    string $sel[] = `ls -sl`;
+    string $attrArray[] = {};
+    
+    for( $object in $sel )
+    {
+        $attrArray = {};
+        //get user defined attributes for object
+        $attrArray = na_getStringArrayIntersectWithOption( `listAttr -ud $object`, $attrAllowed );
+        if(size($attrArray) > 0 ){na_setAttributeLockOfAnim( $object, $state, $attrArray );}
+    }
+    
+}
+global proc
+na_setLockStateUserDefinedAttrOfSelectedByList_unitTest()
+{
+    circle -c 0 0 0 -nr 0 1 0 -sw 360 -r 1 -d 3 -ut 0 -tol 0.01 -s 8 -ch 1;
+    addAttr -ln "attr_naOne"  -at double  |nurbsCircle1;
+    setAttr -e-keyable true |nurbsCircle1.attr_naOne;
+    addAttr -ln "attr_naTwo"  -at double  |nurbsCircle1;
+    setAttr -e-keyable true |nurbsCircle1.attr_naTwo;
+    rename "nurbsCircle1" "hand";
+    
+    select -r hand;
+    
+    na_setLockStateUserDefinedAttrOfSelectedByList( {"attr_naOne"}, 1  );
+}
+
+
+/**set keyable state on subset of user defined attributes of selected objects
+@param attribute list to consider for locking
+@param result keyable state 1 means make keyable, 0 means make not keyable
+*/
+global proc 
+na_setKeyableStateUserDefinedAttrOfSelectedByList( string $attrAllowed[], int $state  )
+{
+    //na_assertBinaryInteger({$state});
+    //na_assertSizeGreaterEqualTo( $attrAllowed , 1 );
+    
+    //keyboard shortcut to delete user defined attributes
+    string $sel[] = `ls -sl`;
+    string $attrArray[] = {};
+    
+    for( $object in $sel )
+    {
+        $attrArray = {};
+        //get user defined attributes for object
+        $attrArray = na_getStringArrayIntersectWithOption( `listAttr -ud $object`, $attrAllowed );
+        if(size($attrArray) > 0 ){na_setAttributeKeyableOfAnim( $object, $state, $attrArray );}
+    }
+    
+}
+global proc
+na_setKeybaleStateUserDefinedAttrOfSelectedByList_unitTest()
+{
+    circle -c 0 0 0 -nr 0 1 0 -sw 360 -r 1 -d 3 -ut 0 -tol 0.01 -s 8 -ch 1;
+    addAttr -ln "attr_naOne"  -at double  |nurbsCircle1;
+    setAttr -e-keyable true |nurbsCircle1.attr_naOne;
+    addAttr -ln "attr_naTwo"  -at double  |nurbsCircle1;
+    setAttr -e-keyable true |nurbsCircle1.attr_naTwo;
+    rename "nurbsCircle1" "hand";
+    
+    select -r hand;
+    
+    na_setKeyableStateUserDefinedAttrOfSelectedByList( {"attr_naOne"}, 0  );
+}
+
+
+
+/**lock user defined attributes of selected objects
+*/
+global proc
+na_unLockUserDefinedAttrOfSelected()
+{
+    //keyboard shortcut to delete user defined attributes
+    string $sel[] = `ls -sl`;
+    string $attrArray[] = {};
+    
+    for( $object in $sel )
+    {
+        $attrArray = {};
+        //get user defined attributes for object and remember to clear storage
+        $attrArray = `listAttr -ud $object`;
+        if(size($attrArray) > 0){
+        na_setAttributeLockOfAnim( $object, 0, $attrArray ); }
+    }
+    
+    select -r $sel;
+    
+}
+global proc
+na_hideUserDefinedAttrOfSelected()
+{
+    //keyboard shortcut to delete user defined attributes
+    string $sel[] = `ls -sl`;
+    string $attrArray[] = {};
+    
+    for( $object in $sel )
+    {
+        $attrArray = {};
+        //get user defined attributes for object and remember to clear storage
+        $attrArray = `listAttr -ud $object`;
+        na_setAttributeKeyableOfAnim( $object, 0, $attrArray );
+    }
+    
+    select -r $sel;
+    
+}
+global proc
+na_unHideUserDefinedAttrOfSelected()
+{
+    //keyboard shortcut to delete user defined attributes
+    string $sel[] = `ls -sl`;
+    string $attrArray[] = {};
+    
+    for( $object in $sel )
+    {
+        $attrArray = {};
+        //get user defined attributes for object and remember to clear storage
+        $attrArray = `listAttr -ud $object`;
+        if(size($attrArray) > 0 ){
+        na_setAttributeKeyableOfAnim( $object, 1, $attrArray );}
+    }
+    
+    select -r $sel;
+    
+}
+
+
+/**get user defined attribute by suffix(s)
+@param animator control
+@param suffix(s) (no underscore)
+@pre attribute names use underscore, animator control exists
+*/
+global proc string [] 
+na_getUserAttributeBySuffix( string $anim, string $suffix[] )
+{
+    //na_assertObjectExist({$anim});
+    
+    string $result[] = {};
+    
+    string $attrArray[] = `listAttr -ud $anim`;
+    
+    //search animator control for matching formated attributes and save them
+    //
+    for($attr in $attrArray)
+    {   
+        string $tokens[] = {};
+        $tokens = na_getTokensByThisSeparator( $attr, "_" );
+        string $lastToken = "";
+        if( size($tokens) >= 2 ){
+            //if extension matches last token save it
+            $lastToken = $tokens[size($tokens)-1];
+            if( na_isOption( {$lastToken}, $suffix, 1 ) == 1 )
+            {
+                $result[size($result)] = $attr;
+            }
+        }
+    }
+    return $result;
+}
+global proc
+na_getUserAttributeBySuffix_unitTest()
+{
+    circle -c 0 0 0 -nr 0 1 0 -sw 360 -r 1 -d 3 -ut 0 -tol 0.01 -s 8 -ch 1;
+    addAttr -ln "attr_naOne"  -at double  |nurbsCircle1;
+    setAttr -e-keyable true |nurbsCircle1.attr_naOne;
+    addAttr -ln "attr_naTwo"  -at double  |nurbsCircle1;
+    setAttr -e-keyable true |nurbsCircle1.attr_naTwo;
+    rename "nurbsCircle1" "hand";
+    
+    select -r hand;
+    
+    print( na_getUserAttributeBySuffix( "hand", {"naOne"}  ) );
+}
+
+
+
+
+
+
+
+/**lock translation and rotation of selected objects
+*/
+global proc
+na_unLockPrimaryAttributeOfSelected()
+{
+    string $sel[] = `ls -sl`;
+    for( $object in $sel )
+    {
+        na_setAttributeLockOfAnim( $object, 0, {"rotateX","rotateY","rotateZ",
+            "translateX","translateY","translateZ","scaleX","scaleY","scaleZ"} );
+    }
+    select -r $sel;
+}
+/**unLock translation and rotation of all objects on scene with suffix
+@param string suffix ex: "_naSnap_loc"
+*/
+global proc
+na_unLockPrimaryAttributeByObjectSuffix(string $arg)
+{    
+    string $restoreSel[] = `ls -sl`;
+    select -cl;
+    select ("*"+$arg);
+    string $sel[] = `ls -sl`;
+    for( $object in $sel )
+    {
+        na_setAttributeLockOfAnim( $object, 0, {"rotateX","rotateY","rotateZ",
+        "translateX","translateY","translateZ","scaleX","scaleY","scaleZ"} );
+    }
+    select -r $restoreSel;
+}
+
+
+/**unLock translation and rotation of selected objects
+*/
+global proc
+na_lockPrimaryAttributeOfSelected()
+{
+    string $sel[] = `ls -sl`;
+    for( $object in $sel )
+    {
+        na_setAttributeLockOfAnim( $object, 1, {"rotateX","rotateY","rotateZ",
+            "translateX","translateY","translateZ","scaleX","scaleY","scaleZ"} );
+    }
+    select -r $sel;
+}
+
+
+/**return plug from single node uses each attribute
+@param string $node  single object
+@result string list input converted to plugs ex,  joint1.translateX, joint1.translateY ...
+@pre no checks on existence
+@bug no assert
+@see na_getPlug
+*/
+global proc string[]
+na_getPlugByAttributeArray( string $node, string $attribute[] )
+{
+    string $drivenPlusAttrArray[] = {};
+
+    string $attr[] = {};
+    $attr = $attribute;
+    
+  
+    for($j = 0; $j < size($attribute); $j++)
+    {
+        $drivenPlusAttrArray[size($drivenPlusAttrArray)] = $node+"."+($attr[$j]);
+    } 
+
+    
+    return $drivenPlusAttrArray;   
+}
+/**set lock status of anim and attribute
+@param animator control
+@param 1 to make attribute locked 0 to unLock it
+@param string list of attributes on animator control to edit
+*/
+global proc
+na_setAttributeLockOfAnim(string $anim, int $isLock, string $attrArray[])
+{
+    string $attrAndPlug[] = {};
+    $attrAndPlug = na_getPlugByAttributeArray($anim, $attrArray);
+    //na_assertObjectExist($attrAndPlug);
+    
+    if( ($isLock == 1) || ($isLock == 0) ){
+        for($attr in $attrArray)
+        {
+            setAttr -l $isLock ($anim+"."+$attr);
+        }
+    }
+    
+}
+
+/**set keybale/hide status of anim and attribute
+@param animator control
+@param 1 to make it keyable and shown in channel editor 0 otherwise
+@param string list of attributes on animator control to edit
+*/
+global proc
+na_setAttributeKeyableOfAnim(string $anim, int $isKeyable, string $attrArray[])
+{
+    string $attrAndPlug[] = {};
+    $attrAndPlug = na_getPlugByAttributeArray($anim, $attrArray);
+    //na_assertObjectExist($attrAndPlug);
+    
+    if( ($isKeyable == 1) || ($isKeyable == 0) ){
+        for($attr in $attrArray)
+        {
+            //here we assume when its keybale should be shown
+            setAttr -keyable $isKeyable -channelBox $isKeyable ($anim+"."+$attr);
+            setAttr -k $isKeyable ($anim+"."+$attr);
+        }
+    }
+    
+}
+
+
+
+
+/**return 1 if argument is of type
+@param string $arg -- a node
+@param string $plug -- a plug
+@param string $type -- a node type ex: ("nurbsCurve")
+*/
+global proc int na_isAttrType(string $object, string $plug, string $type)
+{
+    int $isType = 0;
+    string $objectAndPlug = "";
+    $objectAndPlug = ($object+"."+$plug);
+    if( `objExists $objectAndPlug` == 1){
+        string $curType = `getAttr -type $objectAndPlug`;
+        //is this of input type
+        if(`strcmp $curType $type` == 0){$isType = 1;}
+    }
+    return $isType;
+}
+/**
+@param object that has attributes
+@param attribute list
+@param type list 
+*/
+global proc int 
+na_isAttrTypeSupportedArray(string $object, string $attr[], string $supported[])
+{
+    int $result = 1;
+    int $isType = 0;
+    string $objectAndPlug = "";
+    string $plug = "";
+    for( $i = 0 ; $i < size($attr); $i++ )
+    {
+        $plug = $attr[$i];
+        $objectAndPlug= ($object+"."+$plug);
+        if( `objExists $objectAndPlug` == 1){
+            $isType = na_isAttrTypeSupported($object,$plug,$supported);
+            if($isType == 0){
+                $result = 0;
+                break;
+            }
+        }
+    }
+    return $result;
+}
+global proc int na_isAttrTypeSupported(string $object, string $plug, string $supported[])
+{
+    int $isType = 0;
+    string $objectAndPlug = ($object+"."+$plug);
+    if( `objExists $objectAndPlug` == 1){
+        //if its supported dont continue looping
+        for($i = 0; $i < size($supported); $i++)
+        {
+            //is the type of this supported
+            $isType = na_isAttrType($object,$plug,$supported[$i]);
+            if($isType == 1){ break;}
+        }
+    }
+    return $isType;
+}
+
+
+/**for helping a new control also get the range of attributes of old control
+it should be empty if no range to take care of
+@bug not making sure attribute is of correct type
+*/
+global proc int[]
+na_getMinIntAttr(string $anim, string $argAttr)
+{
+    //na_assertObjectExist( {$anim+"."+$argAttr} );
+    //na_assertAttrTypeInList($anim,{$argAttr},{"long"});
+    int $minArray[] = {};
+    
+    if( `attributeQuery -node $anim -minExists $argAttr` == 1){ 
+        
+        $minArray = `attributeQuery -node $anim -min $argAttr`;
+        //na_assertIntSizeEqualArg($minArray,1);
+    };
+    
+    return $minArray;
+}
+global proc int[]
+na_getMaxIntAttr(string $anim, string $argAttr)
+{
+    //na_assertObjectExist( {$anim+"."+$argAttr} );
+    //na_assertAttrTypeInList($anim,{$argAttr},{"long"});
+    int $maxArray[] = {};
+    
+    if( `attributeQuery -node $anim -maxExists $argAttr` == 1){ 
+        
+        $maxArray = `attributeQuery -node $anim -max $argAttr`;
+        //na_assertIntSizeEqualArg($maxArray,1);
+    };
+    return $maxArray;
+}
+
+
+global proc float[]
+na_getMinFloatAttr(string $anim, string $argAttr)
+{
+    //na_assertObjectExist( {$anim+"."+$argAttr} );
+    //na_assertAttrTypeInList($anim,{$argAttr},{"double"});
+    float $minArray[] = {};
+    
+    if( `attributeQuery -node $anim -minExists $argAttr` == 1){ 
+        
+        $minArray = `attributeQuery -node $anim -min $argAttr`;
+        //na_assertFloatSizeEqualArg($minArray,1);
+    };
+    
+    return $minArray;
+}
+global proc float[]
+na_getMaxFloatAttr(string $anim, string $argAttr)
+{
+    //na_assertObjectExist( {$anim+"."+$argAttr} );
+    //na_assertAttrTypeInList($anim,{$argAttr},{"double"});
+    float $maxArray[] = {};
+    
+    if( `attributeQuery -node $anim -maxExists $argAttr` == 1){ 
+        
+        $maxArray = `attributeQuery -node $anim -max $argAttr`;
+        //na_assertFloatSizeEqualArg($maxArray,1);
+    };
+    return $maxArray;
+}
+

@@ -1,0 +1,60 @@
+
+//updated 12-25-2014 nate --- added center tolerance update
+//07-17-2014 -- nate  -- initial release
+//nathananozie dot blogspot dot com
+//Modify at own risk
+
+
+eval( "source \"na_setToDefaultOppositeSideOfBlendshape.mel\";" );//stuff for math
+eval( "source \"naMirrorBlendshape.mel\";" );//stuff for math
+string $importCmd = "from "+"na_comboMaker"+" "+"import "+"na_comboMaker"; //python stuff for math
+python $importCmd;
+
+
+//changes a string:  a to  'a'
+proc string pad(string $arg){return ("'"+$arg+"'");}
+
+global proc naBlendShapeSymmetry(string $defaultArg, string $blendshapeArg){
+    //symmetrize blendshape (assumes sculpted in +x is correct side including centered verts)
+    //defaultArg            -- this is mesh with no changes from its starting vtx locations
+    //blendshapeArg         -- this is mesh we want to symmetrize
+
+    //no error checking
+    string $default = "";
+    string $blendshape = "";
+    
+    $default = $defaultArg;//base mesh
+    $blendshape = $blendshapeArg;//blendshape we wish to symmetrize
+    
+    
+    
+    //make a mesh with one side set to default, center vertices not set to default
+    string $oppositeCleanResultAr[] = {};
+    select -r $blendshape;//select blendshape then the default mesh
+    select -add $default;
+    float $centerTolerance[] = {-.001,.001}; //was {-.001,.001}
+    $oppositeCleanResultAr = na_setToDefaultOppositeSideOfBlendshape("+x",$centerTolerance);
+    string $oppositeCleanResult = $oppositeCleanResultAr[0];
+    select -cl;
+    
+    //make a mesh mirrored to our shape
+    string $mirrorResultAr[] = {};
+    $mirrorResultAr = naMirrorBlendshape($default, $blendshape, "+x" );
+    string $mirrorResult = $mirrorResultAr[0];
+    
+    //make symmetrize mesh
+    //put mirrorResult and oppositeCleanResult into a duplicate of base mesh bs with 1's on both
+    /////
+    //create the symmetrize mesh
+    string $pyCmd = "na_comboMaker"+" "+"("+
+    "default="+pad($default)+","+
+    "sculpted="+pad($oppositeCleanResult)+","+
+    "posed="+pad($mirrorResult)
+    +")";
+    python $pyCmd;
+    //////done making symmetrize mesh
+    
+    delete $mirrorResult;
+    delete $oppositeCleanResult;
+}
+

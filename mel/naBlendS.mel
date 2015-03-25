@@ -1,0 +1,109 @@
+
+global proc naBlendS_mBS()
+{
+    //mBS
+    eval( "source \"naMirrorBlendshape.mel\";" );
+    
+    string $sel[] = {};
+    $sel = `ls -sl`;
+    if(size($sel) == 2){
+        //default mesh, blend shape, +x means mirror from +x to -x
+        string $resultAr[] = naMirrorBlendshape($sel[1],$sel[0],"+x");
+    }
+    else{
+        print("select blend shape then default mesh");
+    }
+
+}
+
+global proc naBlendS_UImBS()
+{
+    //default mesh, blend shape, +x means mirror from +x to -x
+    eval( "source \"naMirrorBlendshape.mel\";" );
+    naMirrorBlendshape_ui_based();
+}
+
+global proc naBlendS_smthSel()
+{
+    //smooth selected
+    //assumes selected a single polygon object, it will put a smooth on it
+    string $sel[] = `ls -sl`;
+    if( size($sel) == 1 ){
+        string $poly = $sel[0];
+        int $numDivisions = 1; //how smooth to make mesh -- 2 smoothest, 0 no smooth
+        polySmooth  -mth 0 -dv $numDivisions -c 1 -kb 1 -ksb 1 -khe 0 -kt 1 -kmb 1 -suv 1 -peh 0 -sl 1 -dpe 1 -ps 0.1 -ro 1 -ch 1 $poly;
+    }
+}
+
+global proc naBlendS_eqBS()
+{
+    //symmetrize blendshape
+    
+    eval( "source \"naBlendShapeSymmetry.mel\";" );
+    
+    //First select blendshape to symmetrize then base mesh
+    string $sel[] = `ls -sl`;
+    if(size($sel) == 2){
+        naBlendShapeSymmetry($sel[1],$sel[0]);
+    }
+    else{ error("First select blendshape to symmetrize then base mesh!");}
+}
+
+
+global proc naBlendS_limX()
+{
+    //make limits of x between -1 and 1
+    
+    for($arg in `ls -sl`){ 
+        transformLimits -tx -1 1 -etx 1 0 $arg;
+        transformLimits -tx -1 1 -etx 1 1 $arg;
+    };
+}
+
+global proc naBlendS_limY()
+{
+    //make limits of y between -1 and 1
+    
+    for($arg in `ls -sl`){ 
+        transformLimits -ty -1 1 -ety 1 0 $arg;
+        transformLimits -ty -1 1 -ety 1 1 $arg;
+    };    
+}
+
+global proc naBlendS_ty( float $val )
+{
+    //set ty to 1 for all selected
+    string $sel[] = {};
+    $sel = `ls -sl`;
+    for($arg in $sel){ setAttr($arg+".translateY",$val);}
+}
+global proc naBlendS_tx( float $val )
+{
+    //set ty to 1 for all selected
+    string $sel[] = {};
+    $sel = `ls -sl`;
+    for($arg in $sel){ setAttr($arg+".translateX",$val);}
+}
+
+
+global proc na_addSingleBlendshape(){
+    //select bs then base mesh, requires single bs, assumes to put bs on
+    
+    string $sel[] = `ls -sl`;
+    if( size($sel) != 2 ){error("First select blendshape, then select undeformed mesh.");}
+    $blendshape = $sel[0];
+    $unSculptedMesh = $sel[1];
+    string $blendAr[] = `blendShape $blendshape $unSculptedMesh`;
+    setAttr ($blendAr[0] + "." + $blendshape) 1;
+}
+
+global proc na_addDoubleBlendshape(){
+    //select bs then base mesh, requires single bs, assumes to put bs on
+    string $sel[] = `ls -sl`;
+    if( size($sel) != 3 ){error("First select 2 blendshapes, then select undeformed mesh.");}
+    $blendshape_a = $sel[0];
+    $blendshape_b = $sel[1];
+    $unSculptedMesh = $sel[2];
+    string $blendAr[] = `blendShape $blendshape_a $blendshape_b $unSculptedMesh`;
+    setAttr ($blendAr[0] + "." + $blendshape_a) 1;
+}

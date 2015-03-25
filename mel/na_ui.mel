@@ -1,0 +1,306 @@
+/**@file na_ui.mel
+*
+*Makes MEL user interfaces quickly.(Tested Maya 2008)
+*
+*@author Nathaniel O. Anozie (ogbonnawork at gmail dot com)
+*@note date created: March 16, 2012
+*@note How to Install
+*@note source na_ui.mel
+*@defgroup ui UI Drawing
+*@{
+*Techniques to build User Interface in Maya
+*
+*Examples: supports use of absolute control of widget placement, retrieval of multiple button selections etc.
+*@note Acknowledgement:  Bryan Ewert xyz2 dot net -- for learning about about oncommand with radio buttons and text labels
+*@note Modify at your own risk
+*/
+
+
+
+
+/**create an empty window
+@param string $mainWindowName window global name
+@param string $titleWindow
+@param float $width
+@param float $height
+@bug sizeable fixed
+*/
+global proc na_window(string $mainWindowName, string $titleWindow, float $width, float $height)
+{
+    
+    na_windowRemoveIfExist($mainWindowName);
+    window -t $titleWindow -width $width -height $height -sizeable true $mainWindowName;
+    
+}
+
+/**remove window and windows preferences if it exists
+@param string $mainWindowName window global name
+*/
+global proc na_windowRemoveIfExist(string $mainWindowName)
+{
+    //delete window pref for this window if it exists
+    if(`windowPref -exists $mainWindowName`){ windowPref -remove $mainWindowName;}
+    
+    if( `window -exists $mainWindowName`  )
+    {
+        deleteUI $mainWindowName;
+    }
+}
+/**
+@result 1 if window exist, 0 otherwise
+*/
+global proc int
+na_isWindowExist(string $mainWindowName)
+{
+    int $result = 0;
+    if(`window -exists $mainWindowName`)
+    {
+        $result = 1;
+    }
+    return $result;
+}
+
+
+/**add a text label to a window
+@parm string $form -- name of form
+@param string $winName -- name of window
+@param string $label -- ?should be label
+@param float $top  position top
+@param float $left position left
+*/
+global proc na_text(string $form, string $winName, string $label, float $top, float $left)
+{
+    if( `window -exists $winName`  )
+    {       
+        string $textLabel = "";
+        $textLabel = `text -l $label`;
+               
+        //how should things be positioned
+        formLayout -edit 
+        -attachForm $textLabel "top" $top
+        -attachForm $textLabel "left" $left
+        $form;
+        
+        //setParent $winName;//add tab to arg window
+    }
+    else{
+        ui_errorMessage();
+    }
+}
+
+
+/**add a text field to a window
+@parm string $form -- name of form
+@param string $winName -- name of window
+@param string $label -- ?should be label
+@param float $top  position top
+@param float $left position left
+@param string $globalName  global variable to hold value
+*/
+global proc na_textFieldGrp(string $form, string $winName, string $label, float $top, float $left, string $globalName)
+{
+    if( `window -exists $winName`  )
+    {       
+        textFieldGrp -label $label $globalName;
+               
+        //how should things be positioned
+        formLayout -edit 
+        -attachForm $globalName "top" $top
+        -attachForm $globalName "left" $left
+        $form;
+        
+        //setParent $winName;//add tab to arg window
+    }
+    else{
+        ui_errorMessage();
+    }
+}
+
+/**add a int field to a window
+@parm string $form -- name of form
+@param string $winName -- name of window
+@param string $label -- ?should be label
+@param float $top  position top
+@param float $left position left
+@param string $globalName  global variable to hold value
+*/
+global proc na_intFieldGrp(string $form, string $winName, string $label, float $top, float $left, string $globalName)
+{
+    if( `window -exists $winName`  )
+    {       
+        intFieldGrp -numberOfFields 1 -value1 1 -label $label  $globalName;
+               
+        //how should things be positioned
+        formLayout -edit 
+        -attachForm $globalName "top" $top
+        -attachForm $globalName "left" $left
+        $form;
+      
+        //setParent $winName;//add to arg window
+    }
+    else{
+        ui_errorMessage();
+    }
+}
+/**add a button to a window
+@parm string $form -- name of form
+@param string $winName -- name of window
+@param string $label -- ?should be label
+@param float $top  position top
+@param float $left position left
+@param string $globalName  global variable to hold value
+@param string $cmd command for button
+*/
+global proc na_button(string $form, string $winName, string $label, float $top, float $left, string $globalName, string $cmd)
+{
+    if( `window -exists $winName`  )
+    {       
+        button -label $label -command $cmd $globalName;
+               
+        //how should things be positioned
+        formLayout -edit 
+        -attachForm $globalName "top" $top
+        -attachForm $globalName "left" $left
+        $form;
+        
+        //setParent $winName;//add tab to arg window
+    }
+    else{
+        ui_errorMessage();
+    }
+}
+
+
+/**add a single check box to a window
+@parm string $form -- name of form
+@param string $winName -- name of window
+@param string $label -- label
+@param float $top  position top
+@param float $left position left
+@param string $onCommand on command for button
+@param string $offCommand off command for button
+*/
+global proc 
+na_checkBox(string $form, string $winName, string $label, float $top, float $left, string $onCommand, string $offCommand)
+{
+    
+    if( `window -exists $winName`  )
+    {       
+        string $val = `checkBox -label $label -onc $onCommand -ofc $offCommand`;
+        
+        //how should things be positioned
+        formLayout -edit 
+        -attachForm $val "top" $top
+        -attachForm $val "left" $left
+        $form;
+        
+        //setParent $winName;//add tab to arg window  
+    }
+    else{
+        ui_errorMessage();
+    }
+}
+
+/**if arg string is same as string version of any of options integer option otherwise get empty integer list
+@note example used for ui where need an integer and ui has strings
+*/
+global proc int[]
+na_stringIsInteger( string $arg, int $options[])
+{
+    int $result[] = {};
+    
+    string $compareTo = "";
+    for($i = 0; $i < size($options); $i++)
+    {
+        $compareTo = ($options[$i])+"";
+        if( `strcmp $arg $compareTo` == 0 )
+            { $result[size($result)] = $options[$i]; break; }
+    }
+    return $result;
+}
+
+
+/**print error message
+*/
+global proc ui_errorMessage()
+{
+    print("skipping, error creating window");
+}
+
+
+/**get python list from mel string array, it works with one item or more
+*/
+global proc string
+na_getPythonListFromMelStringArray(string $object[])
+{
+    string $result = "";
+    
+    string $sep = ",";
+    
+    if( size($object) < 1 ){error("size less than--"+1);}
+
+    
+    $result = "["+stringArrayToString($object,",")+"]";
+    
+    return $result;
+}
+global proc
+na_getPythonListFromMelStringArray_unitTest()
+{
+    print( na_getPythonListFromMelStringArray({"a"}) );
+    print("\n");
+    print( na_getPythonListFromMelStringArray({"a","b"}) );
+    print("\n");
+    print( na_getPythonListFromMelStringArray({}) );
+}
+
+/**Give back input string list after adding on optional prefix and suffix strings.
+@param string $front    what to place in front of each input
+@param string $back     what to place at end of each input
+*/
+global proc string[]
+na_getStringArrayPadded(string $object[], string $front, string $back)
+{
+    if( size($object) < 1 ){error("size less than--"+1);}
+    
+    string $result[] = {};
+    for($i=0; $i < size($object); $i++)
+    {
+        $result[size($result)] = $front+$object[$i]+$back;
+    }
+    return $result;
+}
+global proc
+na_getStringArrayPadded_unitTest()
+{
+    print( na_getStringArrayPadded({"a"},"'","'") );
+    print("\n");
+    print( na_getStringArrayPadded({"a","b"},"'","'") );
+    print("\n");
+    print( na_getStringArrayPadded({"a","b"},"l_","_anim") );
+    print("\n");
+    print( na_getStringArrayPadded({},"l_","_anim") );
+}
+global proc string
+na_getStringPadded(string $object, string $front, string $back)
+{
+    return ($front+$object+$back);
+}
+global proc
+na_getStringPadded_unitTest()
+{
+    print( na_getStringPadded("a","'","'") );
+    print("\n");
+}
+/**
+*@}
+*/
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,95 @@
+/**na_cleanMaterial.mel
+
+----  This is useful when you export some things to a new scene then reimport them but dont want to use their imported materials
+----  since there are already materials on scene.
+
+@note Run na_cleanMaterial(); in MEL script editor after sourcing this script 
+@author Nathaniel Anozie
+ogbonnawork at gmail dot com
+@note created: 07/25/2013
+@note Inspired by Rik Poggi online tutorial on using rfind in python
+@note Modify at your own risk
+*/
+
+//last updated: 07/25/2013 -- working on initial release
+
+
+/*clean up imported materials
+go through all supported material shaders and if there is a underscore and the end part of name is already on scene 
+1. save objects assigned (objects could be face,shapes, É )
+2. reassign scene material to them
+3. remove imported material shader, and remove imported material shading group.
+*/
+global proc
+na_cleanMaterial()
+{
+    print("[na_cleanMaterial] Starting . . . \n");
+    string $sel[] = `ls -sl`;
+    string $shader[] = `ls -type surfaceShader -type lambert -type blinn`; //PUT MORE MATERIALS TO SUPPORT HERE
+    for($arg in $shader){
+        if( strcmp($arg,"lambert1") != 0){
+            
+            string $maybeSceneMat = na_cleanMaterial_getNonImportedName($arg);
+            //reassign to material when needed
+            if(  (strcmp($arg, $maybeSceneMat) != 0)  && objExists($maybeSceneMat) ){
+                
+                string $sgAr[] = `listConnections -source true -type shadingEngine $maybeSceneMat`;
+                if(size($sgAr) == 1){
+                    print("[na_cleanMaterial] Great! reassigning material for-->"+$sgAr[0]+"!\n");
+                    string $nonImportMatSG = $sgAr[0];
+                    
+                    select -cl;
+                    //select objects with material
+                    //if no objects with material nothing gets selected
+                    hyperShade -objects $arg;
+                    
+                    //assign to scenes non imported material via its shading group
+                    if(size(`ls -sl`) > 0){
+                        sets -e -forceElement $nonImportMatSG;
+                    }
+                    else{ print("[na_cleanMaterial] Skipping! Nothing needed to reassign for material -->"+$sgAr[0]+"\n"); }
+                    
+                    //remove imported non used material
+                    string $importedSGAr[] = `listConnections -source true -type shadingEngine $arg`;
+                    if( size($importedSGAr) == 1){ 
+                        print("[na_cleanMaterial] removing-->"+$importedSGAr[0]+"!\n");
+                        delete $importedSGAr[0];
+                    }
+                    print("[na_cleanMaterial] removing-->"+$arg+"!\n");
+                    delete $arg;
+                }
+                else{ print("[na_cleanMaterial] Warning Cannot Find Shading Group For-->"+$maybeSceneMat+"!\n"); }
+            }
+            else{ print("[na_cleanMaterial] Skipping -->"+$arg+"! No objects need reassigning\n"); }	
+            
+        }
+    }
+    
+    select -r $sel;
+    print("[na_cleanMaterial] Great Day its Complete !!!\n");
+    
+}
+
+
+
+//gives back either the input or the ending part of input if input is of imported name form
+//should support materials with underscores in name
+global proc string
+na_cleanMaterial_getNonImportedName(string $arg)
+{
+    string $shader = "";
+    //string $arg = "toImport_materialName";
+    $shader = $arg;
+    //get last zero based index of underscore in string
+    int $last = python(  "'"+$arg+"'"+".rfind('_')"  ); //if cant find it gives a -1
+    
+    //---getting last part of name if possible
+    //strict less is important here
+    if($last != -1 && ($last < size($arg) ) ){
+        
+        $shader = python( "'"+$arg+"'"+"["+ ($last+1) +":]"  );
+    }
+    
+    return $shader;
+    //print $shader;
+}

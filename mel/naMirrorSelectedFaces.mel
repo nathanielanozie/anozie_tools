@@ -1,0 +1,126 @@
+/**@file naMirrorSelectedFaces.mel
+@brief  v1.0.0 mirror face selection supports: Supports Low Poly Meshes ex < 10000 verts on a side
+@author Nathaniel O. Anozie (ogbonnawork at gmail dot com)
+@note Modify at your own risk
+@Inspired by David Johnson (djx dot com dot au)  Learning about closestPointOnMesh node from online tutorials
+*/
+
+//updated 07-08-2014 nate --- working on intial release
+
+eval( "source \"na_getPolyFromComponent.mel\";" );//helper
+
+global proc string[] 
+naMirrorSelectedFaces(int $mirrorAxis)
+{   
+    //assumes selected is from a symmetric poly at origin, assumes nothing selected goes past one side of mesh
+    
+    string $result[] = {};
+    string $_face[] = `ls -sl`;
+    //na_assertTypeInList($_face,{"mesh"});  
+    //na_assertFloatNonNegative( {$howCloseIsNearEnough} );
+    
+    //use the correct axis for mirroring
+    //its used by multiplying position by this so we can mirror
+    //to opposite side regardless of side picked
+    //
+    int $mDirect[] = {};
+    
+    switch($mirrorAxis){
+        case 1:
+        $mDirect = {-1,1,1}; //mirror in x direction
+        break;
+        case 2:
+        $mDirect = {1,-1,1}; //mirror in y direction
+        case 3:
+        $mDirect = {1,1,-1}; //mirror in z direction
+        break;
+        default:
+        error("Requires 1,2, or 3 for, X,Y, or Z mirror axis respectively");
+        break;	        
+    }
+    
+    
+    
+    
+    //print(`date -time`+"\n");
+    //string $mVerts[]; //for each input vtx corresponding mirrored vtx    
+    
+    if(size($_face)>0){
+        
+        string $face[] = `filterExpand -sm 34 -expand true`;
+        //get shape for mesh that has these faces
+        string $polyNameArray[] = na_getPolyFromComponent($face[0]);
+        string $polyName = $polyNameArray[0];
+        string $shapes[] = `listRelatives - shapes $polyName`;
+        string $shape = $shapes[0];
+
+        
+        
+        
+        //loop over faces
+        for($i=0; $i<size($face); $i++){
+            
+            //CHECK HERE !!!
+            
+            float $selPos[] = na_getWorldPositionFace($face[$i]);//still need to mirror position
+            //might want to verify here selecting on one side of mesh only
+            
+            //get mirrored position for each slected face
+            float $mPosX = $mDirect[0]*$selPos[0];
+            float $mPosY = $mDirect[1]*$selPos[1];
+            float $mPosZ = $mDirect[2]*$selPos[2];
+ 
+            
+            //get mirrored face
+            string $nodeForMath = eval("createNode closestPointOnMesh");
+            connectAttr -f ($shape+".outMesh") ($nodeForMath+".inMesh");
+            string $mirrorLoc = eval("createNode transform");
+            xform -ws -t $mPosX $mPosY $mPosZ $mirrorLoc;//move mirrored loc to mirror position
+            connectAttr -f ($mirrorLoc+".translate") ($nodeForMath+".inPosition");
+            int $nearestFaceId;
+            $nearestFaceId = `getAttr ($nodeForMath+".closestFaceIndex")`;
+            $result[size($result)] = $polyName+".f"+"["+$nearestFaceId+"]";; //store face
+            
+            catch(`delete $nodeForMath`); //clean up
+            catch(`delete $mirrorLoc`);
+            //done mirroring this face
+        }//end face loop
+    }
+    
+    //select -r $_face;   
+    catch( `select -r $result` );
+    //print(`date -time`+"\n");
+    return($result)  ;  
+    
+}
+
+
+global proc float[] 
+na_getWorldPositionFace(string $_face)
+{
+    //given single face average world position of its neighbor verts and return trio
+    
+    float $result[] = {};
+    if( `objectType $_face` != "mesh" ){error("Error computing poly face position !!!");}
+    
+    //do math
+    float $sumPos[] = {0.0,0.0,0.0};    
+    //float $allPos[] = {};
+    //float $allPos[] = `xform -q -t -ws $_face`;//doesnt give back one number usually 4
+    string $_vertsOfFace[] = `polyListComponentConversion -ff -tv $_face`;
+    select -r $_vertsOfFace;
+    string $vertsOfFace[] = `filterExpand -sm 31 -expand true`;
+    for($vtx in $vertsOfFace){
+        float $pos[] = `xform -q -t -ws $vtx`;
+        $sumPos[0] = $sumPos[0] + $pos[0]; //--x
+        $sumPos[1] = $sumPos[1] + $pos[1]; //--y
+        $sumPos[2] = $sumPos[2] + $pos[2]; //--z
+    }
+    int $numCornerFace = size($vertsOfFace);
+    
+    $result = { $sumPos[0]/$numCornerFace , $sumPos[1]/$numCornerFace, $sumPos[2]/$numCornerFace };//world positions x,y,z averaged    
+    
+    return $result;
+}
+
+

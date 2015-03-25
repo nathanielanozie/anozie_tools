@@ -1,0 +1,73 @@
+/**@file na_postyD_UI.mel
+@author Nathaniel O. Anozie (ogbonnawork at gmail dot com)
+@note modify at your own risk
+@bug not of ui's work if rig imported, one reason doesn't like imported is names are hard coded inside of the ui scripts
+which makes it a problem. Like suppose changed name for a setting, supposed changed names of animator control etc.
+*/
+
+//last updated: 05/14/2014-05/15/2014 -- show space switching, matching only
+
+
+
+/** old version of ui
+@note 
+@bug channel editor version not working, not isolated to selected animator control
+*/
+global proc na_snap_UI()
+{
+    string $mainWindowName = "mainWindow";
+    int $width = 160;
+    int $height = 170;
+    
+    //so we can toggle ui on or off with one hot key
+    //if window is up already just close it otherwise make a new one
+    //
+    if( na_isWindowExist($mainWindowName) == 1 )
+    {
+        na_windowRemoveIfExist($mainWindowName);
+    }
+    else
+    {        
+        //for different characters would change the ui function calls here
+        na_windowFrameLayout("postyD UI", $width, $height, $mainWindowName,
+        {"na_match_UI_config"},
+        {"matching"});        
+    }
+}
+
+
+/** old version of ui
+@note 
+@bug channel editor version not working
+*/
+global proc na_space_UI()
+{
+    string $mainWindowName = "mainWindow";
+    int $width = 160;
+    int $height = 170;
+    
+    //so we can toggle ui on or off with one hot key
+    //if window is up already just close it otherwise make a new one
+    //
+    if( na_isWindowExist($mainWindowName) == 1 )
+    {
+        na_windowRemoveIfExist($mainWindowName);
+    }
+    else
+    {
+        //for different characters would change the ui function calls here
+        /*
+        na_windowFrameLayout("postyD UI", $width, $height, $mainWindowName,
+        {"na_vis_UI","na_animSelect_UI","na_match_UI_config","na_spaceSwitch_UI_config"},
+        {"visibility","selection","matching","space switching"});
+        */
+        
+        //for different characters would change the ui function calls here
+        na_windowFrameLayout("postyD UI", $width, $height, $mainWindowName,
+        {"na_spaceSwitch_UI_config"},
+        {"space switching"});        
+    }
+}
+
+
+

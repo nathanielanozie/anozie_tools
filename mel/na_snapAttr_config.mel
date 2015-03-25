@@ -1,0 +1,344 @@
+/**@file na_snapAttr_config.mel
+@brief v1.0.0 configure data for snapping attributes ex: whats the backend network and connections, whats does the ik/fk matching procedure need on animator control etc.
+@author Nathaniel O. Anozie (ogbonnawork at gmail dot com)
+@bug  not working on production rig
+@note date created: May 9, 2012
+@note date last modified: May 23, 2012
+@note How to Install
+@source naMath.mel
+@source na_connect.mel
+@source naGeneral.mel
+@source na_assertGeneral
+@note released 
+@note --
+@note -- working on separating configure stuff the details from code
+@note -- adding optional attribute name
+@note -- 
+@note Modify at your own risk
+*/
+
+
+/**
+@pre  all network setup already
+@post gives data in form of name list or float list
+@bug no assert 2 things to separate, existence, no check md node actually found,
+no assert inputs found...
+@see na_getPlugInputFromMultiMDNodeFromAnim
+@see na_getObjectSepPlug
+*/
+global proc string[]
+na_snapAttrGetAttrPlug(string $anim, string $naAttr)
+{
+    //get all attrs names
+    string $attrAndPlug[] = {};
+    $attrAndPlug = na_getPlugInputFromMultiMDNodeFromAnim($anim,$naAttr,"X","input1");
+    
+    string $attr[] = {};
+    string $attr_sep[] = {};
+    for( $i = 0; $i < size($attrAndPlug); $i++ )
+    {
+        $attr_sep = na_getObjectSepPlug( $attrAndPlug[$i] );
+        $attr[size($attr)] = $attr_sep[1];
+    }
+    
+    return $attr;
+}
+global proc string[]
+na_snapAttrGetGoalName(string $anim, string $naAttr)
+{
+    //get all goal point names
+    string $goalAndPlug[] = {};
+    $goalAndPlug = na_getPlugInputFromMultiMDNodeFromAnim($anim,$naAttr,"Z","input2");
+    
+    string $goal[] = {};
+    string $goal_sep[] = {};
+    for( $i = 0; $i < size($goalAndPlug); $i++ )
+    {
+        $goal_sep = na_getObjectSepPlug( $goalAndPlug[$i] );
+        $goal[size($goal)] = $goal_sep[0];
+    }
+    
+    return $goal;
+}
+global proc string[]
+na_snapAttrGetAttrMoveThisName(string $anim, string $naAttr)
+{
+    //get all goal point names
+    string $attrMovesThisAndPlug[] = {};
+    $attrMovesThisAndPlug = na_getPlugInputFromMultiMDNodeFromAnim($anim,$naAttr,"Z","input1");
+    
+    string $attrMovesThis[] = {};
+    string $attrMovesThis_sep[] = {};
+    for( $i = 0; $i < size($attrMovesThisAndPlug); $i++ )
+    {
+        $attrMovesThis_sep = na_getObjectSepPlug( $attrMovesThisAndPlug[$i] );
+        $attrMovesThis[size($attrMovesThis)] = $attrMovesThis_sep[0];
+    }
+    
+    return $attrMovesThis;
+}
+global proc float[]
+na_snapAttrGetDefaultFloat(string $anim, string $naAttr)
+{
+    //get all default float values
+    string $defaultAndPlug[] = {};
+    $defaultAndPlug = na_getPlugInputFromMultiMDNodeFromAnim($anim,$naAttr,"X","input2");
+    
+    float $default[] = {};
+    string $default_sep[] = {};
+    string $defaultNode = "";
+    for( $i = 0; $i < size($defaultAndPlug); $i++ )
+    {
+        $default_sep = na_getObjectSepPlug( $defaultAndPlug[$i] );
+        $defaultNode = $default_sep[0];
+        $default[size($default)] = `getAttr ($defaultNode+".outputX")`;
+    }
+    
+    return $default;
+}
+
+/**
+@pre assuming double type of attribute to be stored in float array
+@bug no assert to verify getAttr values can be saved, assuming float
+*/
+global proc float[]
+na_snapSimpleAttrGetDefault(string $anim, string $naAttr)
+{
+    //getAttr numbers
+    string $goalAndPlug[] = {};
+    $goalAndPlug = na_getPlugInputFromMultiMDNodeFromAnim($anim,$naAttr,"X","input2");
+    
+    float $goal[] = {};
+    for( $i = 0; $i < size($goalAndPlug); $i++ )
+    {
+        $goal[size($goal)] = `getAttr $goalAndPlug[$i]`;
+    }
+    
+    return $goal;
+}
+
+
+
+/**
+@param string $animArg  animator control it should have all attributes on it
+@param string $attrArrayArg[] the things animator can change and it moves endpoints
+@param string $endArrayArg[] endpoints things attributes moves somehow
+@param string $goalArrayArg[] goal where we want endpoint to arrive
+@param name for snap attribute found on animator control
+@bug no checking existence attribute, no checks existence connections, no checks whether overwriting
+@see na_addNonKeyFloatAttr
+@see na_makeMultiplyDivide
+@see na_setInputToMDByPlugLetter
+@bug i don't think this will work on overwriting
+*/
+global proc
+na_snapAttrMake(string $animArg, string $attrArrayArg[], string $endArrayArg[], 
+string $goalArrayArg[], string $naAttr, string $prefixName)
+{
+    
+    //set some variables
+    string $anim="";
+    $anim = $animArg;
+    
+    
+    //name 
+    //string $naAttr = "naSnapAdv";
+    
+    
+    //assert data
+    na_assertObjectExist( {$anim} );
+    na_assertObjectExist( $endArrayArg );
+    na_assertObjectExist( $goalArrayArg );
+    int $n = size($attrArrayArg);
+    na_assertSizeEqualArg( $endArrayArg, $n );
+    na_assertSizeEqualArg( $goalArrayArg, $n );
+    
+    
+
+    
+    //
+    ///what to store
+    string $attrArray[] = {};
+    string $endArray[] = {};
+    string $goalArray[] = {};
+    
+    $attrArray = $attrArrayArg;
+    $endArray = $endArrayArg;
+    $goalArray = $goalArrayArg;
+    
+    
+    //assert nonexistence nodes and existence of scene plugs
+    //
+    for($i = 0; $i < size($attrArray); $i++)
+    {
+        string $attr = "";
+        $attr= $attrArray[$i];
+        na_assertObjectExist( {($anim+"."+$attr)} );
+        
+        //
+        //make md nodes
+        string $suffix = "_"+$attr+"_md";
+        string $prefix = $prefixName+"_";
+        string $mdName = $prefix+$anim+$suffix;
+        string $defaultSuffix = "_"+$attr+"_default_md";
+        string $defaultName = $prefix+$anim+$defaultSuffix;
+        
+        if( `objExists $mdName` ){ error("found--"+$mdName+"\n");  }
+        if( `objExists $defaultName` ){ error("found--"+$defaultName+"\n");  }
+    }
+    //make special attribute used to find all data
+    if( `objExists ($anim+"."+$naAttr) ` == 0 )
+    {
+        na_addNonKeyFloatAttr($anim,$naAttr); 
+    }
+    
+    
+    
+    //make and connect backend
+    for($i = 0; $i < size($attrArray); $i++)
+    {
+        string $attr = "";
+        $attr= $attrArray[$i];
+        na_assertObjectExist( {($anim+"."+$attr)} );
+        
+        //
+        //make md nodes
+        string $suffix = "_"+$attr+"_md";
+        string $prefix = $prefixName+"_";
+        string $mdName = $prefix+$anim+$suffix;
+        string $defaultSuffix = "_"+$attr+"_default_md";
+        string $defaultName = $prefix+$anim+$defaultSuffix;
+        
+        if( `objExists $mdName` ){ error("found--"+$mdName+"\n");  }
+        if( `objExists $defaultName` ){ error("found--"+$defaultName+"\n");  }
+        na_makeMultiplyDivide( $mdName );
+        na_makeMultiplyDivide( $defaultName );
+        
+        //
+        //connect md nodes
+        string $end = "";
+        $end = $endArray[$i];
+        string $goal = "";
+        $goal = $goalArray[$i];
+        na_setInputToMDByPlugLetter($mdName,"X",$anim,$attr,"input1");
+        na_setInputToMDByPlugLetter($mdName,"Y",$anim,$naAttr,"input1");
+        na_setInputToMDByPlugLetter($mdName,"Z",$end,"scaleX","input1");
+        na_setInputToMDByPlugLetter($mdName,"X",$defaultName,"outputX","input2");
+        na_setInputToMDByPlugLetter($mdName,"Z",$goal,"scaleX","input2");
+    }
+    
+}
+
+
+
+/**create network where we can retrieve goal point and goal attribute to be use for matching rigs
+@param animator control
+@param attribute list
+@param goal objects
+@param goal attribute
+@param backend node prefix names
+@param find attribute
+*/
+global proc
+na_snapSimpleAttrMake(string $animArg, string $attrArrayArg[], string $goalArrayArg[], string $goalPlugArrayArg[], string $prefixName, string $findAttr )
+{
+    //set some variables
+    string $anim="";
+    $anim = $animArg;
+    
+    
+    //name 
+    string $naAttr = $findAttr;
+    na_assertObjectDoesNotExist( { ($anim+"."+$naAttr)  } );
+    
+    
+    //assert data
+    na_assertObjectExist( {$anim} );
+    na_assertObjectExist( $goalArrayArg );
+    int $n = size($attrArrayArg);
+    na_assertSizeEqualArg( $goalPlugArrayArg, $n );
+    na_assertSizeEqualArg( $goalArrayArg, $n );
+    
+    
+
+    
+    //
+    ///what to store
+    string $attrArray[] = {};
+    string $goalPlugArray[] = {};
+    string $goalArray[] = {};
+    
+    $attrArray = $attrArrayArg;
+    $goalPlugArray = $goalPlugArrayArg;
+    $goalArray = $goalArrayArg;
+    
+    
+    //assert non existence nodes, existence required plugs
+    //
+    for($i = 0; $i < size($attrArray); $i++)
+    {
+        //assert
+        //
+        string $attr = "";
+        $attr= $attrArray[$i];
+        na_assertObjectExist( {($anim+"."+$attr)} );
+        
+        string $plug = "";
+        $plug = $goalPlugArray[$i];
+        string $goal = "";
+        $goal = $goalArray[$i];
+        na_assertObjectExist( {($goal+"."+$plug)} );
+        
+        //
+        string $suffix = "_"+$attr+"_md";
+        string $prefix = $prefixName+"_";
+        string $mdName = $prefix+$anim+$suffix;
+        
+        if( `objExists $mdName` ){ error("found--"+$mdName+"\n");  }
+    }
+    
+    
+    
+    //make special attribute used to find all data
+    if( `objExists ($anim+"."+$naAttr) ` == 0 )
+    {
+        na_addNonKeyFloatAttr($anim,$naAttr); 
+    }
+    
+    
+    
+    for($i = 0; $i < size($attrArray); $i++)
+    {
+        //assert
+        //
+        string $attr = "";
+        $attr= $attrArray[$i];
+        na_assertObjectExist( {($anim+"."+$attr)} );
+        
+        string $plug = "";
+        $plug = $goalPlugArray[$i];
+        string $goal = "";
+        $goal = $goalArray[$i];
+        na_assertObjectExist( {($goal+"."+$plug)} );
+        
+        
+        //
+        //make md nodes
+        string $suffix = "_"+$attr+"_md";
+        string $prefix = $prefixName+"_";
+        string $mdName = $prefix+$anim+$suffix;
+        
+        if( `objExists $mdName` ){ error("found--"+$mdName+"\n");  }
+        na_makeMultiplyDivide( $mdName );
+       
+        //
+        //connect md nodes        
+        na_setInputToMDByPlugLetter($mdName,"X",$anim,$attr,"input1");
+        na_setInputToMDByPlugLetter($mdName,"Y",$anim,$naAttr,"input1");
+        na_setInputToMDByPlugLetter($mdName,"X",$goal,$plug,"input2");
+    }
+    
+    
+}
+
+

@@ -1,0 +1,62 @@
+//This builds old version of a ui for a character
+//na_gameBody_UI.mel
+
+global proc na_gameBody_UI(){
+//general
+eval( "source \"naGeneral.mel\";" );
+eval( "source \"na_assertGeneral.mel\";" );
+eval( "source \"na_ui.mel\";" );
+eval( "source \"na_radioButton_ui.mel\";" );
+eval( "source \"naMath.mel\";" );
+eval( "source \"na_connect.mel\";" );
+eval( "source \"na_getNearestAttributeToGoal.mel\";" );
+//
+
+//matching
+eval( "source \"na_snapHelperMake_config.mel\";" );
+eval( "source \"na_snapAttr_config.mel\";" );
+eval( "source \"na_snapAttr.mel\";" );
+eval( "source \"na_snap.mel\";" );
+//
+
+//space
+eval( "source \"na_space.mel\";" );
+//
+
+//visibility
+//
+//its config file depends on the scene so it would need to be slightly modified for new scene
+//see getObject sections change to different object names and counts
+eval( "source \"na_vis_UI_config.mel\";" );
+eval( "source \"na_vis_UI.mel\";" );
+
+
+//select
+//
+//its config file depends on the scene so it would need to be slightly modified for new scene
+//see getCmd section which allows to change the commands to run and for what objects
+eval( "source \"na_animSelect_UI_config.mel\";" );
+eval( "source \"na_animSelect_UI.mel\";" );
+
+
+//matching
+//
+//config depends on user scene. look into how many things needed to change states,
+//what attributes are needed on animator controls for changing states, scene transforms that
+//organize different rig states ex: settings_anim, l_arm_state, l_elbow_state ...
+//
+eval( "source \"na_match_UI_config.mel\";" );
+eval( "source \"na_match_UI.mel\";" );
+
+
+//space
+//
+//its config file depends on the scene and the method of space matching
+//so we use the config to first build the ui
+//
+eval( "source \"na_spaceSwitch_UI_config.mel\";" );
+eval( "source \"na_spaceSwitch_UI.mel\";" );
+
+
+eval( "source \"na_postyD_UI.mel\";" );
+}

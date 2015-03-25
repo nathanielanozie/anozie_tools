@@ -1,0 +1,189 @@
+/**@file na_setToDefaultOppositeSideOfBlendshape.mel Clean up opposite side of blendshape
+It uses a symmetric unedited default mesh. Why: Its use comes in handy when sculpting blendshapes with joint, deformer, cluster etc tools where opposite side of mesh may be edited unwantedly.  By using this tool can focus on one half not worrying about the other side.
+@note date created: June 04, 2013
+@author Nathaniel Anozie, ogbonnawork at gmail dot com, nathananozie dot blogspot dot com
+@note Acknowledgement: John La Rooy  learning about regexp, Naughty Nathan (naughtynathan dot co dot uk) for learning to call python one liners in Mel
+/////
+*/
+
+//updated 12-25-2014 nate --- working on adding center tolerance optional support
+//updated 07-07-2014 nate --- added support selected not at orgin, can work on multiple blendshapes at a time
+//updated 06-24-2013 nate --- added support -x
+
+//needed for math stuff
+eval( "source \"naMirrorSelectedVerts.mel\";" );//assumes a way to mirror vertices exists
+
+
+/**remove messy side of sculpted mesh. 
+@param first select blendshape(s), then select undeformed base mesh
+@param goodMeshSide is a string "+x" or "-x" where "+x" says do not touch positive x side of mesh.
+@param centerTolerance range to consider a vertex a center vertex  ex: {-.01,.01}, it uses the top bound for mirror purpose
+@note example used a falloff tool and the opposite side has vertices moved that we dont want moved. This tool
+will put those vertices back to default.
+*/
+global proc string[] na_setToDefaultOppositeSideOfBlendshape(string $goodMeshSide, float $centerTolerance[] )
+{
+    //float $centerTolerance[] = {-.01,.01}; //was {-.001,.001}
+    //assumes last thing is default mesh, and all else are blendshapes to edit.  it gives back all results
+    string $sel[] = `ls -sl`;  
+    
+    string $result[] = {};
+    
+    //this bit so we can work on multiple blendshapes at a time, uses the last thing and all other things are blendshapes
+    string $default = $sel[(size($sel)-1)];
+    string $selArg[] = {};
+    for($j = 0; $j < (size($sel)-1); $j++){
+        $selArg = {};
+        $selArg = {$sel[$j],$default};
+        $resultArg = na_setToDefaultOppositeSideOfBlendshapeArg($goodMeshSide, $selArg, $centerTolerance);
+        //put your function here
+        $result[size($result)] = $resultArg;
+    }
+    
+    select -r $result;
+    return $result;
+}
+
+global proc string na_setToDefaultOppositeSideOfBlendshapeArg(string $goodMeshSide, string $selArg[], float $centerTolerance[])
+{
+    //second argument should be first blendshape then base mesh in that order. it gives back string name of edited mesh
+    
+    //string $goodMeshSide = "+x"; //COULD CHANGE THIS TO -x
+        
+    //string $sel[] = `ls -sl`;
+    string $sel[] = $selArg;
+    if( size($sel) != 2 ){error("First select blendshape, then select undeformed base mesh. Argument \"+x\" says do not touch postive x side");}
+    // add code here to support working on multiple
+    print("[na_setToDefaultOppositeSideOfBlendshape] Starting ...\n"); 
+    
+    
+    //
+    string $baseMesh = $sel[1];   //this is the base mesh
+    //na_assertObjectExist({$baseMesh});
+    string $unSculptedMeshAr[] = `duplicate -rr $baseMesh`; //we will remove this when were done
+    $unSculptedMesh = $unSculptedMeshAr[0];
+    
+    //
+    string $targetObject = $sel[0];  //this is the mesh that we want a cleaner version of
+
+    //na_assertObjectExist({$targetObject});
+    //na_assertAllInList({$goodMeshSide},{"+x","-x"});
+    
+    string $blendshapeArray[] = `duplicate -rr $targetObject`; //we will remove this when were done
+    $blendshape = $blendshapeArray[0];
+    
+    //so we can do math operations simpler, place at origin, assumes pivot in correct position
+    xform -ws -t 0.0 0.0 0.0 $unSculptedMesh ;
+    xform -ws -t 0.0 0.0 0.0 $blendshape ;
+
+    
+    //world position target
+    float $worldBlend[] = {};
+    $worldBlend = `xform -q -ws -t $blendshape`;
+    
+       
+    //put blendshape and unsculpted mesh at x origin for computational reasons
+    //
+    xform -ws -t 0.0 $worldBlend[1] $worldBlend[2] $blendshape;
+    xform -ws -t 0.0 $worldBlend[1] $worldBlend[2] $unSculptedMesh;  
+    
+    //variables for determining mirrored side of mesh
+    float $translateXYZ[];
+    int $vertsSource[]={};
+    string $vertsSourceName[] = {};
+
+    
+
+    //what are we using to find vertex positions    
+    string $obj = $unSculptedMesh;
+    $obj = $unSculptedMesh;
+    int $numVtx[] = `polyEvaluate -vertex $obj`;
+    
+    if($goodMeshSide == "-x")
+    {
+        ////get mesh vertex transformations
+        //over vertices
+        for( $i=0; $i< $numVtx[0]; $i++)
+        {
+            
+            //save default mesh transformations 
+            string $vertexLabel = $obj+".vtx["+$i+"]";
+            $translateXYZ = `xform -ws -q -t $vertexLabel`;
+
+                                             
+            //save vertex name on source side of base mesh we don't want to include
+            //symmetry border vertices that is why were using small number not zero
+            //
+            if( $translateXYZ[0] < $centerTolerance[0] )
+            {  
+                $vertsSource[ size($vertsSource) ] = $i;
+                $vertsSourceName[ size($vertsSourceName) ] = $obj+".vtx"+"["+$i+"]";
+            }
+        }
+    }    
+    
+    //function 
+    //initializeDataWhenMirrorFromPositiveToNegativeX
+    else if($goodMeshSide == "+x")  //source is on right side of default mesh
+    {
+        for( $i=0; $i< $numVtx[0]; $i++)
+        {
+            //save default mesh transformations 
+            string $vertexLabel = $obj+".vtx["+$i+"]";
+            $translateXYZ = `xform -ws -q -t $vertexLabel`;
+                 
+            //use the origin in x to see what side vertex is on
+            //
+            if( $translateXYZ[0] > $centerTolerance[1] )
+            {  
+                $vertsSource[ size($vertsSource) ] = $i;
+                $vertsSourceName[ size($vertsSourceName) ] = $obj+".vtx"+"["+$i+"]";
+            }
+        }
+    }
+    
+ 
+    //we now know what we can tell blendshape to flood zero weight on
+    //
+    string $sel[] = `ls -sl`;
+    select -r $vertsSourceName;
+    string $vertexMatch[] = {};
+    $vertexMatch = naMirrorSelectedVerts( 1, $centerTolerance[1] );//mirror x direction, how close enough were allowed
+    select -r $sel;
+    //na_assertSizeEqualArg($vertexMatch,size($vertsSource));
+    print("[na_setToDefaultOppositeSideOfBlendshape] Find Opposite Vertices Complete ...\n");
+
+   
+    print("[na_setToDefaultOppositeSideOfBlendshape] Setting up blendshape...\n");
+    
+    //make a blendshape with single target shape
+    string $blendAr[] = `blendShape $blendshape $unSculptedMesh`;
+
+    //set blendshape weight to 1
+    //setAttr "blendShape1.pCube2" 1;
+    setAttr ($blendAr[0] + "." + $blendshape) 1;
+    
+    //flood zero weight onto opposite side vertices
+    python( "import re" );
+    select -r $vertexMatch;
+    string $vertsAr[] = `filterExpand -sm 31 -expand true`;
+    for($arg in $vertsAr){
+        //blendshape weight setting requires vertex number so we get it here.
+        string $vert = python( "re.search(re.escape('[')+'(.*)'+re.escape(']'),' "+$arg+" ').group(1)" );
+        //setAttr blendShape1.inputTarget[0].inputTargetGroup[0].targetWeights[16] 0;
+        setAttr ($blendAr[0]+".inputTarget[0].inputTargetGroup[0].targetWeights[" + int($vert) +"]") 0;
+    }
+
+    //duplicate out mesh
+    string $resultMeshAr[] = `duplicate -rr $unSculptedMesh`; 
+    string $resultMesh = "";
+    $resultMesh = $resultMeshAr[0];
+    delete(`pointConstraint -offset 0 0 0 -weight 1 $targetObject $resultMesh`); //clean position of created shape
+    print("[na_setToDefaultOppositeSideOfBlendshape] New Mesh Created: " + $resultMesh + "...\n");    
+     
+    //cleanup
+    delete $unSculptedMesh;
+    delete $blendshape;
+    
+    return $resultMesh;
+}

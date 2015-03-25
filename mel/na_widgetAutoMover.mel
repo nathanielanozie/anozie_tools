@@ -1,0 +1,68 @@
+//last updated: 07/08/2013 -- add force straight legs,arms,spine
+
+
+//na_widgetAuotMover
+{
+    
+    string $leftSideArg = "LT_THIGH_wdg LT_KNEE_wdg LT_ANKLE_wdg LT_HEEL_wdg LT_BALL_wdg LT_TOE_wdg LT_REV_ANKLE_wdg LT_REV_HEEL_wdg LT_REV_BALL_wdg LT_REV_TOE_wdg PINKY_LEFT_wdg INDEX_LEFT_wdg MIDDLE_LEFT_wdg RING_LEFT_wdg THUMB_LEFT_wdg Pinky_1_LEFT_wdg Pinky_2_LEFT_wdg Pinky_end_LEFT_wdg Index_1_LEFT_wdg Index_2_LEFT_wdg Index_end_LEFT_wdg Middle_1_LEFT_wdg Middle_2_LEFT_wdg Middle_end_LEFT_wdg Ring_1_LEFT_wdg Ring_2_LEFT_wdg Ring_end_LEFT_wdg Thumb_1_LEFT_wdg Thumb_end_LEFT_wdg LEFT_CLAVICLE_wdg LEFT_SHOULDER_wdg LEFT_ELBOW_wdg LEFT_WRIST_wdg LEFT_PALM_wdg";
+    string $leftSide[],$rightSide[];
+    $leftSide = stringToStringArray($leftSideArg," ");
+    print("[na_widgetAutomover] using these left side widgets\n"+$leftSideArg+"\n");
+    string $rightArg;
+    $rightArg = "";
+    
+    //get right side widgets,if LT use RT for right side,if LEFT use RIGHT for right side
+    for( $leftArg in $leftSide ){
+        if( gmatch( $leftArg, "*LT*" ) ){
+            $rightArg = `substitute "LT" $leftArg "RT"`;
+            //substitute -find- search string -replaceWith-
+        }
+        else if( gmatch( $leftArg, "*LEFT*" ) ) {
+            $rightArg = `substitute "LEFT" $leftArg "RIGHT"`;
+        }
+        $rightSide[size($rightSide)] = $rightArg;
+    }
+    
+    //get left widgets move right widgets translation only, assumption x is mirror axis, no connection checks
+    print("[na_widgetAutomover] making right side widgets translated by left side widgets\n");
+    for( $i = 0; $i < size($leftSide); $i++){
+        $leftArg = $leftSide[$i];
+        $rightArg = $rightSide[$i];
+        $md = `createNode "multiplyDivide"`;
+        setAttr ($md+"."+"input2X") -1;//mirror axis assumption
+        connectAttr -f ($leftArg+"."+"translateX") ($md+"."+"input1X");
+        connectAttr -f ($leftArg+"."+"translateY") ($md+"."+"input1Y");
+        connectAttr -f ($leftArg+"."+"translateZ") ($md+"."+"input1Z");
+        
+        connectAttr -f ($md+"."+"outputX") ($rightArg+"."+"translateX");
+        connectAttr -f ($md+"."+"outputY") ($rightArg+"."+"translateY");
+        connectAttr -f ($md+"."+"outputZ") ($rightArg+"."+"translateZ");
+    }
+    
+    
+    //force the legs to be on same plane
+    //leg
+    connectAttr -f LT_THIGH_wdg.translateX LT_KNEE_wdg.translateX; 
+    connectAttr -f LT_THIGH_wdg.translateX LT_ANKLE_wdg.translateX;
+    connectAttr -f LT_THIGH_wdg.translateX LT_HEEL_wdg.translateX;
+    connectAttr -f LT_THIGH_wdg.translateX LT_BALL_wdg.translateX;
+    connectAttr -f LT_THIGH_wdg.translateX LT_TOE_wdg.translateX;
+    connectAttr -f LT_THIGH_wdg.translateZ LT_KNEE_wdg.translateZ; 
+    connectAttr -f LT_THIGH_wdg.translateZ LT_ANKLE_wdg.translateZ;
+
+    //arm
+    connectAttr -f LEFT_CLAVICLE_wdg.translateZ LEFT_SHOULDER_wdg.translateZ; 
+    connectAttr -f LEFT_CLAVICLE_wdg.translateZ LEFT_ELBOW_wdg.translateZ; 
+    connectAttr -f LEFT_CLAVICLE_wdg.translateZ LEFT_WRIST_wdg.translateZ;
+    connectAttr -f LEFT_CLAVICLE_wdg.translateZ LEFT_PALM_wdg.translateZ;
+    connectAttr -f LEFT_CLAVICLE_wdg.translateY LEFT_SHOULDER_wdg.translateY; 
+    connectAttr -f LEFT_CLAVICLE_wdg.translateY LEFT_ELBOW_wdg.translateY; 
+    connectAttr -f LEFT_CLAVICLE_wdg.translateY LEFT_WRIST_wdg.translateY;
+    connectAttr -f LEFT_CLAVICLE_wdg.translateY LEFT_PALM_wdg.translateY;
+    
+    //spine
+    connectAttr -f ROOT_wdg.translateZ SPINE_1_wdg.translateZ;
+    connectAttr -f ROOT_wdg.translateZ SPINE_2_wdg.translateZ; 
+    connectAttr -f ROOT_wdg.translateZ NECK_wdg.translateZ;
+    connectAttr -f ROOT_wdg.translateZ HEAD_wdg.translateZ;
+}

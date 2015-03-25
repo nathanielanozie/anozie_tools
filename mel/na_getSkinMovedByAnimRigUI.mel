@@ -1,0 +1,91 @@
+/**@file na_getSkinMovedByAnimRigUI.mel
+*/
+
+global string $gl_selectedObject = "gl_selectedObject";
+global string $gl_removeAnimRigSuffix = "gl_removeAnimRigSuffix";
+global string $gl_skinSuffix = "gl_skinSuffix";
+
+
+/**ui
+*/
+global proc
+na_getSkinMovedByAnimRigUI()
+{
+    global string $gl_selectedObjectBtn;
+    global string $gl_removeAnimRigSuffix;
+    global string $gl_skinSuffix;
+    
+    
+    //setup up title for gui
+    string $titleWindow = "na_getSkinMovedByAnimRig.mel  Move Skin by Anim Rig";
+    string $mainWindowName = "mainWindow";
+    na_window($mainWindowName,$titleWindow, 480, 190);
+    
+    //set up format for gui
+    string $form = `formLayout -numberOfDivisions 50 "form layout"`;
+    
+    //set up ui widgets
+    na_button($form, $mainWindowName,"LOAD SELECTED", 15, 170,"selButton","na_getSkinMovedByAnimRig_loadSelected_cmd");
+    na_textFieldGrp($form, $mainWindowName,"remove suffix(s) space separated\n (optional)", 45, 20, $gl_removeAnimRigSuffix);
+    na_textFieldGrp($form, $mainWindowName,"skin rig suffix", 95, 20, $gl_skinSuffix);
+    na_button($form, $mainWindowName,"ok", 135, 200,"button","na_getSkinMovedByAnimRig_cmd");
+    
+    showWindow $mainWindowName;
+    
+    
+}
+/**useful for a ui loading user selection
+*/
+global proc na_getSkinMovedByAnimRig_loadSelected_cmd()
+{
+    global string $gl_selectedObject;
+    
+    //return empty string if nothing selected otherwise convert selection to a string space separated
+    //
+    string $arg = "";
+    string $sel[] = `ls -sl`;
+    if( size($sel) > 0 )
+    {
+        $arg = stringArrayToString($sel," ");
+    }
+    
+    $gl_selectedObject = $arg;
+    
+
+}
+
+
+/**ui command
+*/
+global proc
+na_getSkinMovedByAnimRig_cmd()
+{
+    global string $gl_selectedObject;
+    global string $gl_removeAnimRigSuffix;
+    global string $gl_skinSuffix;
+ 
+    //temp
+    string $removeAnimRigSuffix="";
+    string $skinSuffix = "";
+    string $object = "";
+     
+    //main variables used by script
+    string $objectArray[] = {};
+    string $removeAnimRigSuffixArray[] = {};
+    string $skinSuffixArray[] = {};
+    
+        //
+    $object = $gl_selectedObject;
+    if(size($object)>0){
+        $objectArray = stringToStringArray( $object, " " );
+    }
+    
+    $removeAnimRigSuffix = `textFieldGrp -query -text $gl_removeAnimRigSuffix`;
+    $skinSuffix= `textFieldGrp -query -text $gl_skinSuffix`; 
+    
+    $removeAnimRigSuffixArray = stringToStringArray($removeAnimRigSuffix," ");
+    $skinSuffixArray = stringToStringArray($skinSuffix," ");
+    
+    
+    na_getSkinMovedByAnimRig($removeAnimRigSuffixArray, $skinSuffixArray, $objectArray );
+}

@@ -1,0 +1,1138 @@
+/**@file na_connect.mel
+@brief v1.0.2 Make backend node connections examples connecting up multiply divide nodes, blendTwoAttr etc.
+@author Nathaniel O. Anozie (ogbonnawork at gmail dot com)
+@note date created: Apr 4 2012
+@note source na_connect.mel
+@note source na_assertGeneral.mel
+@note source naGeneral.mel
+@note -- fixed bug in path finding to a final joints to see if attr linked to joint and what axis
+@note -- fixing bug in path find to a transform for duping hand rigs
+@note -- fixed bug in retrieving data from input of a backend node
+@note -- working on reverseit, normalizeIt, blendTwoIt basic usable tools for rigging that use connection
+@note Modify at your own risk
+*/
+
+
+
+
+global proc na_reverseIt_unitTest_1()
+{
+    spaceLocator -p 0 0 0;
+    move -r -os -wd -4.227784 0 0 ;
+    spaceLocator -p 0 0 0;
+    move -r -os -wd 4.227784 0 0 ;
+    na_reverseIt("locator1","scaleX","locator2","scaleX","aNode" );
+}
+
+/**reverse connection between two objects for one thing
+@pre no used node exists already
+@post  uses inputX and outputX of reverse only
+@param $from object getting information
+@param $fromPlug from attribute
+@param $toObject passing information to
+@param $toPlug to attribute
+@param $nameArg name for backend
+@bug no restriction on prefix name
+*/
+global proc na_reverseIt(string $from, string $fromPlug, string $to, string $toPlug, string $nameArg)
+{
+    //uses inputX and outputX of reverse only
+    string $letterIn = "X";
+    string $letterOut = "X";
+    string $name = $nameArg;
+    
+    //error checking
+    na_assertObjectExist({($from+"."+$fromPlug),($to+"."+$toPlug)});
+    na_assertObjectDoesNotExist({$name});
+    
+    string $input= "input"+$letterIn;
+    string $output= "output"+$letterOut;
+ 
+    //making backend
+    na_makeReverse($name);
+    string $supportedType[] = {"reverse"};
+    na_assertTypeInList( {$name}, $supportedType );
+    
+    //connecting backend
+    na_setInputToMDByPlugLetter($name,$letterIn,$from,$fromPlug,"input");
+    na_setOutputToMDByPlugLetter( $name, $letterOut, $to, $toPlug );  
+}
+
+
+global proc na_normalizeIt_unitTest_1()
+{
+    spaceLocator -p 0 0 0;
+    move -r -os -wd -4.227784 0 0 ;
+    spaceLocator -p 0 0 0;
+    move -r -os -wd 4.227784 0 0 ;
+    spaceLocator -p 0 0 0;
+    move -r -os -wd 8.227784 0 0 ;
+    na_normalizeIt("locator1","scaleX","locator2","scaleX","locator3","scaleX","normalizeIt" );
+}
+
+/**normalized output of one object to another using a third scale object
+@pre no used node exists already
+@post prefix + from + to +suffix is form of backend name, uses input1X numerator input1Y denominator and output1X of divide only
+@param $from object getting information
+@param $fromPlug from attribute
+@param $to passing information to
+@param $toPlug to attribute
+@param $scaleObject getting scaling info
+@param $scalePlug attribute scaling info
+@param $nameArg name for backend
+@bug no restriction on prefix name
+@see na_normalizeIt
+*/
+global proc na_normalizeIt(string $from, string $fromPlug, string $to, string $toPlug, string $scaleObject, string $scalePlug, string $nameArg)
+{
+    string $name = $nameArg;
+    
+    //error checking
+    na_assertObjectExist({($from+"."+$fromPlug),($to+"."+$toPlug),($scaleObject+"."+$scalePlug)});
+    na_assertObjectDoesNotExist({$name});
+
+    //making divide node backend
+    na_makeMultiplyDivide($name);
+    string $supportedType[] = {"multiplyDivide"};
+    na_assertTypeInList( {$name}, $supportedType );
+    setAttr ($name+"."+"operation") 2;
+    
+    //connecting backend
+    na_setInputToMDByPlugLetter($name,"X",$from,$fromPlug,"input1");
+    na_setInputToMDByPlugLetter($name,"X",$scaleObject,$scalePlug,"input2");
+    na_setOutputToMDByPlugLetter( $name,"X", $to, $toPlug );  
+    
+}
+
+global proc na_blendTwoIt_unitTest_1()
+{
+    spaceLocator -p 0 0 0;
+    move -r -os -wd -4.227784 0 0 ;
+    na_blendTwoIt("locator1","scaleX","blendTwo");
+}
+global proc na_blendTwoIt(string $object, string $plug, string $nameArg)
+{
+    string $name = $nameArg;
+    
+    //error checking
+    na_assertObjectExist({($object+"."+$plug)});
+    na_assertObjectDoesNotExist({$name});
+
+    //making node backend
+    na_makeBlend($name);
+    string $supportedType[] = {"blendTwoAttr"};
+    na_assertTypeInList( {$name}, $supportedType );
+    setAttr ($name+"."+"input[0]") 1;
+    setAttr ($name+"."+"input[1]") 1;
+    
+    //connecting backend
+    na_setInputToBlend($name,$object,$plug,"input[0]");
+}
+
+
+global proc
+na_isPlugConnectedAll_unitTest()
+{
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    select -d pCube1 ;
+    select -d;
+    joint -p 4 0 0 ;
+    
+    //make expression
+    expression -s "pCube1.translateX = 0.05*joint1.translateX;"  -o "" -n "naExp" -ae 1 -uc all ;
+    
+    select -cl  ;
+    select -r pCube1 ;
+    select -cl  ;
+    select -r joint1 ;
+    select -tgl pCube1 ;
+    
+    connectAttr -f joint1.rotateZ pCube1.rotateZ;
+    
+    print( ("pCube1"+"--"+"translateX\n") );
+    print( na_isPlugConnectedAll("pCube1","translateX") );
+    print("\n");
+    
+    print( ("pCube1"+"--"+"rotateZ\n") );
+    print( na_isPlugConnectedAll("pCube1","rotateZ") );
+    print("\n");
+    
+    print( ("pCube1"+"--"+"translateY\n") );
+    print( na_isPlugConnectedAll("pCube1","translateY") );
+    print("\n");
+    
+}
+
+/**return 1 if from has any input or output to fromPlug, 0 otherwise
+@param $from where we check connection
+@param $fromPlug where we check connection
+@bug not used in practice
+*/
+global proc int
+na_isPlugConnectedAll(string $from, string $fromPlug)
+{
+    int $result = 0;
+    
+    string $fromName = "";
+    $fromName = $from+"."+$fromPlug;
+    na_assertObjectExist( {$fromName} );
+    
+    string $start[] = {};
+    $start = `listConnections $fromName`;
+    
+    if(size($start) > 0){  
+        $result = 1;
+    }
+    
+    return $result;
+}
+
+
+
+/**return 1 if from has output to to, 0 otherwise
+@param $to where we want connection to lead to,
+@param $toPlug where we want connection to lead to
+@param $from where we check connection coming from
+@param $fromPlug where we check connection coming from
+@bug not used in practice
+*/
+global proc int
+na_isPlugConnected(string $to, string $toPlug, string $from, string $fromPlug)
+{
+    int $result = 0;
+    
+    string $toName  = "";
+    $toName = $to+"."+$toPlug;
+    na_assertObjectExist( {$toName} );
+    
+    string $fromName = "";
+    $fromName = $from+"."+$fromPlug;
+    na_assertObjectExist( {$fromName} );
+    
+    string $start[] = {};
+    $start = `connectionInfo -destinationFromSource $toName`;
+    if(size($start) == 1){  
+        if( `strcmp $fromName $start[0]` == 0){$result = 1;}
+    }
+    return $result;
+}
+
+
+
+/**
+create a multiply divide node of this name
+@param string $name name for node
+@pre name doesn't exist
+*/
+global proc na_makeMultiplyDivide(string $name)
+{ na_makeNode($name,"multiplyDivide"); }
+
+global proc na_makeBlend(string $name)
+{ na_makeNode($name,"blendTwoAttr"); }
+
+global proc na_makeReverse(string $name)
+{ na_makeNode($name,"reverse"); }
+/**
+create a multiply divide node of this name
+@param $name name for node
+@param $type what string should be used in command to make node
+@pre name doesn't exist
+*/
+global proc na_makeNode(string $name, string $type)
+{
+    na_assertAllInList( {$type}, {"multiplyDivide","reverse","blendTwoAttr"} );
+    if(`objExists $name` == 1){ error("object exists");}
+	string $cmd = "createNode "+$type+" -n "+$name;
+	eval($cmd);
+}
+
+global proc na_makeMultiplyDivide_unitTest()
+{
+    na_makeMultiplyDivide("node1");
+}
+global proc na_makeBlend_unitTest()
+{
+    na_makeBlend("node2");
+}
+global proc na_makeReverse_unitTest()
+{
+    na_makeReverse("node3");
+}
+
+/**
+connect these two inputs to the X or Y or Z plug of multiply divide
+@param string $node name of multiply divide node
+@param string $plugLetter   letter for where to set input
+@param string $input1 control for first input  
+@param string $input2   control for second input
+@param string $input1Plug   control attr for first input 
+@param string $input2Plug  control attr for second input
+@pre plug not used already
+@post in connection created, overwrite plug connection if exists
+*/
+global proc na_setAllInputToMDByPlugLetter(string $node, string $plugLetter, string $input1, string $input2, string $input1Plug, string $input2Plug)
+{
+    na_assertTypeInList( {$node}, {"multiplyDivide"} );
+    na_assertAllInList( {$plugLetter}, {"X","Y","Z"} );
+    na_assertObjectExist( {$node,($input1+"."+$input1Plug),($input2+"."+$input2Plug)} );
+	na_setInputToMDByPlugLetter($node, $plugLetter, $input1, $input1Plug, "input1");
+ 	na_setInputToMDByPlugLetter($node, $plugLetter, $input2, $input2Plug, "input2");
+}
+
+/**
+connect this inputs to the X or Y or Z plug of node
+@note supports multiply divide, reverse node
+@param string $node name of multiply divide node
+@param string $plugLetter   letter for where to set input
+@param string $input  object input  
+@param string $inputPlug   attribute input 
+@param string  $inputStr ex input1,input2,input
+@pre plug not used already
+@post in connection created, overwrite plug connection if exists
+*/
+global proc na_setInputToMDByPlugLetter(string $node, string $plugLetter, string $input, string $inputPlug, string $inputStr)
+{
+    na_assertTypeInList( {$node}, {"multiplyDivide","reverse"} );
+    na_assertObjectExist( {$node,($input+"."+$inputPlug)} );
+    na_assertAllInList( {$plugLetter}, {"X","Y","Z"} );
+    na_assertAllInList( {$inputStr}, {"input1","input2","input"} );
+
+    string $in1 = $inputStr+$plugLetter;
+    string $in1Plug = $input+"."+$inputPlug;
+       
+    connectAttr -f $in1Plug ($node+"."+$in1);
+}
+global proc na_setInputToMDByPlugLetter_unitTest_1()
+{
+    spaceLocator -p 0 0 0;
+    move -r -os -wd -4.227784 0 0 ;
+    createNode multiplyDivide  -n node_md;
+    na_setInputToMDByPlugLetter("node_md","X","locator1","scaleX","input1");
+}
+global proc na_setInputToMDByPlugLetter_unitTest_2()
+{
+    spaceLocator -p 0 0 0;
+    move -r -os -wd -4.227784 0 0 ;
+    createNode reverse  -n node_md;
+    na_setInputToMDByPlugLetter("node_md","X","locator1","scaleX","input");
+}
+
+
+
+/**
+connect this inputs to the input of node
+@note supports blendTwoAttribute, blendColors
+@param string $node name node
+@param string $input  object input  
+@param string $inputPlug   attribute input 
+@param string  $inputStr ex "input[0]","input[5]","attributesBlender"
+@pre plug not used already
+@post in connection created, overwrite plug connection if exists
+*/
+global proc na_setInputToBlend(string $node, string $input, string $inputPlug, string $inputStr)
+{
+    na_assertTypeInList( {$node}, {"blendTwoAttr","blendColors"} );
+    na_assertObjectExist( { ($node+"."+$inputStr),($input+"."+$inputPlug)} );
+
+    string $in1 = $inputStr;
+    string $in1Plug = $input+"."+$inputPlug;
+       
+    connectAttr -f $in1Plug ($node+"."+$in1);
+}
+global proc na_setInputToBlend_unitTest_1()
+{
+    spaceLocator -p 0 0 0;
+    move -r -os -wd -4.227784 0 0 ;
+    createNode blendTwoAttr  -n node;
+    na_setInputToBlend("node","locator1","translateX","input[0]");
+}
+
+
+
+
+/**set output of node to a second arg and plug
+@note supports multiply divide, curve info, reverse, blendTwoAttr
+@param string $node name of multiply divide node
+@param string $plugLetter   letter for where to set input
+@param string $anim control
+@param string $animPlug   control attr 
+@pre capitalized plug letter of X or Y or Z,md exists, md out plug exists, second arg plug exists, second arg plug has no input connections
+@post out connection created
+@bug no plug connection exist checks
+*/
+global proc na_setOutputToMDByPlugLetter(string $node, string $plugLetter, string $anim, string $animPlug)
+{
+    na_assertTypeInList( {$node}, {"multiplyDivide","curveInfo","reverse","blendTwoAttr"} );
+    na_assertObjectExist( {$node,($anim+"."+$animPlug)} );
+    na_assertAllInList( {$plugLetter}, {"X","Y","Z",""} );
+    
+    string $out = "output"+$plugLetter;
+    connectAttr -f ($node+"."+$out) ($anim+"."+$animPlug);
+}
+global proc na_setOutputToMDByPlugLetter_unitTest_1()
+{
+    spaceLocator -p 0 0 0;
+    move -r -os -wd -4.227784 0 0 ;
+    createNode multiplyDivide  -n node;
+    na_setOutputToMDByPlugLetter( "node", "X", "locator1","scaleX" );
+}
+global proc na_setOutputToMDByPlugLetter_unitTest_2()
+{
+    spaceLocator -p 0 0 0;
+    move -r -os -wd -4.227784 0 0 ;
+    createNode reverse  -n node;
+    na_setOutputToMDByPlugLetter( "node", "X", "locator1","scaleX" );
+}
+global proc na_setOutputToMDByPlugLetter_unitTest_3()
+{
+    spaceLocator -p 0 0 0;
+    move -r -os -wd -4.227784 0 0 ;
+    createNode blendTwoAttr  -n node;
+    na_setOutputToMDByPlugLetter( "node", "", "locator1","scaleX" );
+}
+
+/**get multiply divide output letter from attribute with a multiplydivide connected to it
+@pre animator plug exists,  one multiply divide out is connected to input plug
+@post exactly 1 string returned either X or Y or Z
+@bug no plug connection exist , not already connected checks
+*/
+global proc string
+na_getPlugLetterByConnectedAttribute(string $anim, string $animPlug)
+{
+	string $outArray[] = {}; 
+	$outArray = `listConnections -plugs true -source true ($anim+"."+$animPlug)`;
+	string $out = "";
+	$out = $outArray[0];//no size checking
+	
+	string $plugLetter = "";
+	
+	//for multiply divide node the last letter is important and tells us the different inputs and outputs
+	//
+	$plugLetter = endString($out,1); //no checking if X,Y,Z
+	
+	return $plugLetter;
+}
+
+
+
+/**given a node and plug give me the multiply divide whose ouptut leads to plug
+@param string $anim an animator control with a plug that is connected to exactly 1 md node
+@param string $animPlug plug connected to exactly 1 md node
+@post could be more than one md so a different proc should check number of mds
+*/
+global proc string[]
+na_getMultiplyDivideNodeFromPlug(string $anim, string $animPlug)
+{
+    string $mdArray[] = {};
+	string $mdNode="";
+	$mdArray = `listConnections -source true ($anim+"."+$animPlug)`;
+	
+	na_assertSizeGreaterEqualTo( $mdArray, 1 );
+	$mdNode = $mdArray[0];
+	
+	//very important otherwise not sure if plugs exist on node
+	na_assertTypeInList( {$mdNode}, {"multiplyDivide"} );
+	
+    return $mdArray;
+}
+
+
+
+
+/**given a plug whose input is a multiply divide node, give the input to md node at specified plugletter and plug input
+@param  string $anim name object that has a plug whose input is one multiply divide node
+@param  string $naAttr name of plug on on $anim whose input is one multiply divide node
+@param  string $plugLetter either X, Y or Z
+@param  string $plugInput either input1, or input2
+@note not tested in practice
+@bug not tested in practice, not asserting type is md node
+*/
+global proc string[]
+na_getInputFromSingleMDNodeFromAnim(string $anim, string $naAttr, string $plugLetter, string $plugInput)
+{
+    na_assertObjectExist({$anim,($anim+"."+$naAttr)});
+	string $result[] = {};
+	
+	//find data node from animator control
+	string $mdArray[] = {};
+	$mdArray = na_getMultiplyDivideNodeFromPlug( $anim, $naAttr );
+	na_assertSizeEqualArg($mdArray,1);
+	string $node = "";
+	$node = $mdArray[0];
+	
+	string $plug = "";
+	$plug = $plugInput+$plugLetter;
+	
+	$result = `listConnections -source true ($node+"."+$plug)`;
+	
+	return $result;
+}
+
+/**
+@bug not tested, no asserting type is multiply divide
+*/
+global proc string[]
+na_getPlugInputFromMultiMDNodeFromAnim(string $anim, string $naAttr, string $plugLetter, string $plugInput)
+{
+    na_assertObjectExist({$anim,($anim+"."+$naAttr)});
+	string $result[] = {};
+	
+	//find data node from animator control
+	string $mdArray[] = {};
+	$mdArray = na_getMultiplyDivideNodeFromPlug( $anim, $naAttr );
+	
+	
+	
+	string $node = "";
+	string $plug = "";
+	string $inConnect[] = {};
+	
+	for($i = 0; $i < size($mdArray); $i++)
+	{
+	    $node = $mdArray[$i];
+	    $plug = $plugInput+$plugLetter;
+	    
+	    $inConnect = `listConnections -plugs true -source true ($node+"."+$plug)`;
+	    
+	    if(size($inConnect) > 0){
+	        $result = stringArrayCatenate($result,$inConnect);
+	    }
+	}
+		
+	return $result;
+}
+
+
+
+
+/**get both inputs with same out plug of multiply divide and all from same multiply divide node
+@param string $anim an animator control with a plug that is connected to exactly 1 md node
+@param string $animPlug plug connected to exactly 1 md node
+@pre plug exists, md exists, md out plug exists
+@post exactly 2 string returned correspond to input1 and input2 respectively, or empty list returned, all outputs are to same md node
+@bug no checking for existing plugs of multiply divide node...
+@see na_getPlugLetterByConnectedAttribute
+*/
+global proc string[]
+na_getAllInputsByConnectedAttribute(string $anim, string $animPlug)
+{
+    na_assertObjectExist( { ($anim+"."+$animPlug) } );
+    
+	string $result[] = {};
+	string $allArray[] = {};
+	
+	//based on the multiply divide's out connection to animator control we can tell
+	//what are all the inputs that effect this out on the md node
+	//those inputs give the location, rotation scale to be used for snapping rig
+	//
+	string $mdArray[] = {};
+	$mdArray = na_getMultiplyDivideNodeFromPlug($anim, $animPlug);
+	if(size($mdArray) != 1){error("expecting single multiply divide node output to--"+$animPlug);}
+	string $mdNode = "";
+	$mdNode = $mdArray[0];
+	
+	//now weve got an md node we can save any objects going into any input1
+	string $plugLetterArray[] = {"X","Y","Z"};
+	string $inputNodeArray[] = {};
+	string $in1 = "";
+	string $input1Node = "";
+	for($plugLetter in $plugLetterArray)
+	{
+	    $in1 = "input1"+$plugLetter;
+	    $input1NodeArray = `listConnections -source true ($mdNode+"."+$in1)`; 
+
+	    if(size($input1NodeArray) == 1 ){    
+	        $input1Node = $input1NodeArray[0];
+	        $allArray[size($allArray)] = $input1Node;
+	    }
+	}
+	
+	$result = stringArrayRemoveDuplicates($allArray);
+		
+	return $result;
+}
+
+
+
+/**gives array at most 3 elements, where each is either 1, 2 or 3 depending on whether
+input1X , input1Y, or input1Z has any incoming connection
+@param string $anim an animator control with a plug that is connected to exactly 1 md node
+@param string $animPlug plug connected to exactly 1 md node
+@pre plug exists, md exists, md out plug exists
+*/
+global proc int[]
+na_representInputMultiplyDivideAsAnInteger(string $anim, string $animPlug)
+{
+    int $result[];
+    
+    string $mdArray[] = {};
+	$mdArray = na_getMultiplyDivideNodeFromPlug($anim, $animPlug);
+	if(size($mdArray) != 1){error("expecting single multiply divide node output to--"+$animPlug);}
+	
+	string $mdNode = "";
+	$mdNode = $mdArray[0];
+	
+	//note its not checking input2
+	if(size( `listConnections -source true ($mdNode+"."+"input1X")` ) == 1){ $result[size($result)] = 1; }
+	if(size( `listConnections -source true ($mdNode+"."+"input1Y")`) == 1){ $result[size($result)] = 2; }
+	if(size( `listConnections -source true ($mdNode+"."+"input1Z")`) == 1){ $result[size($result)] = 3; }
+	
+	return $result;
+}
+
+
+global proc
+na_findStartToGoal_decisionOnObjectFound_unitTest()
+{
+    //make a joint chain with ending part attached to driven key
+    select -d;
+    joint -p 0 0 0 ;
+    joint -p 2 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint1;
+    joint -p 4 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint2;
+    joint -p 5 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint3;
+    select -cl  ;
+    select -r joint3 ;
+    circle -c 0 0 0 -nr 0 1 0 -sw 360 -r 1 -d 3 -ut 0 -tol 0.01 -s 8 -ch 1; objectMoveCommand;
+    move -rpr 4 0 0 ;
+    setAttr -lock true -keyable false "nurbsCircle1.tx";
+    setAttr -lock true -keyable false "nurbsCircle1.ty";
+    setAttr -lock true -keyable false "nurbsCircle1.tz";
+    setAttr -lock true -keyable false "nurbsCircle1.rx";
+    setAttr -lock true -keyable false "nurbsCircle1.ry";
+    setAttr -lock true -keyable false "nurbsCircle1.rz";
+    setAttr -lock true -keyable false "nurbsCircle1.sx";
+    setAttr -lock true -keyable false "nurbsCircle1.sy";
+    setAttr -lock true -keyable false "nurbsCircle1.sz";
+    addAttr -ln "attr"  -at double  |nurbsCircle1;
+    setAttr -e-keyable true |nurbsCircle1.attr;
+
+    setDrivenKeyframe -currentDriver nurbsCircle1.attr joint3.rotateZ;
+    setAttr "nurbsCircle1.attr" 10;
+    setAttr "joint3.rotateZ" 50;
+    setDrivenKeyframe -currentDriver nurbsCircle1.attr joint3.rotateZ;
+    setAttr "nurbsCircle1.attr" 0;
+    
+    print(
+    na_findStartToGoal_decisionOnObjectFound("joint3", {"joint3_rotateZ"}, {"joint","animCurve","blendWeighted","unitConversion"})
+    );
+    print("\n");
+    print(
+    na_findStartToGoal_decisionOnObjectFound("joint4", {"joint3_rotateZ"}, {"joint","animCurve","blendWeighted","unitConversion"})
+    );
+}
+
+
+/**as soon as a joint found in path it decides whether set driven key curve on anim's attr can be used for joint
+@note joint can include plug
+*/
+global proc string[]
+na_findStartToGoal_decisionOnObjectFound( string $jointAndAttr, string $possibleStart[], string $supportedTypes[] )
+{
+    //starts -- na_getOutConnect( "finger_controls.scrunch", "animCurve");
+    string $result[] = {};
+    string $possible[]={};//hold possible starts including ones far
+    
+    string $all[] = {}; //holds relative connection per start
+    string $start ="";
+    for( $i = 0; $i < size($possibleStart); $i++)
+    {
+        $start = $possibleStart[$i];
+        $all = na_listRelativeConnectionWithPlug($start,$supportedTypes,30);
+        
+        for($object in $all)
+        {
+            //decide whether there is a path on first valid object found
+            //
+            if( na_isTypeSupportedArray({$object},{"joint","locator","transform"}) == 1 ){
+                //if found node save start curve that worked
+                if( `strcmp $object $jointAndAttr` == 0 ){ 
+                    $possible = stringArrayCatenate($possible,{$start});
+                }
+                
+                break;
+            }
+        }
+    }
+    if(size($possible) > 0){ 
+        $result = $possible;
+    }
+    else{
+         print("sorry could not find path to --"+$jointAndAttr+" please check input");
+    }
+    
+    return $result;
+}
+
+
+
+
+
+
+
+/**get the start node name that lead to goal via connection
+@note if two or more starts leads to goal returns one that is closet from goal in connections
+@result string list of the thing in $possibleStart that can lead to $goal via connections
+@param string $goal    goal node name
+@param string $possibleStart[]  possible starting node names
+@param string $supportedTypes[] possible node types it can traverse to find goal
+@note not asserted
+@supports finding a joint by way of joint, animCurve, unitedConversion or blendWeighted nodes
+@see na_listRelativeConnection("locator1",{"transform"},30));
+*/
+
+
+global proc string[]
+na_findStartToGoal( string $goal, string $possibleStart[], string $supportedTypes[] )
+{
+    //starts -- na_getOutConnect( "finger_controls.scrunch", "animCurve");
+    string $result[] = {};
+    //loop starting point find its connections down hierarchy
+    string $start ="";//hold each possible start
+    string $all[] = {}; //holds relative connection per start
+    string $intersect[] = {};  //holds intersection with goal per start
+    
+    int $maxLevel = 1000;//we want the start that is closest to goal so this is helpful
+    //this default value is the most possible number levels to connection to expect
+    int $curLevel = 0;
+    string $possible[]={};//hold possible starts including ones far
+    
+    //loop starts
+    //break as soon as goal found in one of the possible starts and
+    //return that possible start
+    for( $i = 0; $i < size($possibleStart); $i++)
+    {
+        $start = $possibleStart[$i];
+        $all = na_listRelativeConnection($start,$supportedTypes,30);
+        
+        if(size($all) > 0){
+            $curLevel = size($all);//note may not lead to goal
+            $intersect = na_getStringArrayIntersectWithOption( $all, {$goal} );//arg, options
+            //if found goal save start curve that worked
+            if(size($intersect) > 0 ){ 
+                //only save this start if it has least most number of levels to goal
+                if( $curLevel <= $maxLevel )
+                {
+                    $maxLevel = $curLevel;//have a new maxLevel
+                    $possible = stringArrayCatenate($possible,{$start});
+                }
+            }
+        }
+        
+    }
+    if(size($possible) > 0){ 
+        $result = stringArrayCatenate($result,{$possible[size($possible)-1]});
+    }
+    else{
+         print("sorry could not find path to --"+$goal+" please check input");
+    }
+    return $result;
+}
+
+/**assumes empty scene
+*/
+global proc
+na_findStartToGoal_unitTest_1()
+{
+    spaceLocator -p 0 0 0;
+    spaceLocator -p 0 0 0;
+    spaceLocator -p 0 0 0;
+    spaceLocator -p 0 0 0;
+    spaceLocator -p 0 0 0;
+    connectAttr -f locator1.translateX locator2.translateX;
+    connectAttr -f locator2.translateX locator3.translateX;
+    connectAttr -f locator4.translateX locator5.translateX;
+
+    print(na_findStartToGoal("locator5",{"locator1","locator2"},{"transform"}));
+    print("\n");
+    print(na_findStartToGoal("locator5",{"locator1","locator4"},{"transform"}));
+}
+
+/**assumes empty scene
+*/
+global proc
+na_findStartToGoal_unitTest_2()
+{
+    spaceLocator -p 0 0 0;
+    spaceLocator -p 0 0 0;
+    spaceLocator -p 0 0 0;
+    spaceLocator -p 0 0 0;
+    spaceLocator -p 0 0 0;
+    connectAttr -f locator1.translateX locator2.translateX;
+    connectAttr -f locator2.translateX locator3.translateX;
+    connectAttr -f locator3.translateX locator4.translateX;
+    connectAttr -f locator4.translateX locator5.translateX;
+
+    print(na_findStartToGoal("locator5",{"locator1","locator3"},{"transform"}));
+    print("\n");
+}
+
+
+/**listRelativeConnections 
+@note it needs access to all support types down list so should be as large as possible
+@param int $maxIterations what is the most number of times allowed to try searching for outs, i'm guessing 30 would
+most likely work for most cases could make it higher
+@post in order so towards end are further down the hierarchy
+*/
+global proc string[]
+na_listRelativeConnectionWithPlug(string $node,string $supportedTypes[], int $maxIterations) 
+{
+    string $result[]={};
+    string $result_next[]={};
+    string $next[] = {};//keeps each level of connections and is refreshed each time
+    string $prev[] = {};
+    
+    //gives all nodes going out
+    $next = na_getOutConnectArray( {$node}, $supportedTypes );
+    $result_next = na_getOutConnectArrayWithPlug( {$node}, $supportedTypes );
+    $result = stringArrayCatenate($result, $result_next);
+    $prev = stringArrayCatenate($prev, $next);
+    
+    //figure out a kind of listRelative, but for listRelativeConnection
+    //gives all outputs and we can support certain out types
+    for( $i = 0; $i < $maxIterations; $i ++ ){
+         
+        $next = na_getOutConnectArray( $prev, $supportedTypes );
+        $result_next = na_getOutConnectArrayWithPlug( $prev, $supportedTypes );
+        //if size next ==  zero save have found all outs we exit
+        if(size($next) == 0 ){
+            break;
+        }
+        $result = stringArrayCatenate($result, $result_next);
+        clear($prev);
+        $prev = $next;
+        clear($next);
+   
+        if($i >= $maxIterations){print("warning -- reached maxIterations");} 
+    }
+
+    return $result;
+    
+}
+global proc string[]
+na_listRelativeConnection(string $node,string $supportedTypes[], int $maxIterations) 
+{
+    string $result[]={};
+    string $next[] = {};//keeps each level of connections and is refreshed each time
+    string $prev[] = {};
+    
+    //gives all nodes going out
+    $next = na_getOutConnectArray( {$node}, $supportedTypes );
+    $result = stringArrayCatenate($result, $next);
+    $prev = stringArrayCatenate($prev, $next);
+    
+    //figure out a kind of listRelative, but for listRelativeConnection
+    //gives all outputs and we can support certain out types
+    for( $i = 0; $i < $maxIterations; $i ++ ){
+         
+        $next = na_getOutConnectArray( $prev, $supportedTypes );
+        //if size next ==  zero save have found all outs we exit
+        if(size($next) == 0 ){
+            break;
+        }
+        $result = stringArrayCatenate($result, $next);
+        clear($prev);
+        $prev = $next;
+        clear($next);
+   
+        if($i >= $maxIterations){print("warning -- reached maxIterations");} 
+    }
+
+    return $result;
+    
+}
+
+
+/**assumes empty scene
+*/
+global proc
+na_listRelativeConnection_unitTest_1()
+{
+    spaceLocator -p 0 0 0;
+    spaceLocator -p 0 0 0;
+    spaceLocator -p 0 0 0;
+    spaceLocator -p 0 0 0;
+    spaceLocator -p 0 0 0;
+    connectAttr -f locator1.translateX locator2.translateX;
+    connectAttr -f locator2.translateX locator3.translateX;
+    connectAttr -f locator3.translateX locator4.translateX;
+    connectAttr -f locator4.translateX locator5.translateX;
+    print(na_listRelativeConnection("locator1",{"transform"},30));
+}
+
+/**assumes empty scene
+*/
+global proc
+na_listRelativeConnection_unitTest_2()
+{
+    spaceLocator -p 0 0 0;
+    spaceLocator -p 0 0 0;
+    spaceLocator -p 0 0 0;
+    connectAttr -f locator1.translateX locator2.translateX;
+    connectAttr -f locator2.translateX locator3.translateX;
+    
+    spaceLocator -p 0 0 0;
+    spaceLocator -p 0 0 0;
+    connectAttr -f locator4.translateX locator5.translateX;
+
+
+    print(na_listRelativeConnection("locator1",{"transform"},30));
+}
+
+
+
+/**get all out connections from all input nodes of supported types
+@resul string list all out connections from all input nodes of supported types
+@param string list $array nodes of interest
+@param string list $supportedTypes kinds of nodes we can consider finding out connections
+*/
+global proc string[]
+na_getOutConnectArray(string $array[], string $supportedTypes[])
+{
+    string $result[]= {};
+    string $next[] = {};
+    string $node = "";
+    for($i = 0; $i < size($array) ; $i ++ ){
+        
+        $node = $array[$i];
+        //gives all nodes going out
+        $all = na_getOutConnectAll( $node );
+        //gives all nodes going out of this type
+        //we may have no nodes going out so we should skip
+        //this if is important otherwise run into problems
+        if(size($all) > 0){ 
+            $next = na_getSupported($all, $supportedTypes);
+            //it may skip alot of nodes so its expected if we rarely enter this condition
+            if(size($next) > 0){
+                $result = stringArrayCatenate($result, $next);
+            }
+            clear($next);
+        }
+    }    
+    $result = stringArrayRemoveDuplicates($result);
+    return $result;
+}
+global proc string[]
+na_getOutConnectArrayWithPlug(string $array[], string $supportedTypes[])
+{
+    string $result[]= {};
+    string $next[] = {};
+    string $node = "";
+    for($i = 0; $i < size($array) ; $i ++ ){
+        
+        $node = $array[$i];
+        //gives all nodes going out
+        $all = na_getOutConnectAllWithPlug( $node );
+        //gives all nodes going out of this type
+        //we may have no nodes going out so we should skip
+        //this if is important otherwise run into problems
+        if(size($all) > 0){ 
+            $next = na_getSupported($all, $supportedTypes);
+            //it may skip alot of nodes so its expected if we rarely enter this condition
+            if(size($next) > 0){
+                $result = stringArrayCatenate($result, $next);
+            }
+            clear($next);
+        }
+    }    
+    $result = stringArrayRemoveDuplicates($result);
+    return $result;
+}
+/**assumes empty scene
+*/
+global proc
+na_getOutConnectArray_unitTest_1()
+{
+    spaceLocator -p 0 0 0;
+    spaceLocator -p 0 0 0;
+    spaceLocator -p 0 0 0;
+    spaceLocator -p 0 0 0;
+    spaceLocator -p 0 0 0;
+    connectAttr -f locator1.translateX locator2.translateX;
+    connectAttr -f locator2.translateX locator3.translateX;
+    connectAttr -f locator3.translateX locator4.translateX;
+    connectAttr -f locator4.translateX locator5.translateX;
+    print(na_getOutConnectArray({"locator5"},{"transform"}));
+}
+
+/**assumes empty scene
+*/
+global proc
+na_getOutConnectArray_unitTest_2()
+{
+    spaceLocator -p 0 0 0;
+    spaceLocator -p 0 0 0;
+    spaceLocator -p 0 0 0;
+    spaceLocator -p 0 0 0;
+    spaceLocator -p 0 0 0;
+    connectAttr -f locator1.translateX locator2.translateX;
+    connectAttr -f locator2.translateX locator3.translateX;
+    connectAttr -f locator3.translateX locator4.translateX;
+    connectAttr -f locator4.translateX locator5.translateX;
+    print(na_getOutConnectArray({"locator1","locator3"},{"transform"}));
+}
+
+
+
+/**give me the source(s) of constraint scene objects
+@param string $constraint name of constraint on scene
+@note can be any type of consraint
+@pre assumes constraint command same as type
+@post
+@bug no error checking
+*/
+global proc string[]
+na_getInConstraint(string $constraint){
+    
+    na_assertObjectExist( {$constraint} );
+    string $supportedType[] = {"pointConstraint","orientConstraint","scaleConstraint"};
+    na_assertTypeInList( {$constraint}, $supportedType );
+    
+    string $result[]={};
+    
+    string $flag = "-q -tl";
+    
+    $result = na_getConstraintByFlag( $constraint, $flag );
+    
+    return $result;
+}
+
+/**give me the source(s) of constraint scene objects with plug
+@param string $constraint name of constraint on scene
+@note can be any type of consraint
+@pre assumes constraint command same as type
+@post
+@bug no error checking
+@see na_getInConstraint
+@see na_getPlugByAttributeArray
+*/
+global proc string[]
+na_getInConstraintPlug(string $constraint){
+    
+    na_assertObjectExist( {$constraint} );
+    string $supportedType[] = {"pointConstraint","orientConstraint","scaleConstraint"};
+    na_assertTypeInList( {$constraint}, $supportedType );
+    
+    string $result[]={};
+    
+    string $flagWeight = "-q -wal";
+    string $plug[] = na_getConstraintByFlag( $constraint,  $flagWeight );
+    
+    $result = na_getPlugByAttributeArray( $constraint , $plug );
+    
+    return $result;
+}
+
+
+/**get constraint according to flag advantage works with different kinds of constraints
+@param string $constraint name of constraint on scene
+@param string $flag that is valid for all supported types of constraint, no spaces at end
+@note example flag "-q -tl" or "-q -wal"
+@pre
+@post
+@bug no checking flag argument supported by constraint command
+*/
+global proc string[]
+na_getConstraintByFlag(string $constraint, string $flag){
+    
+    na_assertObjectExist( {$constraint} );
+    
+    string $supportedType[] = {"pointConstraint","orientConstraint","scaleConstraint"};
+    na_assertTypeInList( {$constraint}, $supportedType );
+    
+    string $result[]={};
+    
+    string $type = `objectType $constraint`;
+     
+    //assert object
+    
+    $result = eval( $type+" "+$flag+" "+$constraint);
+    
+    return $result;
+}
+
+
+
+
+/**get what is leading into this node of this type
+@result what is leading into these nodes of this type
+@param string $node node
+@param string $type type
+*/
+global proc string[]
+na_getInConnect( string $node, string $type )
+{
+    string $result[];
+    $result = `listConnections -destination false -type $type -source true $node`;
+    return $result;
+}
+global proc string[]
+na_getInConnectWithPlug( string $node, string $type )
+{
+    string $result[];
+    $result = `listConnections -plugs true -destination false -type $type -source true $node`;
+    return $result;
+}
+/**get what is leading into these nodes of this type
+@result noduplicates string list what is leading into these nodes of this type
+@param string $node[] node
+@param string $type type
+*/
+global proc string[]
+na_getInConnectArray( string $node[], string $type )
+{
+    string $result[];
+    for( $i = 0; $i < size($node) ; $i++ ){
+        $result = stringArrayCatenate($result, na_getInConnect( $node[$i], $type ));
+    }
+    $result = stringArrayRemoveDuplicates($result);
+    
+    return $result;
+}
+global proc string[]
+na_getInConnectArrayWithPlug( string $node[], string $type )
+{
+    string $result[];
+    for( $i = 0; $i < size($node) ; $i++ ){
+        $result = stringArrayCatenate($result, na_getInConnectWithPlug( $node[$i], $type ));
+    }
+    $result = stringArrayRemoveDuplicates($result);
+    
+    return $result;
+}
+
+/**get whats going out of this node of this type
+@param string $node node
+@param string $type type
+*/
+global proc string[]
+na_getOutConnect( string $node, string $type )
+{
+    string $result[];
+    $result = `listConnections -destination true -type $type -source false $node`;
+    return $result;
+}
+global proc string[]
+na_getOutConnectWithPlug( string $node, string $type )
+{
+    string $result[];
+    $result = `listConnections -plugs true -destination true -type $type -source false $node`;
+    return $result;
+}
+global proc string[]
+na_getOutConnectAll( string $node )
+{
+    string $result[];
+    $result = `listConnections -destination true -source false $node`;
+    return $result;
+}
+global proc string[]
+na_getOutConnectAllWithPlug( string $node )
+{
+    string $result[];
+    $result = `listConnections -plugs true -destination true -source false $node`;
+    return $result;
+}
+

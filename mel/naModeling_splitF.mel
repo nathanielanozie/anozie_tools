@@ -1,0 +1,37 @@
+//11-24-2014    --  initial release
+
+global proc naModeling_splitF()
+{
+    //separate selected face
+    
+    string $sel[] = `ls -sl`;
+    if(size($sel) > 0){
+        polyChipOff -ch 1 -kft 1 -dup 0 -off 0 $sel; //start split face
+        string $obj = "";
+        $obj = python("'"+$sel[0]+"'.split('.')[0]" );
+        polySeparate -ch 1 $obj; //finish up splitting
+    }
+    else{print("Select a poly face to separate");}
+}
+
+global proc naModeling_splitP()
+{
+    //split a combine mesh into pieces
+    
+    string $sel[] = {};
+    $sel = `ls -sl`;
+    if(size($sel) == 1){
+        polySeparate -ch 1 $sel[0];
+    }
+}
+
+global proc naModeling_e2V()
+{
+    //convert edge selection to vertices
+    
+    string $sel[] = `ls -sl`;
+    //string $_verts[] = `polyListComponentConversion -fe -tv $sel`;//unexpanded
+    string $_verts[] = `polyListComponentConversion -tv $sel`;//unexpanded, allow any intial component selected
+    string $verts[] = `filterExpand -sm 31 -expand true $_verts`;
+    select -r $verts;    
+}

@@ -1,0 +1,46 @@
+/**
+*@note Inspired by Savio Fernandes (artbycrunk dot com), learning about parameters of toon outline
+*/
+
+/**Given geometry its shape and toon shape set some defaults so can preview character with outlines
+*@pre toon created already for your character. ( RENDERING > Toon > assign outline )
+*@note change creaseLineWidth and creaseColor according to character
+*@note no error checking on types etcs transform, mesh, pfxToon, object existence
+*/
+global proc
+na_makeToonOutline(string $geoName, string $geoShapeName, string $toonShapeName)
+{
+    //need to make into python
+    //MEL making toon outline
+    
+    if( `objectType $geoName` != "transform"){ error("Require Geometry param 1");}
+    if( `objectType $geoShapeName` != "mesh" && `objectType $geoShapeName` != "nurbsSurface" ){ error("Require Shape param 2");}
+    if( `objectType $toonShapeName` != "pfxToon"){ error("Require pfxToon Shape param 3 --RENDERING > Toon > assign outline");}
+    
+    
+    //PUT LINE WIDTH HERE
+    //
+    float $lineWidth = 0.30; 
+    
+    //PUT LINE COLOR HERE
+    //
+    float $creaseRGB[] = {0.0,0.618,0.618}; 
+
+    //PUT GEO HERE
+    //
+    string $geo = $geoName;
+    string $geoShape = $geoShapeName;
+    
+    //PUT TOON SHAPE HERE
+    //
+    string $toonShape = $toonShapeName;
+    
+    setAttr ($toonShape+".profileLines") 0;
+    setAttr ($toonShape+".borderLines") 0;
+    setAttr ($toonShape+".hardCreasesOnly") 0;
+    setAttr ($toonShape+".creaseAngleMin") 0;
+    setAttr ($toonShape+".creaseAngleMax") 0;
+    setAttr ($toonShape+".creaseLineWidth") $lineWidth;
+    setAttr ($toonShape+".creaseColor") -type double3 $creaseRGB[0] $creaseRGB[1] $creaseRGB[2] ;
+    
+}

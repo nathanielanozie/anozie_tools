@@ -1,0 +1,296 @@
+/**@file naFileGeneral.mel
+@brief  v1.0.1 File Input Output. example reading a mel file, writing mel variables onto file as proc commands etc.
+@author Nathaniel O. Anozie (ogbonnawork at gmail dot com)
+@note date created: Feb 08, 2012
+@note -- moved out extensions
+@note -- working on tool to print expression equality with no variable
+@note Modify at your own risk
+*/
+
+global proc
+na_printExpressionEquality_unitTest()
+{
+    na_printExpressionEquality("a","b",{"tx","ty"},{"output1x","output1y"});
+}
+
+
+global proc
+na_printExpressionEquality(string $left, string $right, string $leftPlug[], string $rightPlug[] )
+{
+    na_assertSizeEqualArg( $rightPlug, size($leftPlug) );
+    
+    string $leftArg[] = {};
+    $leftArg = na_getPlugByAttributeArray( $left, $leftPlug );
+
+    string $rightArg[] = {};
+    $rightArg = na_getPlugByAttributeArray( $right, $rightPlug );    
+    
+    print("//---\n");
+    for($i = 0; $i < size($leftPlug); $i++)
+    {
+        print($leftArg[$i]+" = "+$rightArg[$i]+";");
+        print("\n");
+    }
+    print("//---\n");
+}
+
+/**gain access to the data stored in a mel file by sourcing it
+*@param $fileName string name of file 
+*@param $dir string  directory name
+*@param $extension string allowable file extension
+*@pre addTrailingBackSlash(), na_isExtension()
+*@note If we store data as mel procs instead of global calling this multiple times wont give already initialized errors.
+*@note ex: ("/Users/name/folder/trash/", "fn.mel")
+*@result none
+*/
+global proc
+findFileWithData(string $fileName, string $dir, string $extension)
+{
+
+    
+    //where the file should be read
+    string $dirPath = addTrailingBackSlash($dir);
+    string $file = ($dirPath+$fileName);
+    
+    //check if it has extension .mel
+    int $isCorrectFileExtension = 0;
+    $isCorrectFileExtension = na_isExtension($fileName,$extension,".");
+    if($isCorrectFileExtension == 0){ error("no ."+$extension+" extension");}
+    
+    //if file exists evaluate it
+    if( `filetest -f $file` == 1 ){ 
+        string $cmd = "source \""+$file+"\"";
+        eval $cmd;
+    }
+    else{
+        error("cannot find file to read "+$file+"\n");
+    }
+    
+}
+
+/**for getting a string representing float to have a decimal followed by zero.
+*@param  string value 
+*@note  ex: f( (""+1) ) gives "1.0", f( (""+1.0) ) gives "1.0"
+*@result string equivalent of input as a decimal with a dot zero at end
+*@pre na_getTokensByThisSeparator()
+*/
+global proc string
+addTrailingZero(string $arg)
+{
+    string $result = $arg;
+    //store tokens for every object
+    ////tokenize all dots   
+    string $buffer[] = na_getTokensByThisSeparator($arg,"."); 
+    
+    //dont padd a decimal shorthand like 1e05
+    int $isDecimalShorthand = 0;
+    //the stars mean anything can come before letter e and anthing can come after letter e
+    $isDecimalShorthand = gmatch($arg,"*e*");
+    
+    if($isDecimalShorthand == 0){
+        //when size is one and there is no e, this means there is no dot and we should add one 
+        if(size($buffer) == 1){
+            string $add = ".0";
+            $result = ($buffer[0])+$add;
+        }
+    }
+    
+    return $result;
+}
+
+
+
+
+
+
+/**get a mel function equivalent for a float array.
+*@param $sceneValues    float array scene values
+*@param $saveName       string      name to use for calling mel command
+*@result string an excecutable mel command that could return $sceneValues
+*@pre printFloatArray()
+*/
+global proc string
+printGlobalFloatArray(float $sceneValues[], string $saveName)
+{  
+    string $valuesPrint = "";
+    
+    //print declaration of function
+    string $beginning =  ("global proc float[] "+$saveName+"(){\n");
+    
+    //print $beginning;
+    $valuesPrint += $beginning;
+    
+    //print string array as a mel command
+    string $array = printFloatArray($sceneValues, "result");
+    $valuesPrint += $array;
+    
+    //print return and close function braces
+    string $ending = ("return $"+"result"+";\n}\n");
+    
+    $valuesPrint += $ending;
+    //print $ending;
+    
+    return $valuesPrint;
+}
+
+
+/**get a mel function equivalent for a string array.
+*@param $sceneValues    float array         scene values
+*@param $saveName       string              name to use for calling mel command
+*@result string an excecutable mel command that could return $sceneValues
+*@see printGlobalFloatArray()
+*@pre printStringArray()
+*/
+global proc string
+printGlobalStringArray(string $sceneValues[], string $saveName)
+{  
+    string $valuesPrint = "";
+    
+    //print declaration of function
+    string $beginning =  ("global proc string[] "+$saveName+"(){\n");
+    
+    //print $beginning;
+    $valuesPrint += $beginning;
+    
+    //print string array as a mel command
+    string $array = printStringArray($sceneValues, "result");
+    $valuesPrint += $array;
+    
+    //print return and close function braces
+    string $ending = ("return $"+"result"+";\n}\n");
+    
+    $valuesPrint += $ending;
+    //print $ending;
+    
+    return $valuesPrint;
+}
+
+
+
+/**get a mel global variable equivalent for a string array.
+*@param $scenValues string array        scene values
+*@param $saveName   string              name to use for the mel output string array
+*@result string an excecutable mel command that could return $sceneValues
+*@see printFloatArray()
+*/
+global proc string
+printStringArray(string $sceneValues[], string $saveName)
+{   
+    string $valuesPrint = "";
+    //we need this check to prevent negative indexes
+    if(size($sceneValues) > 0)
+    {
+        //print variable declaration
+        string $varDeclaration = ("string $"+$saveName+"[];\n");
+        //print $varDeclaration;
+        
+        $valuesPrint = ($varDeclaration+"$"+$saveName+" = {");
+        
+        //insert loop to populate data item
+        int $numScene = size($sceneValues);
+        
+        for($i=0; $i < ($numScene-1); $i++)
+        {
+            //put leading and trailing quote as well as a comma and space to separate elements
+            $valuesPrint += ( "\""+$sceneValues[$i]+"\", "); 
+        }
+        //put leading and trailing quote on last element
+        $valuesPrint += ( "\""+$sceneValues[($numScene-1)]+"\""); 
+        
+        //add closing brackets ,semi colon and new line to close
+        $valuesPrint += "};\n"; 
+        
+        //print the values
+        //print $valuesPrint;
+    }
+    
+    return $valuesPrint;
+}
+
+
+
+/**get a mel global variable equivalent for a float array.
+*@param $sceneValues float array    scene values 
+*@param $saveName   string          name to use for the mel output string array
+*@note rounds values to six decimal places in current version
+*@result string an excecutable mel command that could return $sceneValues
+*@see printStringArray()
+*/
+global proc string
+printFloatArray(float $sceneValues[], string $saveName)
+{   
+    int $numberRoundPlaces = 6;
+    string $valuesPrint = "";
+    //we need this check to prevent negative indexes
+    if(size($sceneValues) > 0)
+    {
+        
+        //print variable declaration
+        string $varDeclaration = ("float $"+$saveName+"[];\n");
+        //print $varDeclaration;
+        $valuesPrint = ($varDeclaration+"$"+$saveName+" = {");
+        
+        //insert loop to populate data item
+        int $numScene = size($sceneValues);
+
+        //for holding rounded value
+        float $roundedSceneValue;
+        string $paddedRoundedSceneValue;
+        for($i=0; $i < ($numScene-1); $i++)
+        {
+            ////put acomma and space to separate elements
+            //round value
+            $roundedSceneValue = roundToNearestDecimal($sceneValues[$i],$numberRoundPlaces);
+            //add trailing zero
+            $paddedRoundedSceneValue = addTrailingZero( (""+$roundedSceneValue) );
+            $valuesPrint += ( ""+$paddedRoundedSceneValue+", "); 
+        }
+        //last element
+        $valuesPrint += ( ""+$sceneValues[($numScene-1)]+""); 
+        
+        //add closing brackets ,semi colon and new line to close
+        $valuesPrint += "};\n"; 
+        
+        //print the values
+        //print $valuesPrint;
+    }
+    
+    return $valuesPrint;
+}
+
+
+
+
+/**add trailing back slash if none already exists
+*@param string thing to add trailing backslash to
+*@note addTrailingBackSlash("ab"); // Result: ab/ // 
+*@note addTrailingBackSlash("ab/");// Result: ab/ // 
+*/
+global proc string
+addTrailingBackSlash(string $inputStr)
+{
+    string $result;
+    $result = $inputStr;
+    //must be larger than zero letters
+    int $len = size($inputStr);
+    if($len > 0)
+    {
+        //get the last letter of user input
+        string $lastLetter = substring($inputStr,$len,$len);
+        int $shouldAddBackSlash = strcmp( $lastLetter, "/" );
+        
+        //if theres no backslash add one
+        if( $shouldAddBackSlash != 0 ){
+            $result = $inputStr+"/";
+        }
+    }
+    return $result;
+    
+}
+
+
+
+
+
+
+

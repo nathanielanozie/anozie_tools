@@ -1,0 +1,56 @@
+/**@file na_cpSkinToVtxRange.mel Tool to find nearest world vertices between two geometries
+*@author Nathaniel O. Anozie (ogbonnawork at gmail dot com)
+*@note date created: March 20, 2012
+*@note -- made auto joints non parented
+*@note Modify at your own risk
+*
+*@addtogroup deformation
+*@{
+*/
+
+
+
+/**Get vertices on one geometry using another geometry with identical common vertex world positions
+*@note $poly second argument should be the final skin mesh
+*@note assumes youve selected all possible regions of destination $poly before calling
+*/
+global proc string [] 
+na_cpSkinToVtxRange(string $fromPoly, string $poly)
+{
+    string $result[] = {};
+    
+    string $sel[] = `ls -sl`;
+    
+    if( size($sel) != 0 )
+    {
+        //from parameters
+        int $numFromVAr[] = `polyEvaluate -v $fromPoly`;
+        int $numFromV = $numFromVAr[0];
+        
+        //to parameters
+        int $maxAr[] = `polyEvaluate -v $poly`;
+        int $numV = $maxAr[0];
+        string $eyeRegion[] = `filterExpand -sm 31`;
+        //{$poly+".vtx[0:"+$numV+"]"};//slow cause used all verts
+        
+        if(size($eyeRegion) > 0){
+            for($i=0; $i < $numFromV; $i++)
+            {
+                string $vtx = $fromPoly+".vtx["+$i+"]";
+                float $posAr[] = `xform -q -t -ws $vtx`;
+                
+                //0.001 how close is good enough to say these two things are the same
+                string $compute[] = na_getNearestVerticesUsingWorldPointAndCandidatePoints($poly, $posAr, 0.001, $eyeRegion);
+                $result[size($result)] = $compute[0];
+            }
+        }
+    }
+    else{ error("Requires "+$poly+" to have selected vertices, these vertices will be possible candidates for output of computation"); }
+    
+    return $result;
+}
+
+/**
+*@}
+*/
+

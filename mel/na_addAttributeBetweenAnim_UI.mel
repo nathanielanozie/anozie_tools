@@ -1,0 +1,126 @@
+/**@file na_addAttributeBetweenAnim_UI.mel v1.0.0
+@brief used so we can get attribute name on a created control onto a new one
+@author Nathaniel O. Anozie (ogbonnawork at gmail dot com)
+@note date created: May 09 2012
+@note date last modified: May 09 2012
+@note source na_ui.mel, na_addAttribute.mel
+@note Modify at your own risk
+*/
+
+global string $gl_fromAnim = "gl_fromAnim";
+global string $gl_toAnim = "gl_toAnim";
+global string $gl_attrType_1 = "gl_attrType_1";
+global string $gl_attrType_2 = "gl_attrType_2";
+global string $gl_attrType_3 = "gl_attrType_3";
+global string $gl_attrType_3 = "gl_attrType_4";
+
+global proc na_addAttributeBetweenAnim_UI()
+{
+    
+    global string $gl_fromAnim;
+    global string $gl_toAnim;
+    global string $gl_prefix;
+    global string $gl_attrType_1;
+    global string $gl_attrType_2;
+    global string $gl_attrType_3;
+    global string $gl_attrType_4;
+    
+    
+    //setup up title for gui
+    string $titleWindow = "na_addAttribute.mel  Name Create";
+    string $mainWindowName = "mainWindow";
+    na_window($mainWindowName,$titleWindow, 440, 205);
+    
+    //set up format for gui
+    string $form = `formLayout -numberOfDivisions 50 "form layout"`;
+    
+    
+    na_textFieldGrp($form, $mainWindowName,"from anim", 5, -10, $gl_fromAnim);
+    na_textFieldGrp($form, $mainWindowName,"to anim", 30, -10, $gl_toAnim);
+    na_textFieldGrp($form, $mainWindowName,"prefix", 55, -10, $gl_prefix);
+  
+    
+    na_checkBox($form, $mainWindowName,"enum", 95, 90,"attrType_pickTypeOn_cmd(1)","attrType_pickTypeOff_cmd(1)");
+    na_checkBox($form, $mainWindowName,"float", 95, 160,"attrType_pickTypeOn_cmd(2)","attrType_pickTypeOff_cmd(2)");
+    na_checkBox($form, $mainWindowName,"int", 95, 220,"attrType_pickTypeOn_cmd(3)","attrType_pickTypeOff_cmd(3)");
+    na_checkBox($form, $mainWindowName,"boolean", 95, 270,"attrType_pickTypeOn_cmd(4)","attrType_pickTypeOff_cmd(4)");
+    
+    na_button($form, $mainWindowName,"ok", 145, 180,"button","na_addAttributeBetweenAnim_cmd");
+    
+    showWindow $mainWindowName;
+    
+}
+
+
+/**widget commands
+*/
+global proc attrType_pickTypeOn_cmd(int $type)
+{
+    global string $gl_attrType_1;
+    global string $gl_attrType_2;
+    global string $gl_attrType_3;
+    global string $gl_attrType_4;
+    
+    //widget command string
+    string $attrType_pickType_on_str = "on";
+    
+    if($type == 1){ $gl_attrType_1 = $attrType_pickType_on_str; }
+    if($type == 2){ $gl_attrType_2 = $attrType_pickType_on_str; }
+    if($type == 3){ $gl_attrType_3 = $attrType_pickType_on_str; }
+    if($type == 4){ $gl_attrType_4 = $attrType_pickType_on_str; }
+}
+global proc attrType_pickTypeOff_cmd(int $type)
+{
+    global string $gl_attrType_1;
+    global string $gl_attrType_2;
+    global string $gl_attrType_3;
+    global string $gl_attrType_4;
+    
+    //widget command string
+    string $attrType_pickType_off_str = "off";
+    
+    if($type == 1){ $gl_attrType_1 = $attrType_pickType_off_str; }
+    if($type == 2){ $gl_attrType_2 = $attrType_pickType_off_str; }
+    if($type == 3){ $gl_attrType_3 = $attrType_pickType_off_str; }
+    if($type == 4){ $gl_attrType_4 = $attrType_pickType_off_str; }
+}
+
+/**ui command
+*/
+
+global proc na_addAttributeBetweenAnim_cmd()
+{
+    
+    global string $gl_fromAnim;
+    global string $gl_toAnim;
+    global string $gl_prefix;
+    global string $gl_attrType_1;
+    global string $gl_attrType_2;
+    global string $gl_attrType_3;
+    global string $gl_attrType_4;
+    
+    
+    //main variables used by script
+    string $fromAnim = "";
+    string $toAnim = "";
+    string $prefix = "";
+    string $attrType[] = {};
+    
+    //get main variables
+    $fromAnim = `textFieldGrp -query -text $gl_fromAnim`;
+    $toAnim = `textFieldGrp -query -text $gl_toAnim`;
+    $prefix = `textFieldGrp -query -text $gl_prefix`;
+    
+    //widget command string
+    string $attrType_pickType_on_str = "on";
+    
+    if( `strcmp $gl_attrType_1 $attrType_pickType_on_str` == 0 ){ $attrType[size($attrType)] = "enum"; }
+    if( `strcmp $gl_attrType_2 $attrType_pickType_on_str` == 0 ){ $attrType[size($attrType)] = "double"; }
+    if( `strcmp $gl_attrType_3 $attrType_pickType_on_str` == 0 ){ $attrType[size($attrType)] = "long"; }
+    if( `strcmp $gl_attrType_4 $attrType_pickType_on_str` == 0 ){ $attrType[size($attrType)] = "bool"; }
+
+    
+    //main command
+    na_addAttributeBetweenAnim( $fromAnim,$toAnim,$attrType,$prefix );
+
+}

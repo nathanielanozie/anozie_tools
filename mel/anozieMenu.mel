@@ -1,0 +1,144 @@
+//----------------------------------------------------------------------------
+// anozieMenu.mel - MEL Script
+//----------------------------------------------------------------------------
+// Copyright ©2014-2015 Nathaniel O. Anozie All Rights Reserved
+//
+// DESCRIPTION:	
+//
+// REQUIRES:
+//
+//
+// AUTHORS:
+//	Nathaniel O. Anozie - ogbonnawork@gmail.com
+//
+//
+//Inspired by Michael Comet (comet-cartoons dot com) -- learning about creating a menu
+//----------------------------------------------------------------------------
+
+//last updated: 02/17/2015 --  added curve draw tools
+//last updated: 02/05/2015 --  added facial rigging secondary control helper tools
+//last updated: 01/29/2015 --  added some auto anim tools
+//last updated: 01/23/2015 --  added some face rigging shape creation tools
+//last updated: 01/22/2015 --  added some face rigging buffer tools
+//last updated: 12/25/2014 --  added some face rigging ui tools
+//last updated: 11/24/2014 --  working on adding some naModeling-(90pct+done), naBlendS-, naSkin-, naScript, naJoint, and naTechFace tools 
+//last updated: 02/20/2014 --  adding a couple blendshape tools
+//last updated: 02/19/2014 --  adding accessiblity to pivot, object at sel, preview, and anim copy pose tool
+
+
+
+/*
+ * Globals 
+ */
+global string $gMainWindow;    //since were going to put our menu in Maya we need this one
+
+// --------------------------------------------------------------------------
+    
+    //dump menu if its there
+if (`menu -q -exists AnozieMenu`)
+    {
+    menu -e -dai AnozieMenu;
+    }
+else
+    {
+	setParent $gMainWindow ;
+    menu -l "Anozie" -p MayaWindow -to true AnozieMenu ;
+    }
+
+setParent -menu AnozieMenu ;
+
+menuItem -l "naModeling" -sm true -to true ;
+
+    menuItem -l ("origin") -c ("python(\"from na_modeling import*\"); python(\"alignSelectedPolyVertexToOrigin(x=True,y=False, z=False)\");") -ann ("putSelVerticesAtOrigin");
+    menuItem -l ("jnX") -c ("source \"naModeling_jnX.mel\"; naModeling_jnX();") -ann ("mirrorAndCombineSelected_X");
+    menuItem -l ("cPiv") -c ("CenterPivot;") -ann ("center pivot");
+    menuItem -l ("splitF") -c ("source \"naModeling_splitF.mel\"; naModeling_splitF();") -ann ("separate selected face");    
+    menuItem -l ("splitP") -c ("source \"naModeling_splitF.mel\"; naModeling_splitP();") -ann ("split a combine mesh into pieces") ;
+    menuItem -l ("e2V") -c ("source \"naModeling_splitF.mel\"; naModeling_e2V();") -ann ("convert edge selection to vertices string");    
+    menuItem -l ("cube") -c ("polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;") -ann ("cube");
+    menuItem -l ("sew") -c ("polySewEdge;") -ann ("sew selected poly edges ");
+    menuItem -l ("selMat") -c ("python(\"from naModeling_selMat import*\"); python(\"naModeling_selMat()\");") -ann ("select faces that have selected materials");    
+    
+
+    setParent -menu ".." ;
+
+menuItem -l "naFaceUI" -sm true -to true ;
+     menuItem -l ("squareAll") -c ("python(\"import na_faceIt\");python(\"anim = na_faceIt.getAnim( option = 'both' )\");python(\"na_faceIt.setBlendShapeFromAnim( anim, option = 'both' )\");") -ann ("attach anim to blendshapes, select bs: left, right, up, dn, base");
+     menuItem -l ("squareUp") -c ("python(\"import na_faceIt\");python(\"anim = na_faceIt.getAnim( option = 'up' )\");python(\"na_faceIt.setBlendShapeFromAnim( anim, option = 'up' )\");") -ann ("attach anim to blendshapes, select bs: left, right, up, base");
+     menuItem -l ("squareDn") -c ("python(\"import na_faceIt\");python(\"anim = na_faceIt.getAnim( option = 'dn' )\");python(\"na_faceIt.setBlendShapeFromAnim( anim, option = 'dn' )\");") -ann ("attach anim to blendshapes, select bs: left, right, dn, base");     
+     menuItem -l ("text") -c ("python(\"import na_faceIt\");python(\"anim = na_faceIt.getIconText()\");") -ann ("create curve icon from typed text");
+     menuItem -l ("followSurface") -c ("python(\"import naNurbsSurfaceControl\");python(\"naNurbsSurfaceControl.help()\");") -ann ("help to move nulls along surface");
+     menuItem -l ("followCurve") -c ("python(\"import naNurbsCurveControl\");python(\"naNurbsCurveControl.help()\");") -ann ("help to move nulls along curve");     
+     menuItem -l ("buffer") -c ("python(\"import naFaceBuffer\");python(\"naFaceBuffer.help()\");") -ann ("face buffer help to combine face rig ui");
+     menuItem -l ("channelbox") -c ("python(\"import naChannelBoxEditor\");python(\"naChannelBoxEditor.help()\");") -ann ("face buffer help to combine face rig ui");
+     setParent -menu ".." ;
+     
+menuItem -l "naBlendShape" -sm true -to true ;
+
+    menuItem -l ("mBS") -c ("source \"naBlendS.mel\"; naBlendS_mBS();") -ann ("mirror shape select bs then base mesh");
+    menuItem -l ("UImBS") -c ("source \"naBlendS.mel\"; naBlendS_UImBS();") -ann ("ui for mirror bs");
+    menuItem -l ("smthSel") -c ("source \"naBlendS.mel\"; naBlendS_smthSel();") -ann ("smooth selected");   
+    menuItem -l ("r0") -c ("python(\"from na_zero import na_zeroRotate\");python(\"na_zeroRotate()\");") -ann ("set rxyz to 0 for all selected");
+    menuItem -l ("+BS") -c ("source \"naBlendS.mel\"; na_addSingleBlendshape();") -ann ("select bs then base mesh");    
+    menuItem -l ("++BS") -c ("source \"naBlendS.mel\"; na_addDoubleBlendshape();") -ann ("select 2 bs then base mesh");
+    menuItem -l ("cBS") -c ("source \"na_cleanBlendshapeInput.mel\"; na_cleanBlendshapeInput();") -ann ("clean blendshape input of selected");   
+    menuItem -l ("eqBS") -c ("source \"naBlendS.mel\"; naBlendS_eqBS();") -ann ("symmetrize blendshape");
+    menuItem -l ("bsBCrv") -c ("python(\"from na_correctiveMaker import *\");python(\"na_correctiveMakerUI()\");") -ann ("make corrective, select sculpted, then posed, then the default");    
+    menuItem -l ("TOPObs") -c ("python(\"from na_newTopoBS import *\");python(\"na_newTopoBSUI()\");") -ann ("select new topology, then posed, then the default mesh");
+
+    menuItem -l ("env0") -c ("python(\"from blendShapeEnvelope import *\");python(\"blendShapeEnvelopeOff()\");") -ann ("turn off envelope of selected");
+    menuItem -l ("limX") -c ("source \"naBlendS.mel\"; naBlendS_limX();") -ann ("make limits of x between -1 and 1");
+    menuItem -l ("limY") -c ("source \"naBlendS.mel\"; naBlendS_limY();") -ann ("make limits of y between -1");
+    menuItem -l ("ty1") -c ("source \"naBlendS.mel\"; naBlendS_ty(1);") -ann ("set ty to 1 for all selected");
+    menuItem -l ("tyN1") -c ("source \"naBlendS.mel\"; naBlendS_ty(-1);") -ann ("set ty to -1 for all selected");
+    menuItem -l ("tx1") -c ("source \"naBlendS.mel\"; naBlendS_tx(1);") -ann ("set tx to 1 for all selected");
+    menuItem -l ("txN1") -c ("source \"naBlendS.mel\"; naBlendS_tx(-1);") -ann ("set tx to -1 for all selected");
+    
+    setParent -menu ".." ;
+
+    
+menuItem -l "naSkin" -sm true -to true ;
+
+     menuItem -l ("onHld") -c ("source \"naGeneral.mel\"; source \"na_assertGeneral.mel\"; source \"na_skinGeneral.mel\"; na_holdBySelectedInfluence(1);") -ann ("onHold");
+     menuItem -l ("offHld") -c ("source \"naGeneral.mel\"; source \"na_assertGeneral.mel\"; source \"na_skinGeneral.mel\"; na_holdBySelectedInfluence(0);") -ann ("offHold");
+
+     menuItem -l ("flod") -c (" source \"naGeneral.mel\"; source \"na_assertGeneral.mel\"; source \"na_skinGeneral.mel\"; na_setWeightOneBySelectedComponentAndInfluence();") -ann ("floodSingleInfOnSel");     
+     
+     menuItem -l ("seleInf") -c ("source \"naGeneral.mel\"; source \"na_assertGeneral.mel\"; source \"na_skinGeneral.mel\"; na_selectAllInfluenceToSelectedPolygon();") -ann ("selAllInfluencesToSelectedPolygon");
+
+     setParent -menu ".." ;
+
+menuItem -l "Animation" -sm true -to true ;
+    menuItem -l ("Copy Single Pose") -c ("python(\"from cpPoseSingleFrame import*\"); python(\"cpPoseSingleFrame()\"); ") -ann ("copy pose btwn two frames") ;
+    menuItem -l ("Auto") -c ("python(\"import naAutoAnimate\");python(\"naAutoAnimate.help()\");") -ann ("help for auto animation") ;
+    //menuItem -divider true ;
+    //menuItem -l ("joint") -c ("source \"wireShape.mel\"; wireShape(\"joint\"); ") -ann ("Makes a joint.") ;
+    setParent -menu ".." ;
+
+
+menuItem -l "Preview" -sm true -to true ;
+    menuItem -l ("Movie") -c ("python(\"from na_quickPreview import*\"); python(\"na_quickPreview()\"); ") -ann ("quick Preview QuickTime") ;
+    setParent -menu ".." ;
+
+
+    
+    
+menuItem -l "Rigging Guide" -sm true -to true ;
+    menuItem -l ("locator at sel") -c ("source \"naGeneral.mel\"; source \"naMath.mel\"; source \"na_segment.mel\"; source \"na_assertGeneral.mel\"; na_makeLocatorAtSelectedComponent(); ") -ann ("Makes a locator at selected object(component).") ;
+    menuItem -l ("joint at sel") -c ("source \"naGeneral.mel\"; source \"naMath.mel\"; source \"na_segment.mel\"; source \"na_assertGeneral.mel\"; na_makeJointAtSelectedComponent(); ") -ann ("Makes a joint at selected object(component).") ;
+    menuItem -l ("move pivot") -c ("source \"na_movePivotSelToLast.mel\"; na_movePivotSelToLast();") -ann ("Move pivot all selected thing but last to the last things pivot"); 
+    menuItem -l ("curveDrawTools") -c ("python(\"import naCurveDrawTool\");python(\"naCurveDrawTool.help()\");") -ann ("help with ordering selection and drawing curve");
+    menuItem -divider true ;
+    menuItem -l ("radius++") -c ("python(\"import naCurveDrawTool\");python(\"naCurveDrawTool.increaseJointRadiusOnSelected()\");") -ann ("increase selected joints radius");
+    menuItem -l ("curve_x") -c ("python(\"import naCurveDrawTool\");python(\"naCurveDrawTool.drawCurveByWorldPositionOnSelected(worldPositionIndex = 0)\");") -ann ("draw curve using selected auto ordering by --world x axis");
+    menuItem -l ("curve_y") -c ("python(\"import naCurveDrawTool\");python(\"naCurveDrawTool.drawCurveByWorldPositionOnSelected(worldPositionIndex = 1)\");") -ann ("draw curve using selected auto ordering by --world y axis");     
+    menuItem -divider true ;
+    setParent -menu ".." ;
+    
+menuItem -divider true ;    
+menuItem -l "Visit Website..." -c ("showHelp -a \"http://www.nathananozie.blogspot.com/\"; ") -ann ("Visit website.") ;
+menuItem -l "Re-Build Menu" -c ("rehash; source \"anozieMenu.mel\" ;") -ann ("Re-Creates this menu, and does a rehash to pick up any new scripts.") ;
+
+
+// --------------------------------------------------------------------------
+

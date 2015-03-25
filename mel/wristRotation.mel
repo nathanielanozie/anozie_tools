@@ -1,0 +1,90 @@
+global proc wristRotation()
+{
+
+//RIGHT
+select -cl;
+//string $sel[] = {"RIGHT_WRIST_CON"};
+select -r RIGHT_WRIST_CON;
+//make the RIGHT wrist rotatable
+addAttr -ln WRIST_UP_R -keyable true -at double -min -10 -max 10;
+
+
+
+//hand push
+setAttr ($sel[0]=".WRIST_UP_R") 10;
+setAttr ("RIGHT_PALM.rotateZ") -70;
+setDrivenKeyframe -cd ("RIGHT_WRIST_CON.WRIST_UP_R") ("RIGHT_PALM.rotateZ");
+
+//hand towards ground
+setAttr ($sel[0]=".WRIST_UP_R") -10;
+setAttr ("RIGHT_PALM.rotateZ") 70;
+setDrivenKeyframe -cd ("RIGHT_WRIST_CON.WRIST_UP_R") ("RIGHT_PALM.rotateZ");
+
+//default
+setAttr ($sel[0]=".WRIST_UP_R") 0;
+setAttr ("RIGHT_PALM.rotateZ") 0;
+setDrivenKeyframe -cd ("RIGHT_WRIST_CON.WRIST_UP_R") ("RIGHT_PALM.rotateZ");
+
+
+//side
+addAttr -ln WRIST_SIDE_R -keyable true -at double -min -10 -max 10;
+
+
+setAttr ($sel[0]=".WRIST_SIDE_R") 10;
+setAttr ("RIGHT_PALM.rotateY") 40;
+setDrivenKeyframe -cd ("RIGHT_WRIST_CON.WRIST_SIDE_R") ("RIGHT_PALM.rotateY");
+
+setAttr ($sel[0]=".WRIST_SIDE_R") -10;
+setAttr ("RIGHT_PALM.rotateY") -40;
+setDrivenKeyframe -cd ("RIGHT_WRIST_CON.WRIST_SIDE_R") ("RIGHT_PALM.rotateY");
+
+setAttr ($sel[0]=".WRIST_SIDE_R") 0;
+setAttr ("RIGHT_PALM.rotateY") 0;
+setDrivenKeyframe -cd ("RIGHT_WRIST_CON.WRIST_SIDE_R") ("RIGHT_PALM.rotateY");
+
+
+
+
+
+
+select -cl;
+//string $sel[] = {"LEFT_WRIST_CON"};
+select -r LEFT_WRIST_CON;
+
+//make the LEFT wrist rotatable
+addAttr -ln WRIST_UP_L -keyable true -at double -min -10 -max 10;
+
+
+
+//hand push
+setAttr ($sel[0]=".WRIST_UP_L") 10;
+setAttr ("LEFT_PALM.rotateZ") -70;
+setDrivenKeyframe -cd ("LEFT_WRIST_CON.WRIST_UP_L") ("LEFT_PALM.rotateZ");
+
+//hand towards ground
+setAttr ($sel[0]=".WRIST_UP_L") -10;
+setAttr ("LEFT_PALM.rotateZ") 70;
+setDrivenKeyframe -cd ("LEFT_WRIST_CON.WRIST_UP_L") ("LEFT_PALM.rotateZ");
+
+//default
+setAttr ($sel[0]=".WRIST_UP_L") 0;
+setAttr ("LEFT_PALM.rotateZ") 0;
+setDrivenKeyframe -cd ("LEFT_WRIST_CON.WRIST_UP_L") ("LEFT_PALM.rotateZ");
+
+
+//side
+addAttr -ln WRIST_SIDE_L -keyable true -at double -min -10 -max 10;
+
+setAttr ($sel[0]=".WRIST_SIDE_L") 10;
+setAttr ("LEFT_PALM.rotateY") 40;
+setDrivenKeyframe -cd ("LEFT_WRIST_CON.WRIST_SIDE_L") ("LEFT_PALM.rotateY");
+
+setAttr ($sel[0]=".WRIST_SIDE_L") -10;
+setAttr ("LEFT_PALM.rotateY") -40;
+setDrivenKeyframe -cd ("LEFT_WRIST_CON.WRIST_SIDE_L") ("LEFT_PALM.rotateY");
+
+setAttr ($sel[0]=".WRIST_SIDE_L") 0;
+setAttr ("LEFT_PALM.rotateY") 0;
+setDrivenKeyframe -cd ("LEFT_WRIST_CON.WRIST_SIDE_L") ("LEFT_PALM.rotateY");
+
+}

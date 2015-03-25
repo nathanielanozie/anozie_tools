@@ -1,0 +1,70 @@
+/**@file na_insertHalfWayJointUI.mel v1.0.0
+@brief Tools for inserting halfway joint
+@author Nathaniel O. Anozie (ogbonnawork at gmail dot com)
+@note date created: Apr 11, 2012
+@note date last modified: Apr 11, 2012
+@note How to Install
+@note source na_ui.mel
+@note na_segment.mel
+@note released --
+@note Modify at your own risk
+@note Inspired By Jason Schleifer Animator Friendly Rigging (jasonschleifer dot com), halfway and segmenting tools
+*/
+
+
+global string $gl_startJoint = "gl_startJoint";
+global string $gl_endJoint = "gl_endJoint";
+global string $gl_suffix = "gl_suffix";
+
+
+
+/**ui
+*/
+global proc
+na_insertHalfWayJointUI()
+{
+    global string $gl_startJoint;
+    global string $gl_endJoint;
+    global string $gl_suffix;
+    
+    
+    //setup up title for gui
+    string $titleWindow = "na_segment.mel  Add mid joint";
+    string $mainWindowName = "mainWindow";
+    na_window($mainWindowName,$titleWindow, 340, 200);
+    
+    //set up format for gui
+    string $form = `formLayout -numberOfDivisions 50 "form layout"`;
+    
+        
+    //set up ui widgets
+    na_textFieldGrp($form, $mainWindowName,"start joint", 25, -50, $gl_startJoint);
+    na_textFieldGrp($form, $mainWindowName,"end joint", 65, -50, $gl_endJoint);
+    na_textFieldGrp($form, $mainWindowName,"suffix", 105, -50, $gl_suffix);
+    na_button($form, $mainWindowName,"ok", 145, 150,"button","na_insertHalfWayJoint_cmd");
+    
+    showWindow $mainWindowName;
+    
+}
+
+
+/**ui command
+*/
+global proc
+na_insertHalfWayJoint_cmd()
+{
+    global string $gl_startJoint;
+    global string $gl_endJoint;
+    global string $gl_suffix;
+    
+    //used
+    string $startJoint="";
+    string $endJoint="";
+    string $suffix="";
+    
+    $startJoint = `textFieldGrp -query -text $gl_startJoint`;
+    $endJoint = `textFieldGrp -query -text $gl_endJoint`;
+    $suffix = `textFieldGrp -query -text $gl_suffix`;
+    
+    na_insertHalfWayJoint($startJoint,$endJoint,$suffix);
+}

@@ -1,0 +1,1638 @@
+/**@file na_space.mel
+@brief v1.0.1 Make space switch, example used getting head in world space, hand in hip space etc
+@author Nathaniel Anozie (ogbonnawork at gmail dot com)
+@note Inspired by Inspired by Jason Schleifer's Animator Friendly Rigging
+@note not applicable if not allowed to have two different attributes to scroll down for spaces
+@bug not used on a real rig yet, important special attribute is non keyable
+@bug little error checking, ex that return for getconstraint is of constraint type etc., no checking
+type before sending it out ex if expecting constraint need to verify before do anything with it even just
+sending it out somewhere
+@note --
+@note adding removal tool
+@note --
+@note released v1.0.0
+@note modify at your own risk
+*/
+
+//last updated: 05/14/2014-05/14/2014 -- added ignoring if animator control doesnt have a certain attribute
+
+
+
+/**assumes constraining objects already made it creates and connects default nodes to constraining
+objects only
+*/
+global proc 
+na_space_makeDefaultAnim(string $anim)
+{
+    na_assertObjectExist({$anim});
+    string $naAttr = "";
+    $naAttr = na_spaceGetAttrName_var();
+    
+    string $t_object[] = {};
+    $t_object = getTranslationSceneCntObject($anim,$naAttr);
+    na_assertObjectExist($t_object);
+    na_space_makeDefaultPose($t_object,$naAttr);
+    
+    string $r_object[] = {};
+    $r_object = getRotationSceneCntObject($anim,$naAttr);
+    na_assertObjectExist($r_object);
+    na_space_makeDefaultPose($r_object,$naAttr);
+    
+}
+/**reset by animator control,assumes default nodes exist already, and constraints main nodes and
+enums created and connected
+@bug needs to be called twice because there are keys set when locs are moved to correct world
+so after those keys are deleted we move locs from where they should be hence need to do it again
+a solution would be to first move animator to default position then reset
+*/
+global proc 
+na_space_resetAnim(string $anim)
+{
+    na_assertObjectExist({$anim});
+    string $naAttr = "";
+    $naAttr = na_spaceGetAttrName_var();
+    
+    //remove anim curves
+    string $t_object[] = {};
+    $t_object = getTranslationSceneCntObject($anim,$naAttr);
+    na_assertObjectExist($t_object);
+    na_space_reset($t_object);
+    string $r_object[] = {};
+    $r_object = getRotationSceneCntObject($anim,$naAttr);
+    na_assertObjectExist($r_object);
+    na_space_reset($r_object);
+    
+    
+    //move constraining object to default pose
+    na_space_setWorldPositionConstrainingObjectToDefault($r_object);
+    na_space_setWorldPositionConstrainingObjectToDefault($t_object);
+}
+
+
+/**reset all
+*/
+global proc 
+na_space_resetAll()
+{
+    //remove anim curves
+    string $object[] = {};
+    $object = na_space_getObject();
+    na_space_reset($object);
+    
+    //move constraining object to default pose
+    na_space_setWorldPositionConstrainingObjectToDefault($object);
+}
+
+/**removes weight keys, tranlslate and rotate animation curves for constraining object
+@param names for constraining objects (ex: head_locator1,head_locator2
+*/
+global proc 
+na_space_reset(string $object[])
+{   
+    if(size($object) > 0){
+        
+        string $all[] = {};
+        $all = `listConnections -source true $object`;
+        
+        //remove keys for null curve
+        string $curve[] = {};
+        $curve = `ls -type "animCurve" $all`;
+        if(size($curve)>0){ delete $curve; };
+        
+        //remove keys for constraint weights
+        string $constraintCurve[] = {};
+        $constraintCurve = na_space_getConstraintCurves();
+        if(size($constraintCurve)>0){delete $constraintCurve;}
+    }
+    
+}
+
+
+
+/**change space on selected animator control
+@bug doesn't know that because of smooth interpolating of constraint weights
+it needs to round to one place before starting to give full space control to new space
+doesn't check specific node format
+*/
+global proc
+na_space()
+{
+    string $sel[] = `ls -sl`;
+    na_assertSizeEqualArg( $sel, 1 );
+    
+    string $anim = "";
+    $anim = $sel[0];
+    string $naAttr = na_spaceGetAttrName_var();
+    
+    na_assertObjectExist( {$anim+"."+$naAttr} );
+    na_assertSpaceEnum( $anim, $naAttr );//make sure there is an enum for every space
+    
+    //we get space and round weights to have one 1 and rest zeroes
+    na_setKeySpaceEnum($anim, $naAttr);
+    na_setKeyWeightRound($anim,$naAttr);
+    //
+    na_assertSpaceWeight( $anim, $naAttr );//make sure weight 1 or 0, at most one with 1
+    
+    //we are at a given frame we will
+    //key old weights at their current values we don't touch them 
+    //on previous frame, and on the current frame, this is on the constraint itself
+    //
+    //
+    //we then will move new constraining object to old one
+    //on previous frame and on the current frame we do this before keying so we can have this
+    //move stay
+    //
+    //we will then key old constraining objects position for now assume to do all its attributes
+    //on previous frame and on the current frame again we haven't moved or changed anything
+    //
+    //we then key new constraining object at its new position
+    //on previous frame and on the current frame
+    //
+    //we then set weight to one of the new on 
+    //current frame only, this is important not to do on previous frame
+    //
+    //finally we key the new weights on
+    //current frame only
+    
+    na_moveNewCntObjectToOld( $anim, $naAttr );
+    na_setKeyCntObject( $anim, $naAttr);
+    na_setKeyOldWeight( $anim, $naAttr );
+    na_setWeightNew($anim, $naAttr);
+    na_setKeyNewWeight( $anim, $naAttr );
+    
+}
+
+
+/**round constraint weights to zero places, to allow changing space in between other space changes
+*/
+global proc
+na_setKeyWeightRound(string $anim, string $naAttr)
+{
+    na_assertObjectExist( {$anim+"."+$naAttr} );
+    float $value = 0.0;
+    
+    //find constraint weights and set keys on them using rounded current frame weight values
+    //below is for translation similarly for rotation
+    //
+    string $translationCntWeightObject[] = {};
+    $translationCntWeightObject = getTranslationSceneCntWeightObject($anim,$naAttr);
+   
+    if(size($translationCntWeightObject) > 0)
+    {
+        na_assertSpaceEnumTranslation($anim, $naAttr);
+        
+        $value = 0.0;
+        for($weight in $translationCntWeightObject)
+        {
+            $value = `getAttr $weight`;
+            $newValue = 0.0;
+            $newValue = roundToNearestDecimal($value,0);
+            setAttr $weight $newValue;
+            setKeyframe $translationCntWeightObject;
+        }
+    }
+    
+    string $rotationCntWeightObject[] = {};
+    $rotationCntWeightObject = getRotationSceneCntWeightObject($anim,$naAttr);
+    if(size($rotationCntWeightObject) > 0)
+    {
+        na_assertSpaceEnumRotation($anim, $naAttr);
+        
+        $value = 0.0;
+        for($weight in $rotationCntWeightObject)
+        {
+            $value = `getAttr $weight`;
+            $newValue = 0.0;
+            $newValue = roundToNearestDecimal($value,0);
+            setAttr $weight $newValue;
+            setKeyframe $rotationCntWeightObject;
+        }
+    }
+}
+
+
+/**set key on current frame on space enum
+*/
+global proc
+na_setKeySpaceEnum(string $anim, string $naAttr)
+{
+    
+    na_assertObjectExist( {$anim+"."+$naAttr} );
+    
+    
+    string $translationSceneEnum[] = {};
+    $translationSceneEnum = na_getTranslationSceneEnum($anim, $naAttr);
+
+    if(size($translationSceneEnum) > 0)
+    {
+        setKeyframe $translationSceneEnum;
+    }
+    
+    string $rotationSceneEnum[] = {};
+    $rotationSceneEnum = na_getRotationSceneEnum($anim, $naAttr);
+    if(size($rotationSceneEnum) > 0)
+    {
+        setKeyframe $rotationSceneEnum;
+    }
+    
+}
+
+
+
+
+
+
+
+
+//set translation and rotation keys on constraint weights
+/**
+@note it skips keying if not at frame 2 or higher
+@see getTranslationSceneCntWeightObject
+@see getRotationSceneCntWeightObject
+*/
+global proc
+na_setKeyOldWeight(string $anim, string $naAttr)
+{
+    na_assertObjectExist( {$anim+"."+$naAttr} );
+    int $cur = `currentTime -query`;
+    
+    if($cur > 1){
+        
+        int $currentFrame = $cur;
+        int $prevFrame = $currentFrame - 1;
+        
+        string $translationCntWeightObject[] = {};
+        $translationCntWeightObject = getTranslationSceneCntWeightObject($anim,$naAttr);
+        
+        if(size($translationCntWeightObject) > 0)
+        {
+            currentTime $prevFrame;
+            setKeyframe $translationCntWeightObject;
+            currentTime $currentFrame;
+            setKeyframe $translationCntWeightObject;
+        }
+        
+        string $rotationCntWeightObject[] = {};
+        $rotationCntWeightObject = getRotationSceneCntWeightObject($anim,$naAttr);
+        if(size($rotationCntWeightObject) > 0)
+        {
+            currentTime $prevFrame;
+            setKeyframe $rotationCntWeightObject;
+            currentTime $currentFrame;
+            setKeyframe $rotationCntWeightObject;
+        }
+        
+        currentTime $cur;//restore key frame
+        
+    }
+}
+
+/**set keys on rotation and translation of constraining object
+@bug not being clever about setting keys on translate only attr if needed, or rotate only attributes
+*/
+global proc
+na_setKeyCntObject(string $anim, string $naAttr)
+{
+    na_assertObjectExist( {$anim+"."+$naAttr} );
+
+    string $translationCntObject[] = {};
+    $translationCntObject = getTranslationSceneCntObject($anim,$naAttr);
+    
+    if(size($translationCntObject) > 0)
+    {
+        setKeyframe $translationCntObject;
+    }
+    
+    string $rotationCntObject[] = {};
+    $rotationCntObject = getRotationSceneCntObject($anim,$naAttr);
+    if(size($rotationCntObject) > 0)
+    {
+        setKeyframe $rotationCntObject;
+    }
+    
+
+}
+/**snaps all constraint object rotation and translation to current constraint object
+@bug no assert enum, existence attr ..,  existence new scene constraining object, enum length matches weights
+no verifying enum is an enum
+*/
+global proc
+na_moveNewCntObjectToOld(string $anim, string $naAttr)
+{
+    na_assertObjectExist( {$anim+"."+$naAttr} );
+
+    string $translationCntWeightObject[] = {};
+    $translationCntWeightObject = getTranslationSceneCntWeightObject($anim,$naAttr);
+    
+    if(size($translationCntWeightObject) > 0)
+    {
+        na_moveNewCntObjectToOldTranslation($anim, $naAttr);
+    }
+    
+    string $rotationCntWeightObject[] = {};
+    $rotationCntWeightObject = getRotationSceneCntWeightObject($anim,$naAttr);
+    if(size($rotationCntWeightObject) > 0)
+    {
+        na_moveNewCntObjectToOldRotation($anim, $naAttr);
+    }
+    
+}
+
+/**
+@bug no assert enum, existence attr ..,  existence new scene constraining object, enum length matches weights
+no verifying enum is an enum, most objects includes plug which can be a little confusing sometimes
+*/
+global proc
+na_moveNewCntObjectToOldTranslation(string $anim, string $naAttr)
+{
+    na_assertObjectExist( {$anim+"."+$naAttr} );
+    na_assertSpaceEnumTranslation($anim, $naAttr);
+    na_assertSpaceWeightTranslation($anim, $naAttr);
+
+    string $newSceneCntObject = "";
+    $newSceneCntObject = na_getNewTranslationSceneObject($anim,$naAttr);
+    
+    string $oldSceneCntObject = "";
+    $oldSceneCntObject = na_getOldTranslationSceneObject($anim,$naAttr);
+    
+    
+    ////changing scene
+    na_translationWorldFirstArgToSecond($newSceneCntObject,$oldSceneCntObject );
+    
+}
+
+/**
+@pre 
+@post 
+@bug may need to change your attribute names to match what they are suppose to be doing
+*/
+global proc string[]
+na_getSceneCntObjectWithWeightOneTranslation(string $anim, string $naAttr)
+{
+    na_assertSpaceEnumTranslation($anim, $naAttr);
+    na_assertSpaceWeightTranslation($anim, $naAttr);
+    
+    
+    
+    string $result[] = {};
+    na_assertObjectExist( {$anim+"."+$naAttr} );
+    
+    string $translationCntWeightObject[] = {};
+    $translationCntWeightObject = getTranslationSceneCntWeightObject($anim,$naAttr);
+    na_assertSizeGreaterEqualTo( $translationCntWeightObject, 1);
+    
+    string $translationCntObject[] = {};
+    $translationCntObject = getTranslationSceneCntObject($anim,$naAttr);
+    na_assertSizeGreaterEqualTo( $translationCntObject, 1);
+    
+    na_assertSizeEqualArg( $translationCntWeightObject, size($translationCntObject) );
+    
+    float $weight = 0;
+    int $numberWeightWithOne = 0;
+    
+    //this is checking when weight equals one we know that should be the
+    //constraing object
+    for($i = 0; $i < size($translationCntWeightObject); $i++ )
+    {
+        //for each weight assert 1 or 0
+        $weight = `getAttr $translationCntWeightObject[$i]`;
+        if( $weight == 1  )
+        {
+            $result = {$translationCntObject[$i]};
+            break;
+        }
+    }
+    
+    return $result;
+}
+/**
+@bug no assert enum, existence attr ..,  existence new scene constraining object, enum length matches weights
+no verifying enum is an enum, most objects includes plug which can be a little confusing sometimes
+*/
+global proc
+na_moveNewCntObjectToOldRotation(string $anim, string $naAttr)
+{
+    na_assertObjectExist( {$anim+"."+$naAttr} );
+    na_assertSpaceEnumRotation($anim, $naAttr);
+    na_assertSpaceWeightRotation($anim, $naAttr);
+
+    string $newSceneCntObject = "";
+    $newSceneCntObject = na_getNewRotationSceneObject($anim,$naAttr);
+    
+    string $oldSceneCntObject = "";
+    $oldSceneCntObject = na_getOldRotationSceneObject($anim,$naAttr);
+    
+    
+    ////changing scene
+    na_rotationWorldFirstArgToSecond($newSceneCntObject,$oldSceneCntObject );
+    
+}
+
+/**
+*/
+global proc string
+na_getNewRotationSceneObject(string $anim, string $naAttr)
+{
+    na_assertObjectExist( {$anim+"."+$naAttr} );
+    na_assertSpaceEnumRotation($anim, $naAttr);
+    na_assertSpaceWeightRotation($anim, $naAttr);
+    
+    string $result = "";
+    
+    //get enum for spaces
+    string $rotationSceneEnum[] = {};
+    $rotationSceneEnum = na_getRotationSceneEnum($anim, $naAttr);
+    na_assertSizeEqualArg( $rotationSceneEnum, 1 );
+    int $newSceneCntObjectIndex = 0;
+    $newSceneCntObjectIndex = `getAttr $rotationSceneEnum[0]`;
+    
+    //get scene constraining objects
+    string $rotationCntObject[] = {};
+    $rotationCntObject = getRotationSceneCntObject($anim,$naAttr);
+    na_assertSizeGreaterEqualTo( $rotationCntObject, 1);
+    string $newSceneCntObject = "";
+    $newSceneCntObject = $rotationCntObject[ $newSceneCntObjectIndex ];
+    
+    $result = $newSceneCntObject;
+    
+    return $result;
+}
+/**
+*/
+global proc string
+na_getOldRotationSceneObject(string $anim, string $naAttr)
+{
+    na_assertObjectExist( {$anim+"."+$naAttr} );
+    na_assertSpaceEnumRotation($anim, $naAttr);
+    na_assertSpaceWeightRotation($anim, $naAttr);
+    
+    string $result = "";
+    
+    string $oldSceneCntObjectArray[] = {};
+    $oldSceneCntObjectArray = na_getSceneCntObjectWithWeightOneRotation($anim,$naAttr);
+    na_assertSizeEqualArg( $oldSceneCntObjectArray, 1 );
+    string $oldSceneCntObject = "";
+    $oldSceneCntObject = $oldSceneCntObjectArray[0];
+    
+    $result = $oldSceneCntObject;
+    
+    return $result;
+}
+/**
+*/
+global proc string
+na_getNewTranslationSceneObject(string $anim, string $naAttr)
+{
+    na_assertObjectExist( {$anim+"."+$naAttr} );
+    na_assertSpaceEnumTranslation($anim, $naAttr);
+    na_assertSpaceWeightTranslation($anim, $naAttr);
+    
+    string $result = "";
+    
+    //get enum for spaces
+    string $translationSceneEnum[] = {};
+    $translationSceneEnum = na_getTranslationSceneEnum($anim, $naAttr);
+    na_assertSizeEqualArg( $translationSceneEnum, 1 );
+    int $newSceneCntObjectIndex = 0;
+    $newSceneCntObjectIndex = `getAttr $translationSceneEnum[0]`;
+    
+    //get scene constraining objects
+    string $translationCntObject[] = {};
+    $translationCntObject = getTranslationSceneCntObject($anim,$naAttr);
+    na_assertSizeGreaterEqualTo( $translationCntObject, 1);
+    string $newSceneCntObject = "";
+    $newSceneCntObject = $translationCntObject[ $newSceneCntObjectIndex ];
+    
+    $result = $newSceneCntObject;
+    
+    return $result;
+}
+/**
+*/
+global proc string
+na_getOldTranslationSceneObject(string $anim, string $naAttr)
+{
+    na_assertObjectExist( {$anim+"."+$naAttr} );
+    na_assertSpaceEnumTranslation($anim, $naAttr);
+    na_assertSpaceWeightTranslation($anim, $naAttr);
+    
+    string $result = "";
+    
+    string $oldSceneCntObjectArray[] = {};
+    $oldSceneCntObjectArray = na_getSceneCntObjectWithWeightOneTranslation($anim,$naAttr);
+    na_assertSizeEqualArg( $oldSceneCntObjectArray, 1 );
+    string $oldSceneCntObject = "";
+    $oldSceneCntObject = $oldSceneCntObjectArray[0];
+    
+    $result = $oldSceneCntObject;
+    
+    return $result;
+}
+
+
+
+/**
+@pre 
+@post 
+@bug may need to change your attribute names to match what they are suppose to be doing
+*/
+global proc string[]
+na_getSceneCntObjectWithWeightOneRotation(string $anim, string $naAttr)
+{
+    na_assertSpaceEnumRotation($anim, $naAttr);
+    na_assertSpaceWeightRotation($anim, $naAttr);
+    
+    
+    
+    string $result[] = {};
+    na_assertObjectExist( {$anim+"."+$naAttr} );
+    
+    string $rotationCntWeightObject[] = {};
+    $rotationCntWeightObject = getRotationSceneCntWeightObject($anim,$naAttr);
+    na_assertSizeGreaterEqualTo( $rotationCntWeightObject, 1);
+    
+    string $rotationCntObject[] = {};
+    $rotationCntObject = getRotationSceneCntObject($anim,$naAttr);
+    na_assertSizeGreaterEqualTo( $rotationCntObject, 1);
+    
+    na_assertSizeEqualArg( $rotationCntWeightObject, size($rotationCntObject) );
+    
+    float $weight = 0;
+    int $numberWeightWithOne = 0;
+    
+    //this is checking when weight equals one we know that should be the
+    //constraing object
+    for($i = 0; $i < size($rotationCntWeightObject); $i++ )
+    {
+        //for each weight assert 1 or 0
+        $weight = `getAttr $rotationCntWeightObject[$i]`;
+        if( $weight == 1  )
+        {
+            $result = {$rotationCntObject[$i]};
+            break;
+        }
+    }
+    
+    return $result;
+}
+
+
+
+
+
+
+
+global proc
+na_setWeightNew(string $anim, string $naAttr)
+{
+    na_assertObjectExist( {$anim+"."+$naAttr} );
+    
+    string $translationCntWeightObject[] = {};
+    $translationCntWeightObject = getTranslationSceneCntWeightObject($anim,$naAttr);
+    
+    if(size($translationCntWeightObject) > 0)
+    {
+        na_setWeightNewTranslation($anim, $naAttr);
+    }
+    
+    string $rotationCntWeightObject[] = {};
+    $rotationCntWeightObject = getRotationSceneCntWeightObject($anim,$naAttr);
+    if(size($rotationCntWeightObject) > 0)
+    {
+        na_setWeightNewRotation($anim, $naAttr);
+    }
+    
+}
+/**
+@pre should be on frame we are changing space
+@bug no checking same size weight and constraint objects, no index checking
+*/
+global proc
+na_setWeightNewRotation(string $anim, string $naAttr)
+{
+    na_assertObjectExist( {$anim+"."+$naAttr} );
+    na_assertSpaceEnumRotation($anim, $naAttr);
+    na_assertSpaceWeightRotation($anim, $naAttr);
+    
+    
+    string $rotationCntWeightObject[] = {};
+    $rotationCntWeightObject = getRotationSceneCntWeightObject($anim,$naAttr);
+    string $rotationCntObject[] = {};
+    $rotationCntObject = getRotationSceneCntObject($anim,$naAttr); 
+    
+    
+    string $newSceneCntObject = "";
+    $newSceneCntObject = na_getNewRotationSceneObject($anim,$naAttr);
+    na_assertObjectExist( {$newSceneCntObject} );
+    
+    
+    int $newIndex[] = {};
+    $newIndex = naIndex( $newSceneCntObject, $rotationCntObject  );
+    na_assertIntSizeEqualArg( $newIndex, 1 );
+    string $newScenCntWeightObject = "";
+    $newSceneCntWeightObject = $rotationCntWeightObject[$newIndex[0]];
+    
+    
+    string $oldSceneCntObject = "";
+    $oldSceneCntObject = na_getOldRotationSceneObject($anim,$naAttr);
+    na_assertObjectExist( {$oldSceneCntObject} );
+    
+    
+    int $oldIndex[] = {};
+    $oldIndex = naIndex( $oldSceneCntObject, $rotationCntObject  );
+    na_assertIntSizeEqualArg( $oldIndex, 1 );
+    string $oldScenCntWeightObject = "";
+    $oldSceneCntWeightObject = $rotationCntWeightObject[$oldIndex[0]];
+    
+    setAttr $oldSceneCntWeightObject 0; //no weight on old constraining object
+    setAttr $newSceneCntWeightObject 1; //all weight on new constraining object
+    
+    
+}
+/**
+@pre should be on frame we are changing space
+@bug no checking same size weight and constraint objects, no index checking
+*/
+global proc
+na_setWeightNewTranslation(string $anim, string $naAttr)
+{
+    na_assertObjectExist( {$anim+"."+$naAttr} );
+    na_assertSpaceEnumTranslation($anim, $naAttr);
+    na_assertSpaceWeightTranslation($anim, $naAttr);
+    
+    
+    string $translationCntWeightObject[] = {};
+    $translationCntWeightObject = getTranslationSceneCntWeightObject($anim,$naAttr);
+    string $translationCntObject[] = {};
+    $translationCntObject = getTranslationSceneCntObject($anim,$naAttr); 
+    
+    
+    string $newSceneCntObject = "";
+    $newSceneCntObject = na_getNewTranslationSceneObject($anim,$naAttr);
+    na_assertObjectExist( {$newSceneCntObject} );
+    
+    
+    int $newIndex[] = {};
+    $newIndex = naIndex( $newSceneCntObject, $translationCntObject  );
+    na_assertIntSizeEqualArg( $newIndex, 1 );
+    string $newScenCntWeightObject = "";
+    $newSceneCntWeightObject = $translationCntWeightObject[$newIndex[0]];
+    
+    
+    string $oldSceneCntObject = "";
+    $oldSceneCntObject = na_getOldTranslationSceneObject($anim,$naAttr);
+    na_assertObjectExist( {$oldSceneCntObject} );
+    
+    
+    int $oldIndex[] = {};
+    $oldIndex = naIndex( $oldSceneCntObject, $translationCntObject  );
+    na_assertIntSizeEqualArg( $oldIndex, 1 );
+    string $oldScenCntWeightObject = "";
+    $oldSceneCntWeightObject = $translationCntWeightObject[$oldIndex[0]];
+    
+    
+    setAttr $oldSceneCntWeightObject 0; //no weight on old constraining object
+    setAttr $newSceneCntWeightObject 1; //all weight on new constraining object
+    
+}
+
+
+
+/**
+@pre assume on frame changing space
+@bug no error checking
+*/
+global proc
+na_setKeyNewWeight(string $anim, string $naAttr)
+{
+    na_assertObjectExist( {$anim+"."+$naAttr} );
+    
+    
+    string $translationCntWeightObject[] = {};
+    $translationCntWeightObject = getTranslationSceneCntWeightObject($anim,$naAttr);
+    
+    if(size($translationCntWeightObject) > 0)
+    {
+        na_assertSpaceEnumTranslation($anim, $naAttr);
+        na_assertSpaceWeightTranslation($anim, $naAttr);
+        
+        setKeyframe $translationCntWeightObject;
+    }
+    
+    string $rotationCntWeightObject[] = {};
+    $rotationCntWeightObject = getRotationSceneCntWeightObject($anim,$naAttr);
+    if(size($rotationCntWeightObject) > 0)
+    {
+        na_assertSpaceEnumRotation($anim, $naAttr);
+        na_assertSpaceWeightRotation($anim, $naAttr);
+        setKeyframe $rotationCntWeightObject;
+    }
+    
+}
+
+
+
+
+
+
+
+/**
+@pre empty scene
+*/
+global proc
+na_space_constrainObject_setDefault_unitTest()
+{
+    
+    spaceLocator -p 0 0 0;
+    select -d locator1 ;
+    select -d;
+    joint -p 5 0 0 ;
+    setAttr "joint1.rotateZ" 35;
+    setAttr "joint1.rotateX" 23;
+    createNode multiplyDivide -n "nozo_md";
+
+    select -r locator1 ;
+    addAttr -ln "naSpace"  -at double  |locator1;
+    setAttr -e-keyable true |locator1.naSpace;
+    
+    connectAttr -f nozo_md.outputX locator1.naSpace;
+    
+    na_space_constrainObject_setDefault("naSpace",{"joint1"}, {"locator1"} );
+}
+
+
+/**set default data on constraining object for space tool
+@param name for attribute 
+@param multiply divide node name
+@param from object list
+@param constraining object list
+@pre empty nodes,attributes, objects all created prior
+@post backend gets rotation and translation
+*/
+global proc
+na_space_constrainObject_setDefault(string $naAttr, string $fromObject[], string $toObject[])
+{
+    
+    string $mdNode[]={};
+    $mdNode = na_space_constrainObject_getDefaultNode($naAttr,$toObject);
+    
+    
+    na_space_constrainObject_assert($naAttr,$mdNode,$fromObject,$toObject);
+    
+    string $translationPlug[] = {};
+    $translationPlug = na_space_constrainObject_getDefaultTranslationPlug();
+    string $rotationPlug[] = {};
+    $rotationPlug = na_space_constrainObject_getDefaultRotationPlug();
+    
+    for($i=0; $i < size($toObject); $i++)
+    {
+        $from = $fromObject[$i];
+        $node = $mdNode[$i];
+        
+        
+        //set multiply divide tool using translation and rotation values
+        //and input1 and input2 plugs
+        //
+        float $translation[] = {};
+        $translation = `xform -q -ws -translation $from`;
+        na_assertFloatSizeEqualArg($translation,3);
+        
+        float $rotation[] = {};
+        $rotation = `xform -q -ws -rotation $from`;
+        na_assertFloatSizeEqualArg($rotation,3);
+        
+        //put data on storage
+        for($j=0; $j<3; $j++)
+        {
+            setAttr ($node+"."+$translationPlug[$j]) $translation[$j];
+            setAttr ($node+"."+$rotationPlug[$j]) $rotation[$j];
+        }
+        
+    }
+    
+    
+}
+
+
+
+/**reset consraining object, nothing is made, it sets position of constraining object
+@param constraining object (ex: locator1 that acts on a point constraint to head_anim's parent
+@see na_space_make
+@post constraining object moved to their defaults
+*/
+//this doesnt yet work with different constraint types for prop, char system
+global proc
+na_space_setWorldPositionConstrainingObjectToDefault(string $object[])
+{
+    string $naAttr = "";
+    $naAttr = na_spaceGetAttrName_var();
+    
+    //error if no attribute
+    na_assertObjectExist($object); 
+    string $attrAndPlug[] = {};
+    $attrAndPlug = na_getPlug($object,$naAttr);
+    na_assertObjectExist($attrAndPlug); 
+    
+    
+    string $mdNode[]={};
+    $mdNode = na_space_constrainObject_getDefaultNode($naAttr,$object);
+    na_assertSizeEqualArg($mdNode,size($object));
+    
+    
+    string $translationPlug[] = {};
+    $translationPlug = na_space_constrainObject_getDefaultTranslationPlug();
+    //na_assertSizeEqualArg($translationPlug,3);
+    string $rotationPlug[] = {};
+    $rotationPlug = na_space_constrainObject_getDefaultRotationPlug();
+    //na_assertSizeEqualArg($rotationPlug,3);
+    
+    
+    //move constraining object
+    if(size($translationPlug) > 0){
+    na_setWorldPositionGivenNodeAndPlug($object, $mdNode,$translationPlug,"translation");}
+    if(size($rotationPlug) > 0){
+    na_setWorldPositionGivenNodeAndPlug($object, $mdNode,$rotationPlug,"rotation");
+    }
+    //i think could add another if needed thing to be moved by a different type of constraint
+}
+
+
+
+/**@file na_space_config.mel
+@brief v1.0.1 configure space switch data, example: whats the backend network and connections, whats does the space switch matching procedure need on animator control. Other tools space positions default resetable position etc.
+@author Nathaniel O. Anozie (ogbonnawork at gmail dot com)
+@note date created: May 25 2012
+@note -- added removal tool
+@note modify at your own risk
+*/
+
+
+
+
+
+
+global proc
+na_space_makeDefaultPose_unitTest()
+{
+    spaceLocator -p 0 0 0;
+    spaceLocator -p 0 0 0;
+    move -r -os -wd 4 0 0 ;
+    spaceLocator -p 0 0 0;
+    move -rpr -3 0 -10 ;
+    move -r -3.946079 2.179934 2.311129 ;
+    
+    na_space_makeDefaultPose( {"locator1","locator2","locator3"},"naSpace" );
+}
+
+/**before first space switch call, this creates nodes, attribute connection
+@pre nothing created on constraining object
+*/
+global proc
+na_space_makeDefaultPose( string $object[], string $naAttr )
+{
+    
+    na_assertObjectExist($object);
+    
+    //error if attribute exists or node exists
+    string $suffix = "default_md";
+    string $name = "";
+    for($obj in $object)
+    {
+        if( `objExists ($obj+"."+$naAttr)`){ error("Requires no attribute on constrain object--"+$naAttr);}
+        $name = $obj+"_"+$suffix;
+        if( `objExists $name`){ error("Node Already Exists--"+$name);}
+    }
+
+        
+    //doing error checking separate so no partial work done only complete job
+    //
+    $name = "";
+    for($obj in $object)
+    {
+        //make attribute
+        //make special attribute used to find all data
+        if( `objExists ($obj+"."+$naAttr) ` == 0 )
+        {
+            na_addNonKeyFloatAttr($obj,$naAttr); 
+        }
+        
+        //make node
+        $name = $obj+"_"+$suffix;
+        na_makeMultiplyDivide($name);
+        
+        //connect attribute to node
+        connectAttr -f ($name+".outputX") ($obj+"."+$naAttr);
+    }
+    
+    
+    //because no space matching has been called yet this should put correct
+    //default positions on constraining objects using constraining objects pre space position
+    na_space_constrainObject_setDefault($naAttr,$object,$object);
+}
+
+
+
+
+
+
+
+
+
+/**
+@note may need to change suffix depending on what are suffix for nodes 
+@note ignores anything involved in space matching without proper suffix might
+be better to have a node where all the nodes connect to which allows name changing with no
+problems. like one blend two attr with any number of inputs
+*/
+global proc string[]
+na_space_getObject()
+{
+    string $result[] = {};
+    
+    string $sel[] = `ls -sl`;
+    select -cl; //important so were not editing anything selected
+    
+    select "*_naSpace"; //probably should be global
+    
+    string $object[] = {};
+    $object = `ls -sl`;
+    if(size($object) > 0){
+        $result = $object;
+    }
+    
+    if(size($sel) > 0){
+    select -r $sel;}
+    
+    return $result;
+}
+    
+/**get the curves used on constraints for space matching
+*/
+global proc string[]
+na_space_getConstraintCurves()
+{
+    string $result[] = {};
+    
+    string $object[] = {};
+    $object = na_space_getObject();
+    
+    if(size($object) > 0){
+        
+        string $all[] = {};
+        $all = `listConnections -source true $object`;
+        //get keys on constraint
+        string $point[] = {};
+        $point = `ls -type "pointConstraint" $all`;
+        string $orient[] = {};
+        $orient = `ls -type "orientConstraint" $all`;   
+        string $allConstraint[] = {};
+        $allConstraint = `listConnections -source true $point $orient`;
+        string $constraintCurve[] = {};
+        $constraintCurve = `ls -type "animCurve" $allConstraint`;
+        
+        $result = $constraintCurve;
+    }
+    
+    return $result;
+}
+
+
+
+////
+global proc string 
+na_spaceGetAttrName_var()
+{
+	string $result = "naSpace";
+	return $result;
+}
+global proc string
+na_spaceGetAttrNamePlugLetter_var()
+{
+	string $result = "Z";
+	return $result;
+}
+global proc string
+na_spaceGetAttrNamePlugInput_var()
+{
+	string $result = "input1";
+	return $result;
+}
+////
+
+////how are constraints connected to multiply divide node
+global proc string
+na_spaceGetCntTranslationPlugLetter_var()
+{
+	string $result = "X";
+	return $result;
+}
+global proc string
+na_spaceGetCntTranslationPlugInput_var()
+{
+	string $result = "input2";
+	return $result;
+}
+global proc string
+na_spaceGetCntRotationPlugLetter_var()
+{
+	string $result = "Y";
+	return $result;
+}
+global proc string
+na_spaceGetCntRotationPlugInput_var()
+{
+	string $result = "input2";
+	return $result;
+}
+////
+
+////how are enums connected to multiply divide node
+global proc string
+na_spaceGetTranslationEnumPlugLetter_var()
+{
+	string $result = "X";
+	return $result;
+}
+global proc string
+na_spaceGetTranslationEnumPlugInput_var()
+{
+	string $result = "input1";
+	return $result;
+}
+global proc string
+na_spaceGetRotationEnumPlugLetter_var()
+{
+	string $result = "Y";
+	return $result;
+}
+global proc string
+na_spaceGetRotationEnumPlugInput_var()
+{
+	string $result = "input1";
+	return $result;
+}
+////
+
+
+
+
+
+
+
+
+
+
+
+
+/**get enum for space options whether for translation or rotation
+@param string $anim animator control with a specific attribute to access network
+@param int $moveType either 1 for translation or 2 for rotation
+@pre a specific node network is setup see more info in figure
+@post returns enum for space switching
+@note moveType 1 for translation, 2 for rotation
+@see getTranslationSceneEnum
+@see getRotationSceneEnum
+*/
+global proc string[]
+na_spaceGetSceneEnum(string $anim, int $moveType)
+{
+    
+	string $naAttr = na_spaceGetAttrName_var();
+	na_assertObjectExist({$anim,($anim+"."+$naAttr)});
+	
+	string $sceneObjects[] = {};
+	
+	if( $moveType == 1 ){
+	    $sceneObjects = getTranslationSceneEnum($anim,$naAttr);
+	}
+	else if( $moveType == 2 ){
+	    $sceneObjects = getRotationSceneEnum($anim,$naAttr);
+	}
+	
+	return $sceneObjects;
+}
+
+/**get enum for space options for Translation
+@param string $anim animator control with a specific attribute to access network
+@param string $naAttr name for attribute whose input is to a multiply divide node
+@pre a specific node network is setup see more info in figure
+@post returns weights for space switching
+@see na_spaceGetSceneCnt
+@see na_getInConstraintPlug
+@bug no constraint type checking
+*/
+global proc string[]
+na_getTranslationSceneEnum(string $anim, string $naAttr)
+{
+    na_assertObjectExist({$anim,($anim+"."+$naAttr)});
+	string $result[] = {};
+	
+	//find data node from animator control
+	string $mdArray[] = {};
+	$mdArray = na_getMultiplyDivideNodeFromPlug( $anim, $naAttr );
+	na_assertSizeEqualArg($mdArray,1);
+	string $node = "";
+	$node = $mdArray[0];
+	
+	
+	string $plugLetter = na_spaceGetTranslationEnumPlugLetter_var();
+	string $plugInput = na_spaceGetTranslationEnumPlugInput_var();
+	string $plug = "";
+	$plug = $plugInput+$plugLetter;
+	
+	$result = `listConnections -source true -plugs true ($node+"."+$plug)`;
+	
+	return $result;
+}
+
+/**get enum for space options for Rotation
+@param string $anim animator control with a specific attribute to access network
+@param string $naAttr name for attribute whose input is to a multiply divide node
+@pre a specific node network is setup see more info in figure
+@post returns weights for space switching
+@see na_spaceGetSceneCnt
+@see na_getInConstraintPlug
+@bug no constraint type checking
+*/
+global proc string[]
+na_getRotationSceneEnum(string $anim, string $naAttr)
+{
+    na_assertObjectExist({$anim,($anim+"."+$naAttr)});
+	string $result[] = {};
+	
+	//find data node from animator control
+	string $mdArray[] = {};
+	$mdArray = na_getMultiplyDivideNodeFromPlug( $anim, $naAttr );
+	na_assertSizeEqualArg($mdArray,1);
+	string $node = "";
+	$node = $mdArray[0];
+	
+	
+	string $plugLetter = na_spaceGetRotationEnumPlugLetter_var();
+	string $plugInput = na_spaceGetRotationEnumPlugInput_var();
+	string $plug = "";
+	$plug = $plugInput+$plugLetter;
+	
+	$result = `listConnections -source true -plugs true ($node+"."+$plug)`;
+	
+	return $result;
+}
+
+
+
+
+
+
+
+/**get weights for space options whether for translation or rotation
+@param string $anim animator control with a specific attribute to access network
+@param int $moveType either 1 for translation or 2 for rotation
+@pre a specific node network is setup see more info in figure
+@post returns weights for space switching
+@note moveType 1 for translation, 2 for rotation
+@see getTranslationSceneCntWeightObject
+@see getRotationSceneCntWeightObject
+*/
+global proc string[]
+na_spaceGetSceneCntWeightObject(string $anim, int $moveType)
+{
+    
+	string $naAttr = na_spaceGetAttrName_var();
+	na_assertObjectExist({$anim,($anim+"."+$naAttr)});
+	
+	string $sceneObjects[] = {};
+	
+	if( $moveType == 1 ){
+	    $sceneObjects = getTranslationSceneCntWeightObject($anim,$naAttr);
+	}
+	else if( $moveType == 2 ){
+	    $sceneObjects = getRotationSceneCntWeightObject($anim,$naAttr);
+	}
+	
+	return $sceneObjects;
+}
+
+/**get weights for space options for translation
+@param string $anim animator control with a specific attribute to access network
+@param string $naAttr name for attribute whose input is to a multiply divide node
+@pre a specific node network is setup see more info in figure
+@post returns weights for space switching
+@see na_spaceGetSceneCnt
+@see na_getInConstraintPlug
+@bug no constraint type checking
+*/
+global proc string[]
+getTranslationSceneCntWeightObject(string $anim, string $naAttr)
+{
+    na_assertObjectExist({$anim,($anim+"."+$naAttr)});
+    
+	string $result[] = {};
+	
+	string $cntArray[] = {};
+	$cntArray = na_spaceGetSceneCnt($anim, 1);
+	string $cnt = "";
+	
+	if( size($cntArray) == 1 ){
+	    $cnt = $cntArray[0];	
+	    $result = na_getInConstraintPlug($cnt);
+	}
+	
+	return $result;
+}
+
+/**get weights for space options for rotation
+@param string $anim animator control with a specific attribute to access network
+@param string $naAttr name for attribute whose input is to a multiply divide node
+@pre a specific node network is setup see more info in figure
+@post returns weights for space switching
+@see na_spaceGetSceneCnt
+@see na_getInConstraintPlug
+@bug no constraint type checking
+*/
+global proc string[]
+getRotationSceneCntWeightObject(string $anim, string $naAttr)
+{
+    na_assertObjectExist({$anim,($anim+"."+$naAttr)});
+    
+	string $result[] = {};
+	
+	string $cntArray[] = {};
+	$cntArray = na_spaceGetSceneCnt($anim, 2);
+	string $cnt = "";
+	
+	if( size($cntArray) == 1 ){
+	    $cnt = $cntArray[0];	
+	    
+	    $result = na_getInConstraintPlug($cnt);
+	}
+	
+	return $result;
+}
+
+
+
+
+
+
+
+
+
+/**
+@note moveType 1 for translation, 2 for rotation
+*/
+global proc string[]
+na_spaceGetSceneCntObject(string $anim, int $moveType)
+{
+	string $naAttr = na_spaceGetAttrName_var();
+	na_assertObjectExist({$anim,($anim+"."+$naAttr)});
+	
+	string $sceneObjects[] = {};
+	
+	if( $moveType == 1 ){
+	    $sceneObjects = getTranslationSceneCntObject($anim,$naAttr);
+	}
+	else if( $moveType == 2 ){
+	    $sceneObjects = getRotationSceneCntObject($anim,$naAttr);
+	}
+	
+	return $sceneObjects;
+}
+
+
+
+global proc string[]
+getTranslationSceneCntObject(string $anim, string $naAttr)
+{
+    na_assertObjectExist({$anim,($anim+"."+$naAttr)});
+	string $result[] = {};
+	
+	string $cntArray[] = {};
+	$cntArray = na_spaceGetSceneCnt($anim, 1);
+	string $cnt = "";
+
+	if( size($cntArray) == 1 ){
+	    $cnt = $cntArray[0];  
+	    $result = na_getInConstraint($cnt);
+	}
+	
+	return $result;
+}
+global proc string[]
+getRotationSceneCntObject(string $anim, string $naAttr)
+{
+    na_assertObjectExist({$anim,($anim+"."+$naAttr)});
+    
+	string $result[] = {};
+	
+	string $cntArray[] = {};
+	$cntArray = na_spaceGetSceneCnt($anim, 2);
+	string $cnt = "";
+	
+	if( size($cntArray) == 1 ){
+	    $cnt = $cntArray[0];  
+	    $result = na_getInConstraint($cnt);
+	}
+	
+	return $result;
+}
+
+
+/**give the contraint name corresponding to either translation or rotation for animator control
+@note it finds it using an attribute on the animator control
+@note moveType 1 for translation, 2 for rotation
+@bug not tested in practice
+@see  na_getInputFromSingleMDNodeFromAnim
+*/
+global proc string[]
+na_spaceGetSceneCnt(string $anim, int $moveType)
+{
+	string $naAttr = na_spaceGetAttrName_var();
+	na_assertObjectExist({$anim,($anim+"."+$naAttr)});
+	
+	string $sceneObjects[] = {};
+	
+	if( $moveType == 1 ){
+	    string $plugLetterTranslation = "";
+	    $plugLetterTranslation = na_spaceGetCntTranslationPlugLetter_var();
+	    string $plugInputTranslation = "";
+	    $plugInputTranslation = na_spaceGetCntTranslationPlugInput_var();
+	    $sceneObjects = na_getInputFromSingleMDNodeFromAnim($anim,$naAttr, $plugLetterTranslation, $plugInputTranslation);
+	}
+	else if( $moveType == 2 ){
+	    string $plugLetterRotation = "";
+	    $plugLetterRotation = na_spaceGetCntRotationPlugLetter_var();
+	    string $plugInputRotation = "";
+	    $plugInputRotation = na_spaceGetCntRotationPlugInput_var();
+	    
+	    $sceneObjects = na_getInputFromSingleMDNodeFromAnim($anim,$naAttr, $plugLetterRotation, $plugInputRotation);
+	}
+	return $sceneObjects;
+}
+
+
+
+
+
+
+
+
+
+//
+global proc string[]
+na_space_constrainObject_getDefaultTranslationPlug()
+{
+    string $result[] = {};
+    $result = {"input1X","input1Y","input1Z"};
+    return $result;
+}
+global proc string[]
+na_space_constrainObject_getDefaultRotationPlug()
+{
+    string $result[] = {};
+    $result = {"input2X","input2Y","input2Z"};
+    return $result;
+}
+
+
+
+
+
+
+/**
+@pre empty scene
+*/
+global proc
+na_space_constrainObject_getDefaultNode_unitTest()
+{
+    
+    spaceLocator -p 0 0 0;
+    select -d locator1 ;
+    select -d;
+    joint -p 5 0 0 ;
+    setAttr "joint1.rotateZ" 35;
+    setAttr "joint1.rotateX" 23;
+    createNode multiplyDivide -n "nozo_md";
+
+    select -r locator1 ;
+    addAttr -ln "naSpace"  -at double  |locator1;
+    setAttr -e-keyable true |locator1.naSpace;
+    
+    connectAttr -f nozo_md.outputX locator1.naSpace;
+    
+    print( na_space_constrainObject_getDefaultNode("naSpace", {"locator1"} ) );
+
+}
+
+global proc string[]
+na_space_constrainObject_getDefaultNode(string $naAttr, string $object[] )
+{
+    string $result[] = {};
+     
+    for($obj in $object)
+    {
+        string $md[] = {};
+        $md = na_getMultiplyDivideNodeFromPlug($obj, $naAttr);
+        na_assertSizeEqualArg($md,1);
+        $result[size($result)] = $md[0];
+    }
+    return $result;
+}
+
+
+
+
+
+
+///
+global proc
+na_space_constrainObject_assert(string $naAttr, string $mdNode[], string $fromObject[], string $toObject[])
+{
+     //verify input
+   string $attrAndPlug[] = {};
+   $attrAndPlug = na_getPlug($toObject,$naAttr);
+   na_assertObjectExist($attrAndPlug); 
+   na_assertObjectExist($mdNode);
+   na_assertObjectExist($fromObject);
+   
+   int $n = size($fromObject);
+   na_assertSizeEqualArg($mdNode,$n);
+   na_assertSizeEqualArg($toObject,$n);
+   
+   string $translationPlug[] = {};
+   $translationPlug = na_space_constrainObject_getDefaultTranslationPlug();
+   na_assertSizeEqualArg($translationPlug,3);
+   string $translationAttrAndPlug[] = {};
+   
+   string $rotationPlug[] = {};
+   $rotationPlug = na_space_constrainObject_getDefaultRotationPlug();
+   na_assertSizeEqualArg($rotationPlug,3);
+   string $rotationAttrAndPlug[] = {};
+   for($md in $mdNode){
+       $translationAttrAndPlug = na_getPlugByAttributeArray( $md, $translationPlug );
+       na_assertObjectExist($translationAttrAndPlug);
+       $rotationAttrAndPlug = na_getPlugByAttributeArray( $md, $rotationPlug );
+       na_assertObjectExist($rotationAttrAndPlug);
+   }
+}
+
+
+
+
+
+
+
+
+
+
+////
+global proc
+na_assertSpaceEnum(string $anim, string $naAttr)
+{
+    na_assertObjectExist( {$anim+"."+$naAttr} );
+    
+    string $translationCntWeightObject[] = {};
+    $translationCntWeightObject = getTranslationSceneCntWeightObject($anim,$naAttr);
+    
+    if(size($translationCntWeightObject) > 0)
+    {
+        na_assertSpaceEnumTranslation($anim, $naAttr);
+    }
+    
+    string $rotationCntWeightObject[] = {};
+    $rotationCntWeightObject = getRotationSceneCntWeightObject($anim,$naAttr);
+    if(size($rotationCntWeightObject) > 0)
+    {
+        na_assertSpaceEnumRotation($anim, $naAttr);
+    }
+    
+}
+global proc
+na_assertSpaceWeight(string $anim, string $naAttr)
+{
+    na_assertObjectExist( {$anim+"."+$naAttr} );
+    
+    string $translationCntWeightObject[] = {};
+    $translationCntWeightObject = getTranslationSceneCntWeightObject($anim,$naAttr);
+    
+    if(size($translationCntWeightObject) > 0)
+    {
+        na_assertSpaceWeightTranslation($anim, $naAttr);
+    }
+    
+    string $rotationCntWeightObject[] = {};
+    $rotationCntWeightObject = getRotationSceneCntWeightObject($anim,$naAttr);
+    if(size($rotationCntWeightObject) > 0)
+    {
+        na_assertSpaceWeightRotation($anim, $naAttr);
+    }
+    
+}
+///space specific assert
+/**make sure there is an enum for every space
+*/
+global proc
+na_assertSpaceEnumTranslation(string $anim, string $naAttr)
+{
+    na_assertObjectExist( {$anim+"."+$naAttr} );
+    
+    string $translationCntWeightObject[] = {};
+    $translationCntWeightObject = getTranslationSceneCntWeightObject($anim,$naAttr);
+    na_assertSizeGreaterEqualTo( $translationCntWeightObject, 1);
+    
+    //get enum for spaces
+    string $translationSceneEnum[] = {};
+    $translationSceneEnum = na_getTranslationSceneEnum($anim, $naAttr);
+    na_assertSizeEqualArg( $translationSceneEnum, 1 );
+    
+    string $enumArray[] = {};
+    string $objAndPlug[] = {};
+    $objAndPlug = na_getObjectSepPlug( $translationSceneEnum[0]  );
+    $enumArray = na_getEnumList( $anim, $objAndPlug[1] );
+    na_assertSizeGreaterEqualTo( $enumArray, 1);
+    
+    
+    na_assertSizeEqualArg( $translationCntWeightObject, size($enumArray) );
+}
+/**make sure weight 1 or 0, at most one with 1
+*/
+global proc
+na_assertSpaceWeightTranslation(string $anim, string $naAttr)
+{
+    na_assertObjectExist( {$anim+"."+$naAttr} );
+    
+    string $translationCntWeightObject[] = {};
+    $translationCntWeightObject = getTranslationSceneCntWeightObject($anim,$naAttr);
+    na_assertSizeGreaterEqualTo( $translationCntWeightObject, 1);
+    
+    float $weight = 0;
+    int $numberWeightWithOne = 0;
+    
+    for($i = 0; $i < size($translationCntWeightObject); $i++ )
+    {
+        //for each weight assert 1 or 0
+        $weight = `getAttr $translationCntWeightObject[$i]`;
+        if( ($weight == 1) || ($weight == 0) ){}
+        else{ error("expecting 1 or 0 for weights"); }
+        
+        //for all weight assert exactly one with 1
+        if( $weight == 1 ){ $numberWeightWithOne++; }
+        if( $numberWeightWithOne > 1 ){ error("expecting exactly one weight with one"); }
+    }
+}
+///space specific assert
+/**make sure there is an enum for every space
+*/
+global proc
+na_assertSpaceEnumRotation(string $anim, string $naAttr)
+{
+    na_assertObjectExist( {$anim+"."+$naAttr} );
+    
+    string $rotationCntWeightObject[] = {};
+    $rotationCntWeightObject = getRotationSceneCntWeightObject($anim,$naAttr);
+    na_assertSizeGreaterEqualTo( $rotationCntWeightObject, 1);
+    
+    //get enum for spaces
+    string $rotationSceneEnum[] = {};
+    $rotationSceneEnum = na_getRotationSceneEnum($anim, $naAttr);
+    na_assertSizeEqualArg( $rotationSceneEnum, 1 );
+    
+    string $enumArray[] = {};
+    string $objAndPlug[] = {};
+    $objAndPlug = na_getObjectSepPlug( $rotationSceneEnum[0]  );
+    $enumArray = na_getEnumList( $anim, $objAndPlug[1] );
+    na_assertSizeGreaterEqualTo( $enumArray, 1);
+    
+    
+    na_assertSizeEqualArg( $rotationCntWeightObject, size($enumArray) );
+}
+/**make sure weight 1 or 0, at most one with 1
+*/
+global proc
+na_assertSpaceWeightRotation(string $anim, string $naAttr)
+{
+    na_assertObjectExist( {$anim+"."+$naAttr} );
+    
+    string $rotationCntWeightObject[] = {};
+    $rotationCntWeightObject = getRotationSceneCntWeightObject($anim,$naAttr);
+    na_assertSizeGreaterEqualTo( $rotationCntWeightObject, 1);
+    
+    float $weight = 0;
+    int $numberWeightWithOne = 0;
+    
+    for($i = 0; $i < size($rotationCntWeightObject); $i++ )
+    {
+        //for each weight assert 1 or 0
+        $weight = `getAttr $rotationCntWeightObject[$i]`;
+        if( ($weight == 1) || ($weight == 0) ){}
+        else{ error("expecting 1 or 0 for weights"); }
+        
+        //for all weight assert exactly one with 1
+        if( $weight == 1 ){ $numberWeightWithOne++; }
+        if( $numberWeightWithOne > 1 ){ error("expecting exactly one weight with one"); }
+    }
+}
+
+
+
+
+

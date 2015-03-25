@@ -1,0 +1,37 @@
+//08-21-2014 -- nate  -- add support lattice
+//07-14-2014 -- nate  -- initial release
+//Modify at own risk
+global proc na_cleanBlendshapeInput(){
+    //clean blendshape input of selected, currently it assumes preserving shader on blendshape is not required
+    //assumes shape selected assumes shape has exactly one blend node
+    if(size(`ls -sl`) == 1){
+        string $selAr[] = `ls -sl`;
+        string $shape = "";
+        
+        //so it can work with selecting transform or shape
+        if( `objectType $selAr[0]`  != "mesh" ){
+            string $tryThisAr[] = `pickWalk -d down`;//ignoring if doesnt have shape
+            if( `objectType $tryThisAr[0]` == "mesh" || `objectType $tryThisAr[0]` == "lattice"){$shape = $tryThisAr[0];}
+            else{error("Requires single Shape selected");}
+        }
+        else{$shape = $selAr[0];}
+        //
+        
+        string $allHistory[] = `listHistory $shape`;
+        string $blendNodeAr[] = `ls -type blendShape $allHistory`;
+        
+        if(size($blendNodeAr) == 1){
+            string $blendNode = $blendNodeAr[0];
+            //cleanup blendshape input
+            //disconnectAttr lipBlend_test2.outputGeometry[0] |r_brow_up_default|r_brow_up_defaultShape.inMesh;
+		//add support for lattice
+	     if( `objectType $shape` == "lattice" ){disconnectAttr ($blendNode+"."+"outputGeometry[0]") ($shape+"."+"latticeInput");}
+		else{ disconnectAttr ($blendNode+"."+"outputGeometry[0]") ($shape+"."+"inMesh");}
+            //remove blend node for cleanup this need to come after disconnecting
+            delete $blendNode;
+        }
+        else{error("Requires one blend shape node on selected shape!!!");}
+    }
+    
+}
+

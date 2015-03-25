@@ -1,0 +1,60 @@
+/**@file na_renameBlendshapeUI
+*/
+
+global string $gl_blendName = "gl_blendName";
+global string $gl_prefixOrder = "gl_prefixOrder";
+
+
+/**ui
+*/
+global proc
+na_renameBlendshapeUI()
+{
+    
+    global string $gl_blendName;
+    global string $gl_prefixOrder;
+    
+    
+    //setup up title for gui
+    string $titleWindow = "na_renameBlendshape.mel  Add new name";
+    string $mainWindowName = "mainWindow";
+    na_window($mainWindowName,$titleWindow, 420, 190);
+    
+    //set up format for gui
+    string $form = `formLayout -numberOfDivisions 50 "form layout"`;
+    
+    //set up ui widgets
+    na_textFieldGrp($form, $mainWindowName,"name(s) space separated", 25, 20, $gl_blendName);
+    na_textFieldGrp($form, $mainWindowName,"prefix(s) space separated \n size 2, \n order match selections", 55, 20, $gl_prefixOrder);
+    na_button($form, $mainWindowName,"ok", 125, 200,"button","na_renameBlendshape_cmd");
+    
+    showWindow $mainWindowName;
+    
+    
+}
+
+/**ui command
+*/
+global proc
+na_renameBlendshape_cmd()
+{
+    global string $gl_blendName;
+    global string $gl_prefixOrder;
+ 
+    //temp
+    string $blendName="";
+    string $prefixOrder = "";
+    
+    //used
+    string $blendNameArray[] = {};
+    string $prefixOrderArray[] = {};
+    
+    $blendName = `textFieldGrp -query -text $gl_blendName`;
+    $prefixOrder= `textFieldGrp -query -text $gl_prefixOrder`; 
+    
+    $blendNameArray = stringToStringArray($blendName," ");
+    $prefixOrderArray = stringToStringArray($prefixOrder," ");
+    
+    
+    na_renameBlendshape($blendNameArray, $prefixOrderArray);
+}

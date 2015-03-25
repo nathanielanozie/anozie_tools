@@ -1,0 +1,517 @@
+/**@file na_snap.mel
+@brief v1.0.1 given animator control find out what the fk and ik nodes that need snapping 
+to one another using multiply divide inputs and an added attribute to animator control connected to md node
+@author Nathaniel O. Anozie (ogbonnawork at gmail dot com)
+@bug little bit of error checking, doesn't work on say ikfk_elbow snapping to either ik or fk
+@note date created: Apr 23 2012
+@note date last modified: May 23 2012
+@note source na_snap.mel, na_snapAttr.mel, na_assertGeneral.mel, na_connect.mel, naGeneral.mel
+@note Modify at your own risk
+@note -- released v1.0.0
+@note --
+@note --bug getting ik to match fk, bug maybe an increment by .01 for say 30 times from what we
+get here may improve things
+@note -- bug if orient and rotate order don't match
+@note -- bug in going to reset pose
+@note --
+@note Inspired by Jason Schleifer's Animator Friendly Rigging
+*/
+
+
+
+/**what is called each time animator select anim control
+@pre everthing setup, no error checking, assuming always going to use the same name for attribute
+@bug no error checking, no checking type of selection like assert nurbs curve or joint...
+hasn't been tested fully in practice, doesn't work if a specific formula is followed to connect nodes,
+no checking on the lock status of translations or rotations on control
+@see na_snapAttr
+*/
+global proc string na_snap_getIndexAttribute()
+{
+    return "naSnapIndex";
+}
+
+global proc string na_snap_getSnapCmd()
+{
+    return "na_snap";
+}
+
+/**
+@param animator control
+@param rig to snap to example 0 for fk leg and 1 for ik polevector vis
+@param suffix
+@note supported suffix
+()_#_naSnap
+()_#_naSnapSimple
+()_#_naSnapAdv
+*/
+global proc string[] 
+na_snap_getSnapAttribute( string $anim, int $indexArray[], string $suffix)
+{
+    na_assertIntSizeEqualArg( $indexArray, 1 );
+    int $index = 0;
+    $index = $indexArray[0];
+    
+    string $result[] = {};
+    
+    string $attrArray[] = `listAttr -ud $anim`;
+    
+    //search animator control for matching formated attributes and save them
+    //
+    for($attr in $attrArray)
+    {   
+        string $tokens[] = {};
+        
+        $tokens = na_getTokensByThisSeparator( $attr, "_" );
+        if( size($tokens) == 3 ){
+            //if extension matches check for index match
+            if( na_isOption( {$tokens[2]}, {$suffix}, 1 ) == 1 )
+            {
+                //if index match save it
+                if( $tokens[1] == $index )
+                {
+                    $result[size($result)] = $attr;
+                }
+            }
+        }
+        
+        
+    }
+    return $result;
+}
+
+
+global proc
+na_snap()
+{
+    string $attrForIndex = na_snap_getIndexAttribute(); //zero based integer attribute telling which rigs to do basic snapping between
+     
+    string $sel[] = `ls -sl`;
+    
+    //
+    //loop selected animator controls
+    
+    //zero based index
+    int $activeIndex[] = {};
+    
+    string $naSnapAttr[] = {};
+    string $naSnapInitAttr[] = {};
+    string $naSimpleAttr[] = {};
+    string $naAdvancedAttr[] = {};
+    
+    for($anim in $sel)
+    {
+
+        //regular moving
+        $activeIndex = na_snapAttr_basic_index($anim, $attrForIndex);
+        //default to first rig to snap to if no more than one rig to snap to
+        //
+        if(size($activeIndex)==0){ $activeIndex={0}; } 
+        
+        
+        //position moving to match rigs sometimes starting from default values, example
+        //ik with knee visibile needed to turn stretch on prior to matching to another rig
+        //
+        $naSnapAttr = na_snap_getSnapAttribute($anim, $activeIndex,"naSnap");
+        $naSnapInitAttr = na_snap_getSnapAttribute($anim, $activeIndex,"naSnapInit");
+        if(size($naSnapAttr) > 0 ){
+            
+            if(size($naSnapInitAttr) > 0 ){
+                na_snapAttr_setAttrToDefaultValue($anim,$naSnapInitAttr);
+            }
+            
+            na_snapAttr_basic($anim,$naSnapAttr);  
+        }
+        //
+        
+        //regular moving a little more
+        $naSimpleAttr = na_snap_getSnapAttribute($anim, $activeIndex,"naSnapSimple");
+        if(size($naSimpleAttr) > 0 ){
+                na_snapSimpleAttr($anim, $naSimpleAttr);
+        }
+        //
+        
+        //
+        $naAdvancedAttr = na_snap_getSnapAttribute($anim, $activeIndex,"naSnapAdv");
+        if(size($naAdvancedAttr) > 0 ){
+            na_snapAttr_advanced($anim,$naAdvancedAttr);  
+        }
+        //
+        
+        
+    }
+}
+
+
+global proc int[]
+na_snapAttr_basic_index(string $anim, string $attrForGettingSnappingIndex)
+{
+    int $result[] = {};
+    if( `objExists ($anim+"."+$attrForGettingSnappingIndex)` )
+    {
+        //make sure its an int attribute
+        int $index = `getAttr ($anim+"."+$attrForGettingSnappingIndex)`;
+        $result =  {$index};
+    }
+    return $result;
+}
+
+
+/**match between rig tool by world position type of snapping, the input provided by the attribute gives
+all the information needed like where to snap to and what things to move and whether to match position by
+translation or rotation
+*/
+global proc
+na_snapAttr_basic(string $anim, string $naAttrArray[] )
+{
+    //snap to at most one rig
+    //
+    na_assertSizeEqualArg($naAttrArray,1);
+
+    string $attr = "";
+    $attr = $naAttrArray[0];
+        
+    if( `objExists ($anim+"."+$attr)` )
+    {
+        string $moveToThis[] = {};
+        $moveToThis = na_getAllInputsByConnectedAttribute($anim,$attr);
+        na_assertSizeEqualArg($moveToThis,1);
+        int $moveType[] = {};
+        $moveType = na_representInputMultiplyDivideAsAnInteger($anim,$attr);
+        na_moveFirstArgToSecond($anim, $moveToThis[0], $moveType );  
+    }
+
+}
+
+
+/**Sometimes before position snapping this helps set animator attributes to certain values
+*/
+global proc
+na_snapAttr_setAttrToDefaultValue( string $anim, string $naAttrArray[] )
+{
+    na_assertSizeEqualArg($naAttrArray,1);
+    
+    string $attr = "";
+    $attr = $naAttrArray[0];
+    
+    if( `objExists ($anim+"."+$attr)` )
+    {
+        string $attrToSetArray[] = {};
+        $attrToSetArray = na_snapHelperGetAttrPlug($anim, $attr);
+        if(size( $attrToSetArray ) == 1 )
+        {
+            na_assertObjectExist( { ($anim+"."+$attrToSetArray[0]) } );
+            
+            float $valueToSetArray[] ={};
+            $valueToSetArray = na_snapHelperGetValue($anim, $attr);
+            na_assertFloatSizeEqualArg($valueToSetArray,1);
+            
+            
+            //here were changing the scene
+            //
+            na_assertUnlocked($anim,$attrToSetArray);
+            setAttr ($anim+"."+$attrToSetArray[0]) $valueToSetArray[0];
+            //
+        }  
+    }
+    
+}
+
+/**
+@bug it has no knowlege of which ones are needed to go to which mode
+*/
+global proc
+na_snapAttr_advanced(string $anim, string $naAttrArray[])
+{
+
+    string $allAttr[] = {};
+    float $allDefault[] = {};
+    string $allGoalObject[] = {};
+    string $allAttrMovesThisObject[] = {};
+    float $allCurValuePerAttr[] = {};
+    
+    //so we can go to default pose
+    for($naAttr in $naAttrArray){
+    
+        if( `objExists ($anim+"."+$naAttr)` )
+        {
+            //
+            string $attr[]={};
+            $attr = na_snapAttrGetAttrPlug($anim,$naAttr);
+            $allAttr = stringArrayCatenate($allAttr,$attr);
+            
+            //assert
+            //
+            //double
+            na_assertAttrTypeInList($anim,$attr,{"double"});
+            
+            //get
+            //
+            string $goalObject[]={};
+            $goalObject = na_snapAttrGetGoalName($anim,$naAttr);
+            for($name in $goalObject){$allGoalObject[size($allGoalObject)] = $name;}
+            
+            
+            string $attrMovesThisObject[] = {};
+            $attrMovesThisObject = na_snapAttrGetAttrMoveThisName($anim,$naAttr);
+            for($name in $attrMovesThisObject){$allAttrMovesThisObject[size($allAttrMovesThisObject)] = $name;}
+            
+            //save all current values of attributes
+            //it assumes all snapping attributes are float attributes
+            //
+            float $curValuePerAttr[] = {};
+            $curValuePerAttr= na_snapAttr_getCurrentAttribute_float( $anim,$naAttr );
+            for($value in $curValuePerAttr){ $allCurValuePerAttr[size($allCurValuePerAttr)] = $value;  }
+            
+            //get all default values of attributes
+            float $default[]={};
+            $default = na_snapAttrGetDefaultFloat($anim,$naAttr);
+            for($value in $default){ $allDefault[size($allDefault)] = $value;  }
+            
+        }
+    }
+    
+    /*
+    for($j=0; $j<size($allAttr); $j++)
+    {
+        print($allAttr[$j]);
+        print(" ");
+        print($allAttrMovesThisObject[$j]);
+        print(" ");
+        print($allGoalObject[$j]);
+        print(" ");
+        print($allDefault[$j]);
+        print(" ");
+        print($allCurValuePerAttr[$j]);
+        print(" ");
+        print("\n\n");
+    }
+    */
+
+    
+    //if defaults work fine no need to start algorithm
+    int $indexAttrToRun[] ={};
+    $indexAttrToRun = na_snapAttr_getIndexNeedToEstimate($anim,$allAttr,$allDefault,
+    $allGoalObject,$allAttrMovesThisObject,$allCurValuePerAttr);
+
+  
+    if(size($indexAttrToRun) > 0 ){
+        
+        for($naAttr in $naAttrArray){
+            
+            if( `objExists ($anim+"."+$naAttr)` )
+            {
+                //print("going to start algorithm\n");
+                na_snapAttr($anim,$naAttr,1);  
+                //why we have 0 is that we don't begin from
+                //defaults we begin from the estimates at previous step
+                na_snapAttr($anim, $naAttr,0);    
+            }
+        }
+        
+    }
+    else{ //reset to defaults
+        na_snapAttr_setAttrDefaultOnAnim($anim,$allAttr,$allDefault);
+    }
+    
+}
+
+
+
+
+
+
+
+
+
+
+/**for really basic snapping doensn't work if had more than one option or need to set attributes ...
+more useful for ik to fk, or fk to ik basics
+@param string $anim  what we animate with
+@param string $dupAnim what we will be moving $anim to
+@param int list $moveType type has 1,2,or 3 or any unique 
+@param attribute name used to find objects for snapping
+combination, type has length at most 3; 1 means translate, 2 means rotate, or 3 means scale
+@pre 
+@post
+@bug not setting the correct out connection
+for rotation only ..., no error checking, not allowed to add a new thing to an existing thing
+*/
+global proc
+na_snapMake(string $anim, string $dupAnim, int $moveType[],string $attrName, string $prefixName)
+{
+    
+    string $attr = $attrName;
+    
+    na_assertObjectExist( {$anim,$dupAnim} );
+    
+    //
+    print("making snapping backend nodes..\n");
+    //
+    
+    na_assertObjectDoesNotExist( {($anim+"."+$attr)} );
+    if( `objExists ($anim+"."+$attr)` == 0 ){
+        na_snapMakeAttr({$anim},$attr);
+    }
+    
+    string $indexAttrName = na_snap_getIndexAttribute();
+    if( `objExists ($anim+"."+$indexAttrName)` == 0 ){
+        na_snapMakeIndexAttr({$anim},$indexAttrName);
+    }
+    
+    string $prefix = $prefixName+"_";
+    string $suffix = "_"+$attr+"_md";
+    string $mdName = $prefix+$anim+$suffix; 
+    
+    na_assertObjectDoesNotExist( {$mdName} );
+    
+    //if md node exists don't make it
+    if( `objExists $mdName` == 0 ){
+        na_makeMultiplyDivide($mdName);
+    }
+    
+    
+    //
+    print("connecting snapping backend nodes..\n");
+    //
+    
+    na_assertObjectExist( {$mdName} );
+    na_assertTypeInList( {$mdName}, {"multiplyDivide"} );
+    
+    for( $type in $moveType )
+    {
+        switch($type){
+            case 1:
+            if( na_isPlugConnected($dupAnim, "scaleX" , $mdName, "input1X") == 0 ){
+                na_setInputToMDByPlugLetter($mdName,"X",$dupAnim,"scaleX","input1");
+            }
+            
+            break;
+            case 2:
+            if( na_isPlugConnected($dupAnim, "scaleY" ,$mdName, "input1Y" ) == 0 ){
+                na_setInputToMDByPlugLetter($mdName,"Y",$dupAnim,"scaleY","input1");
+            }
+            
+            break;
+            case 3:
+            if( na_isPlugConnected($dupAnim, "scaleZ", $mdName, "input1Z" ) == 0 ){
+                na_setInputToMDByPlugLetter($mdName,"Z",$dupAnim,"scaleZ","input1");
+            }
+            break;
+            default:
+            break;
+        }
+    }   
+    
+    //change out only if no out already
+    for( $type in $moveType )
+    {
+        switch($type){
+            case 1:
+            if( na_isPlugConnected($mdName, "outputX", $anim, $attr ) == 0 ){
+                na_setOutputToMDByPlugLetter( $mdName, "X", $anim, $attr );
+            }
+            
+            break;
+            case 2:
+            if( na_isPlugConnected($mdName, "outputY", $anim, $attr ) == 0 ){
+                na_setOutputToMDByPlugLetter( $mdName, "Y", $anim, $attr );
+            }
+            
+            break;
+            case 3:
+            if( na_isPlugConnected($mdName, "outputZ", $anim, $attr ) == 0 ){
+                na_setOutputToMDByPlugLetter( $mdName, "Z", $anim, $attr );
+            }
+            break;
+            default:
+            break;
+        }
+    }
+    
+    
+    //if( na_isPlugConnected($mdName, "outputX", $anim, $attr ) == 0 ){
+    //    na_setOutputToMDByPlugLetter( $mdName, "X", $anim, $attr );
+    //}
+    
+    
+    
+    
+    
+    
+    
+    print("made and connected backend node --"+$mdName+"\n");
+}
+
+
+
+
+/**delete backen node and attribute but not any scene transforms
+@param the attribute name on anim
+@pre something is selected, selecting an actual control not a hidden node ... vtx ...
+@post removes md, removes anim plug,  it leaves removing match object to handler
+@bug doing very basic error checking, no checking on the selected 
+@see na_getMultiplyDivideNodeFromPlug
+*/
+global proc
+na_snapDelete(string $attr)
+{
+    string $animPlug = $attr; 
+
+    string $sel[] = `ls -sl`;
+    
+    for($anim in $sel)
+    {
+        na_assertObjectExist( {($anim+"."+$animPlug)} );
+        
+        //get the md node
+        string $mdArray[] = {};
+        $mdArray = na_getMultiplyDivideNodeFromPlug($anim, $animPlug);
+        na_assertSizeEqualArg($mdArray,1);
+        
+        string $mdNode = "";
+        $mdNode = $mdArray[0];
+        
+        //delete md node
+        delete $mdNode;
+        
+        //delete attribute
+        deleteAttr -attribute $animPlug $anim;
+    }
+}
+
+/**
+@param string list $object things we want to create non selectable float attr on
+@param string $animPlug name to use for created attribute
+@pre something is selected,
+@post does not do anything if any of assert not met
+@bug no error checking
+*/
+global proc 
+na_snapMakeAttr(string $object[], string $animPlug)
+{   
+    //so we can possibly add to an existing attribute we 
+    //wont make it if it already exists
+    for($anim in $object)
+    {
+        if( `objExists ($anim+"."+$animPlug)` == 0 ){
+        na_addNonKeyFloatAttr($anim,$animPlug); }
+        else{print("an attribute by this name--"+($anim+"."+$animPlug)+"--already exists\n");}
+    }
+}
+
+
+global proc 
+na_snapMakeIndexAttr(string $object[], string $animPlug)
+{   
+    //so we can possibly add to an existing attribute we 
+    //wont make it if it already exists
+    for($anim in $object)
+    {
+        if( `objExists ($anim+"."+$animPlug)` == 0 ){
+        na_addNonKeyNonNegativeIntAttr($anim,$animPlug); }
+        else{print("an attribute by this name--"+($anim+"."+$animPlug)+"--already exists\n");}
+    }
+}
+
+

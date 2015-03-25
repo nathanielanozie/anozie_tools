@@ -1,0 +1,425 @@
+/**@file  na_spaceSwitch_UI_config.mel v1.0.0  
+@author Nathaniel O. Anozie (ogbonnawork at gmail dot com)
+@note modify at your own risk
+*/
+/**
+@note need animator control selected
+@bug 
+*/
+
+
+//last updated: 05/14/2014-05/14/2014 -- working on removing dependency on fixed names
+
+
+
+
+/**
+@note need animator control selected. it should support name space animator controls
+*/
+global proc string[] na_spaceSwitch_getAnim()
+{
+    
+    //return {"r_ik_hand_anim","r_ik_hand_anim","l_ik_hand_anim","l_ik_hand_anim","head_anim","head_anim","neck_anim","neck_anim",
+    //"r_up_arm_orient_anim","r_up_arm_orient_anim","l_up_arm_orient_anim","l_up_arm_orient_anim"};
+    
+    //return {"r_up_arm_orient_anim","r_up_arm_orient_anim"}; 
+    
+    //return {"r_up_arm_orient_anim"};
+    
+    //give back the first thing selected
+    string $anim[] = `ls -sl`;
+    string $result[] = {};
+    if( size($anim) > 0 ){
+    $result[size($result)] = $anim[0];
+    }
+    else{
+        print("Please Select Animator Control with Space Switching Capability");
+    }
+    return $result;
+}
+
+/**if use 0 then use input1Y and input2Y for putting constraint, if use 1, use input1X and input2X for putting constraint
+*/
+global proc int[] na_spaceSwitch_typeForMDPlugToUse()
+{
+    //return {0,1,0,1,0,1,0,1,0,1,0,1};
+    
+    //return {0,1};
+    
+    return {0};
+}
+
+global proc string na_spaceSwitch_getSnapSwitchAttribute()
+{ 
+    return na_spaceGetAttrName_var();
+}
+global proc int na_spaceSwitch_getEnumIndex(int $widget)
+{
+    //transform widget data into usable data for space switch
+    //ex: an enum zero based index
+    int $count[] = {};
+    $count = na_spaceSwitch_getNumberOfWidgetPerRow();
+    int $allIndex[] = {};
+    $allIndex = na_getIndexFromCount($count);
+    na_assertIntSizeGreaterEqualTo($allIndex,1);
+    if(  $widget >= size($allIndex) ){error("Requires "+$widget+"  smaller than"+size($allIndex));}
+    
+    int $enumIndex = $allIndex[$widget];
+    
+    return $enumIndex;   
+}
+global proc string[] na_spaceSwitch_getTranslationEnum(string $anim)
+{ 
+    string $naAttr = na_spaceSwitch_getSnapSwitchAttribute();
+    na_assertAttributeExist( {$anim}, $naAttr);
+    
+    //could be rotation so need way to change this
+    //
+    string $enum1[] = na_getTranslationSceneEnum($anim,$naAttr);
+    na_assertSizeEqualArg($enum1,1);
+    
+    return $enum1;
+}
+
+global proc string[] na_spaceSwitch_getRotationEnum(string $anim)
+{ 
+    string $naAttr = na_spaceSwitch_getSnapSwitchAttribute();
+    na_assertAttributeExist( {$anim}, $naAttr);
+    
+    //could be rotation so need way to change this
+    //
+    string $enum1[] = na_getRotationSceneEnum($anim,$naAttr);
+    na_assertSizeEqualArg($enum1,1);
+    
+    return $enum1;
+}
+global proc string[] na_spaceSwitch_getEnum(string $anim, int $transformation)
+{
+    string $enum1[] = {};
+    
+    if( $transformation == 0 ){
+        $enum1 = na_spaceSwitch_getTranslationEnum($anim);
+        na_assertSizeEqualArg($enum1,1);
+    }
+    else if( $transformation == 1 )
+    {
+        $enum1 = na_spaceSwitch_getRotationEnum($anim);
+        na_assertSizeEqualArg($enum1,1);
+    }
+    else{ error("Require Transformation Type 0 or 1"); }
+    na_assertSizeEqualArg($enum1,1);
+    //found enum
+    
+    return $enum1;
+}
+
+/**given animator control get the scene enum index
+*/
+global proc int[] na_spaceSwitch_getEnumIndexByAnim(string $anim, int $transformation)
+{ 
+    na_assertObjectExist({$anim});
+    int $result[] = {};
+    
+    string $animAndPlug[] = na_spaceSwitch_getEnum($anim,$transformation);
+    na_assertSizeEqualArg($animAndPlug,1);
+    
+    $result[size($result)] = `getAttr $animAndPlug[0]`;
+    na_assertIntSizeEqualArg($result,1);
+    
+    return $result;
+}
+
+
+
+global proc string na_spaceSwitch_getAnimFromIndex(int $animIndex)
+{
+    string $allAnim[] = na_spaceSwitch_getAnim();
+    na_assertSizeGreaterEqualTo($allAnim,1);
+    na_assertSizeGreaterEqualTo($allAnim, ($animIndex+1) );
+    string $anim = $allAnim[$animIndex];
+    
+    return $anim;
+}
+
+global proc string[] na_spaceSwitch_getLabelFromAnim(int $animIndex)
+{   
+    //could be rotation so added way to get that
+    //
+    string $anim = na_spaceSwitch_getAnimFromIndex( $animIndex );
+    int $allTransformation[] = na_spaceSwitch_typeForMDPlugToUse();
+    
+    string $allAnim[] = na_spaceSwitch_getAnim();
+    na_assertIntSizeEqualArg($allTransformation,size($allAnim));
+    int $transformation = $allTransformation[$animIndex];
+    
+    string $enum1[] = {};
+    $enum1 = na_spaceSwitch_getEnum($anim, $transformation);
+    na_assertSizeEqualArg($enum1,1);
+    //found enum
+    
+    
+    string $token1[] = na_getTokensByThisSeparator( $enum1[0], "." );
+    na_assertSizeEqualArg($token1,2);
+    string $attr1 = $token1[1];
+    
+    //how we get the actual scene options as labels on the ui
+    //
+    string $labelsAll1[] = `attributeQuery -node $anim -listEnum $attr1`;
+    na_assertSizeEqualArg($labelsAll1,1);
+    string $labels1[] = na_getTokensByThisSeparator( $labelsAll1[0], ":" );
+    
+    na_assertSizeGreaterEqualTo($labels1,1);
+    
+    return $labels1;
+}
+global proc string na_spaceSwitch_getCmd()
+{
+    string $cmd = "na_space";
+    na_assertCmdExist({$cmd});
+    return $cmd;
+}
+
+
+
+/**get scene current spaces for all animator controls as ui widget
+this could be used so when opening ui it remembers scenes most recent spaces
+@note although this is pretty specific to this rig, the concept of using scene information inside
+a ui is generalizable.  For ui to use scene information it needs the scene to give it data in ui's language.
+Here the ui's language are widget indexes from 0 to number of widgets, and the scene language are enum attributes per animator
+control with any number of choices per anim.
+*/
+global proc int[]
+na_spaceSwitch_getCurrentEnumAsUIWidget()
+{        
+    int $result[] = {};
+    
+    string $cmd_widgetPerRow = "na_spaceSwitch_getNumberOfWidgetPerRow";
+    string $cmd_anim = "na_spaceSwitch_getAnim";
+    
+
+    
+    int $numWidgetPerRow[] = eval($cmd_widgetPerRow);
+    na_assertIntSizeGreaterEqualTo($numWidgetPerRow,1);
+    
+    //this is used for some math to offset scene attr ex: enum in such a way
+    //that it corresponds to a ui widget
+    //
+    int $sum[] = na_accumlateSum_integer( $numWidgetPerRow );
+    na_assertIntSizeEqualArg($sum, size($numWidgetPerRow) );
+    //one anim corresponds to one row
+    //
+    
+    string $animArray[] = eval( $cmd_anim );
+    na_assertSizeEqualArg($animArray,size($numWidgetPerRow));
+    
+    
+    int $indexSelectedOnAttribute[] = {};
+    string $attr[] = {};
+    //take care of the first case which is a little special cause we don't need the sum
+    $anim = $animArray[0];
+    na_assertObjectExist({$anim});
+    
+
+    
+    //change this
+    //
+    //this is very specific to this rig ui, others probably wont need this
+    //
+    string $cmd_transformation = "na_spaceSwitch_typeForMDPlugToUse";
+    int $isTranslationSpaceArray[] = eval( $cmd_transformation );
+    na_assertIntSizeEqualArg($isTranslationSpaceArray,size($numWidgetPerRow) );
+    //
+    //in this example it finds the scene attribute value via an animator control and another int argument
+    //for other rig ui's substitute relevant function in here that takes at least an animator control and returns int array
+    //
+    $indexSelectedOnAttribute = na_spaceSwitch_getEnumIndexByAnim($anim, $isTranslationSpaceArray[0]);
+    //
+
+    na_assertIntSizeEqualArg($indexSelectedOnAttribute,1);
+    $result[size($result)] = 0 + $indexSelectedOnAttribute[0];
+    
+    //loop over rows of ui (not sure how this extends to tabs) i think could extend to tabs or menus etc.
+    for($i = 1; $i < size($numWidgetPerRow); $i++ )
+    {
+        $anim = $animArray[$i];
+        na_assertObjectExist({$anim});
+        
+        //change this
+        //
+        $indexSelectedOnAttribute = na_spaceSwitch_getEnumIndexByAnim($anim, $isTranslationSpaceArray[$i]);
+        //
+        //
+        
+        na_assertIntSizeEqualArg($indexSelectedOnAttribute,1);
+        
+        //now we found the scene attribute value, we want to get it as a widget for the ui
+        //
+        //need the minus 1 to get the math to work
+        $result[size($result)] = $sum[$i-1] + $indexSelectedOnAttribute[0];
+    }   
+    
+    na_assertIntSizeEqualArg($result,size($numWidgetPerRow));
+    
+    return $result;
+}
+
+
+
+
+
+
+/**space switch to selected
+*/
+global proc na_spaceSwitch_setNewSpace(int $widget)
+{
+    int $currentSpaceByWidget[] = na_spaceSwitch_getCurrentEnumAsUIWidget();
+    na_assertIntSizeGreaterEqualTo($currentSpaceByWidget,1);
+    
+    //do nothing if already in selected space
+    //
+    if( na_isIntInList($widget, $currentSpaceByWidget) == 0 ){
+        
+    //were going to change selections so we save current
+    string $sel[] = `ls -sl`;
+    
+    //space switching needs an enum value to change to
+    int $enumIndex = na_spaceSwitch_getEnumIndex($widget);
+  
+    //so we can find the animator control for whatever ui is selected
+    string $animRepeated[] = na_repeatStringByCount(na_spaceSwitch_getAnim(), na_spaceSwitch_getNumberOfWidgetPerRow());
+    na_assertSizeGreaterEqualTo($animRepeated,1);
+    na_assertSizeGreaterEqualTo($animRepeated,($widget+1));
+    string $anim = $animRepeated[$widget];
+    
+    //a special command is needed to run
+    string $cmd = na_spaceSwitch_getCmd();
+    
+    //space switching needs an enum that tracks spaces to change to
+    int $transformRepeated[] = na_repeatIntByCount(na_spaceSwitch_typeForMDPlugToUse(), na_spaceSwitch_getNumberOfWidgetPerRow());
+    na_assertIntSizeEqualArg($transformRepeated,size($animRepeated));
+    na_assertIntSizeGreaterEqualTo($transformRepeated,($widget+1));
+    int $transformation = $transformRepeated[$widget]; //by spreading out list over the widgets, the widget should match
+    string $attrAndPlug[] = {};
+    $attrAndPlug = na_spaceSwitch_getEnum($anim, $transformation);
+    na_assertSizeEqualArg($attrAndPlug,1);
+    //found enum
+
+
+    //prelim changes to new space
+    setAttr $attrAndPlug[0] $enumIndex;
+    
+    //snaps to new space
+    select -r $anim;
+    eval($cmd);
+    
+
+    //print("Great Day--Mr. anim "+$anim+"\n");
+    //print("Great Day--Mr. widget "+$widget+"\n");
+    //print("Great Day--Mr. index "+$enumIndex+"\n");
+    
+    
+    select -r $sel;
+    }else{print("skipping-- space switching\n");}
+}
+
+
+
+/**get per each animator control, how many places it could possibly switch to
+*/
+global proc int[] na_spaceSwitch_getNumberOfWidgetPerRow()
+{
+    int $result[] = {};
+    
+    string $allAnim[] = na_spaceSwitch_getAnim();
+    na_assertSizeGreaterEqualTo($allAnim,1);
+
+    string $labels[] = {};    
+    for( $i = 0; $i < size($allAnim); $i++ ){    
+        //sending index so we have more information available
+        $labels = na_spaceSwitch_getLabelFromAnim($i);
+        na_assertSizeGreaterEqualTo($labels,1);
+        $result[size($result)] = size($labels);
+    }
+    
+    return $result;
+}
+
+global proc int na_spaceSwitch_getNumberOfWidgetRow()
+{
+    return size(na_spaceSwitch_getNumberOfWidgetPerRow());
+}
+
+
+/**
+*/
+global proc string[] na_spaceSwitch_getLabelPerWidget()
+{
+    string $result[] = {};
+    
+    string $allAnim[] = na_spaceSwitch_getAnim();
+    na_assertSizeGreaterEqualTo($allAnim,1);
+    
+    string $labels[] = {};    
+    for(  $i = 0; $i < size($allAnim); $i++ ){    
+        //sending index so we have more information available
+        $labels = na_spaceSwitch_getLabelFromAnim($i);
+        na_assertSizeGreaterEqualTo($labels,1);
+        $result = stringArrayCatenate($result,$labels);
+    }
+    
+    return $result;
+}
+
+global proc string na_spaceSwitch_getTitlePerRowSuffix(int $arg)
+{
+    string $result = "default suffix";
+    
+    if( $arg == 0 ){
+        $result = " t";
+    }
+    else if( $arg == 1 ){
+        $result = " r";
+    }    
+    else{
+        error("Requires 1 or 0");
+    }
+    
+    return $result;
+}
+global proc string[] na_spaceSwitch_getTitlePerRow()
+{
+    string $prefix = "row ";
+    
+    string $result[] = {};
+    int $numRow = na_spaceSwitch_getNumberOfWidgetRow();
+    string $allAnim[] =  na_spaceSwitch_getAnim();
+    int $numAnim = size($allAnim);
+    
+    int $allTransformation[] = na_spaceSwitch_typeForMDPlugToUse();
+    na_assertIntSizeEqualArg($allTransformation,$numAnim);
+    
+    if( $numRow != $numAnim ){ error("Require anim "+$numAnim+" and widget rows "+$numRow+" equal"); } 
+    
+    for( $i = 0; $i < $numRow; $i++ )
+    {
+        $prefix = $allAnim[$i];
+        $suffix = na_spaceSwitch_getTitlePerRowSuffix($allTransformation[$i]);
+        $result[$i] = $prefix+$suffix;
+    }
+
+    return $result;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+

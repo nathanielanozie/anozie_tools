@@ -1,0 +1,379 @@
+/**@file na_snapAttr.mel
+@brief v1.0.1 Type of ik/fk snapping that involves attribute matching. ex: for animating foot we can use tool to match poses
+gets end joint close to a goal position
+@author Nathaniel O. Anozie (ogbonnawork at gmail dot com)
+@bug  not working on production rig, assuming range for default value of 1
+@note date created: Apr 25, 2012
+@note date last modified: May 23, 2012
+@note How to Install
+@source naMath.mel
+@source naGeneral.mel
+@source na_assertGeneral.mel
+@source na_snapAttr_config.mel
+@source na_getNearestAttributeToGoal.mel
+@source na_snapAttr.mel
+@note released v1.0.0
+@note --
+@note -- working on separating details from code
+@note -- working on bug in resetting to default pose
+@note
+@note Modify at your own risk
+@note Inspired by Jason Schleifer's Animator Friendly Rigging (jasonschleifer dot com)
+*/
+
+
+
+/**perfom matching of pose
+@pre it has access to attributes, goal points, and end objects somehow
+@post it changes attributes to match pose
+@bug not used in practice
+@result nothing
+*/
+global proc
+na_snapSimpleAttr(string $anim, string $naAttrArray[])
+{
+    for($naAttr in $naAttrArray){
+        //assert
+        //exist
+        na_assertObjectExist({$anim+"."+$naAttr});
+        
+        
+        //get
+        //
+        string $attr[]={};
+        $attr = na_snapAttrGetAttrPlug($anim,$naAttr);
+        
+        
+        //assert
+        //
+        //double
+        na_assertAttrTypeInList($anim,$attr,{"double","doubleLinear"});
+        
+        
+        //get
+        //
+        float $default[]={};
+        $default = na_snapSimpleAttrGetDefault($anim,$naAttr);
+        
+        
+        //assert
+        //
+        //size
+        int $n = size($attr);
+        na_assertFloatSizeEqualArg($default,$n);
+        
+        
+        ////
+        ////COMPUTATIONS
+        ////
+        
+        //setting optimal values
+        //
+        for($i = 0; $i < size($attr); $i++ )
+        { 
+            setAttr ($anim+"."+$attr[$i]) $default[$i]; 
+        }
+        ////
+        ////COMPUTATIONS
+        ////
+        
+    }
+    
+}
+
+
+
+/*check if attributes are set to the input do we need to start algorithm
+@note it doesn't use current value of attributes it uses input argument
+*/
+global proc int[]
+na_snapAttr_getIndexNeedToEstimate( string $anim,
+string $attr[],
+float $default[],
+string $goalObject[],
+string $attrMovesThisObject[],
+float $curValuePerAttr[] )
+{
+    
+    //assert
+    //
+    //size
+    int $n = size($default);
+    na_assertSizeEqualArg($attr,$n);
+    na_assertSizeEqualArg($goalObject,$n);
+    na_assertSizeEqualArg($attrMovesThisObject,$n);
+    na_assertFloatSizeEqualArg($curValuePerAttr,$n);
+    
+    
+    ///goes through to see if an estimate is needed 
+    //this stores indexes in attribute array of attributes we need to compute
+    //
+    float $howCloseToAttrIsOkay = 0.005;
+    int $indexAttrToRun[] = {};
+    int $status = 0; 
+    
+    
+    //needs to set all attributes together to specified value
+    //
+    na_snapAttr_setAttrDefaultOnAnim($anim,$attr,$default);
+    
+    
+    for($j = 0; $j < size($attr); $j++ ){
+        
+        //print("for--"+$attr[$j]+"\n");
+        //print("using default---"+$default[$j]+"\n");
+        
+        $status = na_getIsCloseToGoalUsingAttrValue(  $attr[$j],
+        $anim,
+        $attrMovesThisObject[$j],
+        $goalObject[$j],
+        $default[$j],
+        $howCloseToAttrIsOkay);
+        
+        if($status == 1){
+            $indexAttrToRun[size($indexAttrToRun)] = $j;
+        }
+        
+    }
+    
+    
+    
+    //restore current values
+    for($i = 0; $i < size($attr); $i++)
+    {
+        //restore current value of attribute
+        setAttr ($anim+"."+$attr[$i]) $curValuePerAttr[$i];
+    }
+    
+    
+    //print("these will be run--\n");
+    //for($n in $indexAttrToRun)
+    //{
+    //    print( $attr[$n]+"\n" );
+    //}
+    //print("--\n");
+    
+    return $indexAttrToRun;
+    
+}
+
+
+
+/*get current float attribute values
+*/
+global proc float[]
+na_snapAttr_getCurrentAttribute_float( string $anim, string $naAttr )
+{
+    //
+    string $attr[]={};
+    $attr = na_snapAttrGetAttrPlug($anim,$naAttr);
+    
+    //assert
+    //
+    //double
+    na_assertAttrTypeInList($anim,$attr,{"double"});
+    
+    float $curValuePerAttr[] = {};
+    for($i = 0; $i < size($attr); $i++ )
+        { $curValuePerAttr[size($curValuePerAttr)] = `getAttr ($anim+"."+$attr[$i])`;}
+    
+    return $curValuePerAttr;
+}
+
+
+/**perfom matching of pose
+@pre it has access to attributes, goal points, and end objects somehow
+@post it changes attributes to match pose
+@bug not used in practice
+@result nothing
+*/
+global proc
+na_snapAttr(string $anim, string $naAttr, int $setToDefault)
+{
+    
+    //assert
+    //exist
+    na_assertObjectExist({$anim+"."+$naAttr});
+    
+    
+    
+    //
+    string $attr[]={};
+    $attr = na_snapAttrGetAttrPlug($anim,$naAttr);
+    
+    
+    //assert
+    //
+    //double
+    na_assertAttrTypeInList($anim,$attr,{"double"});
+    
+    
+    //get
+    //
+    string $goalObject[]={};
+    $goalObject = na_snapAttrGetGoalName($anim,$naAttr);
+    string $attrMovesThisObject[] = {};
+    $attrMovesThisObject = na_snapAttrGetAttrMoveThisName($anim,$naAttr);
+    float $default[]={};
+    $default = na_snapAttrGetDefaultFloat($anim,$naAttr);
+    float $curValuePerAttr[] = {};
+    $curValuePerAttr= na_snapAttr_getCurrentAttribute_float( $anim,$naAttr );
+    
+    //assert
+    //
+    //size
+    int $n = size($default);
+    na_assertSizeEqualArg($attr,$n);
+    na_assertSizeEqualArg($goalObject,$n);
+    na_assertSizeEqualArg($attrMovesThisObject,$n);
+    na_assertFloatSizeEqualArg($curValuePerAttr,$n);
+    
+    
+    //range
+    //
+    //data
+    float $min = -360;  
+    float $max = 360;
+    int $iterations = 30; //how many steps should algorithm run increase if necessary 30 - 50 
+    float $useMin = $min;//first time range
+    float $useMax = $max;
+    
+    
+    float $attrValueToMeetGoal[]={};
+    int $attrIndexToMeetGoal[]={};
+    float $attrValueArray[] = {};
+    float $generalMinArray[] = {};
+    float $generalMaxArray[] = {};
+    
+    
+    //
+    //get min and max of attribute
+    string $argAttr = "";
+    
+    for($j = 0; $j< size($attr); $j++ ){
+        
+        $argAttr = $attr[$j];
+        $min = -360; 
+        $max = 360;
+        
+        float $minArray[] = {};
+        $minArray = na_getMinFloatAttr($anim,$argAttr);
+        if(size($minArray) == 1){
+        $min = $minArray[0];}
+        
+        float $maxArray[] = {};
+        $maxArray = na_getMaxFloatAttr($anim,$argAttr);
+        if(size($maxArray) == 1){
+        $max = $maxArray[0];}
+        
+        $generalMinArray[size($generalMinArray)] = $min;
+        $generalMaxArray[size($generalMaxArray)] = $max;
+    }
+    
+    
+    
+    
+    
+    ///goes through to see if an estimate is needed 
+    //this stores indexes in attribute array of attributes we need to compute
+    //
+    int $indexAttrToRun[] ={};
+    $indexAttrToRun = na_snapAttr_getIndexNeedToEstimate($anim,$attr,$curValuePerAttr,$goalObject,$attrMovesThisObject,$curValuePerAttr);
+    
+    
+    //only compute on needed attributes
+    //
+    //
+    //for(attrIndex = 0; $i < size($attr); $i++ )
+    for( $attrIndex in $indexAttrToRun ){
+        
+        //compute optimal attribute value
+        //
+        $attrValueArray = {};
+        
+        $useMin = $generalMinArray[$attrIndex];
+        $useMax = $generalMaxArray[$attrIndex];
+        
+        //extra
+        //
+        //if default is 1, change range
+        //
+        if($default[$attrIndex] == 1.0){
+            $useMin = 0.15;
+            $useMax = 20;
+        }
+        //
+        
+        
+        //before algorithm set attributes to different values
+        //dependencies between attributes on the same out
+        if($setToDefault == 1){
+        na_snapAttr_setAttrDefaultOnAnim($anim,$attr,$default);}
+        
+        
+        //print($attr[$attrIndex]+",--,"+$status+"\n");
+        $attrValueArray = na_getNearestAttributeToGoal(  $attr[$attrIndex],
+        $anim,
+        $useMin,
+        $useMax,
+        $attrMovesThisObject[$attrIndex],
+        $goalObject[$attrIndex],
+        $iterations
+        );
+        
+        //end compute optimal attribute value
+        
+        if(size( $attrValueArray ) == 1 ){
+            
+            $attrValueToMeetGoal[size($attrValueToMeetGoal)]= $attrValueArray[0]; 
+            $attrIndexToMeetGoal[size($attrIndexToMeetGoal)] = $attrIndex;
+        }
+    }
+    
+    
+    
+    //setting optimal values
+    //
+    na_assertFloatSizeEqualArg($attrValueToMeetGoal,size($attrIndexToMeetGoal));
+    for($j = 0; $j < size($attrValueToMeetGoal); $j++)
+    { 
+        $index = $attrIndexToMeetGoal[$j];
+        setAttr ($anim+"."+$attr[$index]) $attrValueToMeetGoal[$j]; 
+    }
+    
+    ////
+    ////COMPUTATIONS
+    ////
+    
+    
+}
+
+
+/**
+@bug no lock of attribute or type match between attribute and value checking
+*/
+global proc
+na_snapAttr_setAttrDefaultOnAnim(string $anim, string $attr[], float $default[])
+{
+    na_assertObjectExist( {$anim} );
+    int $n = size($default);
+    na_assertSizeEqualArg($attr,$n);
+    
+    string $attrAndPlug[] = {};
+    $attrAndPlug = na_getPlugByAttributeArray($anim, $attr);
+    na_assertObjectExist($attrAndPlug);
+    na_assertSizeEqualArg($attrAndPlug,$n);
+    
+    for($i = 0; $i < size($attr); $i++ )
+        { setAttr ($attrAndPlug[$i]) $default[$i];}
+    
+}
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,39 @@
+
+global string $gl_anim = "gl_anim";
+
+
+/**ui
+*/
+global proc na_spaceMakeDefaultUI()
+{    
+    global string $gl_anim;
+    
+    
+    //setup up title for gui
+    string $titleWindow = "na_space.mel  Add default pose";
+    string $mainWindowName = "mainWindow";
+    na_window($mainWindowName,$titleWindow, 330, 90);
+    
+    
+    //set up format for gui
+    string $form = `formLayout -numberOfDivisions 50 "form layout"`;
+    
+    //add ui elements like textfields,buttons, and/or radio buttons
+    na_textFieldGrp($form, $mainWindowName,"anim", 5, -70, $gl_anim);
+    na_button($form, $mainWindowName,"ok", 45,160,"button","na_spaceMakeDefault_cmd");
+    
+    showWindow $mainWindowName;
+}
+
+
+/**ui command
+*/
+
+global proc na_spaceMakeDefault_cmd()
+{
+    global string $gl_anim;
+    
+    string $anim = "";
+    $anim = `textFieldGrp -query -text $gl_anim`;
+    na_space_makeDefaultAnim($anim);
+}

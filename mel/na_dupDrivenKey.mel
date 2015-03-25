@@ -1,0 +1,362 @@
+/**@file na_dupDrivenKey.mel
+@brief Duplicate set driven keys, helpful for finger rigging
+@author Nathaniel O. Anozie (ogbonnawork at gmail dot com)
+@note date created: Apr 2 2012
+*
+*@addtogroup sdk 
+*@{
+*/
+
+
+
+global proc
+na_dupHandRig_unitTest()
+{
+    //make 2 hand dummy rigs
+    select -d;
+    joint -p 0 0 -1 ;
+    joint -p 2 0 -1 ;
+    joint -e -zso -oj xyz -sao yup joint1;
+    select -cl  ;
+    select -d;
+    joint -p 0 0 1 ;
+    joint -p 2 0 1 ;
+    joint -e -zso -oj xyz -sao yup joint3;
+    select -cl  ;
+    circle -c 0 0 0 -nr 0 1 0 -sw 360 -r 1 -d 3 -ut 0 -tol 0.01 -s 8 -ch 1;
+    select -cl  ;
+    circle -c 0 0 0 -nr 0 1 0 -sw 360 -r 1 -d 3 -ut 0 -tol 0.01 -s 8 -ch 1; 
+    move -r -os -wd -5 0 0 ;
+    select -r nurbsCircle1 ;
+    setAttr -lock true -keyable false "nurbsCircle1.tx";
+    setAttr -lock true -keyable false "nurbsCircle1.ty";
+    setAttr -lock true -keyable false "nurbsCircle1.tz";
+    setAttr -lock true -keyable false "nurbsCircle1.rx";
+    setAttr -lock true -keyable false "nurbsCircle1.ry";
+    setAttr -lock true -keyable false "nurbsCircle1.rz";
+    setAttr -lock true -keyable false "nurbsCircle1.sx";
+    setAttr -lock true -keyable false "nurbsCircle1.sy";
+    setAttr -lock true -keyable false "nurbsCircle1.sz";
+    select -r nurbsCircle2 ;
+    setAttr -lock true -keyable false "nurbsCircle2.tx";
+    setAttr -lock true -keyable false "nurbsCircle2.ty";
+    setAttr -lock true -keyable false "nurbsCircle2.tz";
+    setAttr -lock true -keyable false "nurbsCircle2.rx";
+    setAttr -lock true -keyable false "nurbsCircle2.ry";
+    setAttr -lock true -keyable false "nurbsCircle2.rz";
+    setAttr -lock true -keyable false "nurbsCircle2.sx";
+    setAttr -lock true -keyable false "nurbsCircle2.sy";
+    setAttr -lock true -keyable false "nurbsCircle2.sz";
+    select -r nurbsCircle1 ;
+    addAttr -ln "curl"  -at double  |nurbsCircle1;
+    setAttr -e-keyable true |nurbsCircle1.curl;
+    addAttr -ln "spread"  -at double  |nurbsCircle1;
+    setAttr -e-keyable true |nurbsCircle1.spread;
+    select -r nurbsCircle2 ;
+    addAttr -ln "curl"  -at double  |nurbsCircle2;
+    setAttr -e-keyable true |nurbsCircle2.curl;
+    addAttr -ln "spread"  -at double  |nurbsCircle2;
+    setAttr -e-keyable true |nurbsCircle2.spread;
+    
+    
+    mirrorJoint -mirrorYZ -mirrorBehavior -searchReplace "l_" "r_" joint1;
+    mirrorJoint -mirrorYZ -mirrorBehavior -searchReplace "l_" "r_" joint3;
+    select -r joint7 joint10 ;
+    move -r -os -wd -4 0 0 ;
+    select -r joint7 ;
+    select -r joint7|joint2 ;
+    rename "joint7|joint2" "joint8";
+    select -cl  ;
+    select -r joint10 ;
+    select -r joint10|joint4 ;
+    rename "joint10|joint4" "joint11";
+    
+    
+    select -cl  ;
+    setDrivenKeyframe -currentDriver nurbsCircle1.curl joint1.rotateZ;
+    setDrivenKeyframe -currentDriver nurbsCircle1.curl joint3.rotateZ;
+    setAttr "nurbsCircle1.curl" 10;
+    setAttr "joint1.rotateZ" 5;
+    setAttr "joint3.rotateZ" 6;
+    setDrivenKeyframe -currentDriver nurbsCircle1.curl joint1.rotateZ;
+    setDrivenKeyframe -currentDriver nurbsCircle1.curl joint3.rotateZ;
+    setAttr "nurbsCircle1.curl" -10;
+    setAttr "joint1.rotateZ" -20;
+    setAttr "joint3.rotateZ" -10;
+    setDrivenKeyframe -currentDriver nurbsCircle1.curl joint1.rotateZ;
+    setDrivenKeyframe -currentDriver nurbsCircle1.curl joint3.rotateZ;
+    
+    setDrivenKeyframe -currentDriver nurbsCircle1.spread joint1.rotateY;
+    setAttr "nurbsCircle1.spread" 10;
+    setAttr "joint1.rotateY" 30;
+    setDrivenKeyframe -currentDriver nurbsCircle1.spread joint1.rotateY;
+    setAttr "nurbsCircle1.spread" -10;
+    setAttr "joint1.rotateY" -30;
+    setDrivenKeyframe -currentDriver nurbsCircle1.spread joint1.rotateY;
+    
+    select -cl;
+    setAttr "nurbsCircle1.spread" 0;
+    setAttr "nurbsCircle1.curl" 0;
+    
+    
+    na_dupHandRig("nurbsCircle1","nurbsCircle2",{"joint1","joint3"},{"joint7","joint10"});
+    
+    
+}
+
+/**make set driven keys using fromAnim and fromJoints and put them on toAnim and toJoints
+@pre need to exclude from joints that have no driven keys on them
+@bug no asserts size equal 1, bug finding fromJoint from an attribute
+*/
+global proc
+na_dupHandRig(string $fromAnim, string $toAnim, string $fromJoint[], string $toJoint[])
+{
+    //assert
+    na_assertObjectExist({$fromAnim,$toAnim});
+    na_assertObjectExist($fromJoint);
+    na_assertObjectExist($toJoint);    
+    int $n = size($fromJoint);
+    na_assertSizeEqualArg( $toJoint, $n );
+    
+    na_assertTypeInList( $fromJoint, {"joint","locator","transform"} );
+    na_assertTypeInList( $toJoint, {"joint","locator","transform"} );
+    
+    string $userDefinedAttr[] = {};
+    $userDefinedAttr = `listAttr -ud $fromAnim`;
+    
+    //inorder to get new hand rig we need the old hand rigs driven frames, keys and anim curves
+    //
+    string $curves[]={};
+    for($attr in $userDefinedAttr)
+    {
+        print($attr+"\n");
+        
+        $curves = na_getOutConnect( $fromAnim+"."+$attr, "animCurve" );
+        string $curv[] = {};
+        
+        if(size($curves) > 0)
+        {
+            for($jointCounter = 0; $jointCounter < size($fromJoint); $jointCounter ++ ){
+                
+                //were assuming only rotations needed
+                //
+                for($toAttr in {"rotateX","rotateY","rotateZ"} )
+                {
+                    //were assuming the joints in input match up between new and old rig
+                    //
+                    $fromJnt = $fromJoint[$jointCounter];
+                    $toJnt = $toJoint[$jointCounter];
+                    
+                    $curv = {};
+                    $curv = na_findStartToGoal_decisionOnObjectFound( ($fromJnt+"."+$toAttr), $curves, {"transform","joint","locator","animCurve","blendWeighted","unitConversion"} );
+                    if(size($curv) > 0)
+                    {   
+                        //so our new rig had old rig functionality
+                        //
+                        //reason zero index since we assume we are using the first curve
+                        float $frames[] = {};
+                        $frames = na_getKeysSDK($curv[0]);
+                        float $values[] =  {};
+                        $values = na_getValuesSDK($curv[0]);
+                        
+                        //were assuming the new hand rig has old hand rig attribute names
+                        //
+                        
+                        na_assertObjectExist({$toJnt+"."+$toAttr});
+                        na_setSDK( ($toJnt+"."+$toAttr), $frames, $values, $toAnim, $attr );
+                        
+                        //print($fromJnt+"\n");
+                        //print($curv);
+                        //print(size($curv)+"\n");
+                    }
+                    else{print("--skipping--"+$attr+"--"+"for "+$fromJnt+"--no anim curve found\n");}
+                    
+                }
+                
+            }
+            
+            //print($curves);
+        }
+        else{print("--skipping--"+$attr+"--no anim curve found\n");}
+    }
+    
+    print $userDefinedAttr;
+}
+
+
+
+
+/**transfer animatins from one animator control to another
+@param string $node[]   node(s)
+@param string $nodeAttr[]   node attribute(s) should be same number as node
+@param string $anim to anim  (where were putting control of new driven keys)
+@param string $attr to anim attribute
+@param string $fromAnim from anim
+@param string $fromAttr from anim attribute (where were getting driven keys from)
+@note
+@see na_getKeysSDK
+@see na_setSDK
+@see na_findStartToGoal
+@see na_getOutConnect
+@see 
+*/
+global proc
+na_dupDrivenKey(string $node[], string $nodeAttr[], string $anim, string $attr, string $fromAnim, string $fromAttr)
+{
+    
+    na_dupDrivenKey_assert($node, $nodeAttr, $anim, $attr, $fromAnim, $fromAttr);
+    
+    string $curve[] = {};
+    float $frame[] = {};//sdk keyframe
+    float $value[] = {}; //sdk value at keyframe
+    int $n = size($node);
+    string $fromControl = $fromAnim+"."+$fromAttr;
+    string $drv = "";
+    
+    
+    //get all possible anim curves coming out of fromControl
+    $allPossibleCurve = na_getOutConnect( $fromControl, "animCurve");
+    string $supportedTypes[] = {"joint","animCurve","blendWeighted","unitConversion"};
+    
+    //get frames well use for new control
+    $curve = na_findStartToGoal( $node[0], $allPossibleCurve, $supportedTypes );
+    //assuming identical frames for all animation
+    $frame = na_getKeysSDK($curve[0]); //index possible error
+    clear($curve);
+    
+    
+    //loop joints we want to add extra control too
+    for( $i = 0; $i < $n; $i++ )
+    {
+        //loop each possible curve finding listRelativeConnection if joint of interest is found
+        $joint = $node[$i];
+        
+        //this curve(s) is used by from control on our joint well use this for setting up new control
+        $curve = na_findStartToGoal( $joint, $allPossibleCurve, $supportedTypes );
+        
+        //get only the thing we wish to be driving
+        $drv  = $node[$i]+"."+$nodeAttr[$i];
+        
+        //get values well using for new control
+        //this is so frames match value
+        if( size(na_getKeysSDK($curve[0])) == size($frame) ){
+            $value = na_getValuesSDK($curve[0]);   
+            //making new control assume what the from control was doing
+            na_setSDK($drv,$frame,$value, $anim, $attr);
+        }
+        else{ print("skipping--"+$curve[0]+"on "+$joint+"-- different number frames"); }
+        
+        
+        clear($curve);
+        clear($value);
+    }
+    
+    print("completed animator control transfer\n");
+}
+
+
+
+
+
+/**na_dupDrivenKey assert existence attribute,node,animCurve
+@see na_getOutConnect
+*/
+global proc
+na_dupDrivenKey_assert(string $node[], string $nodeAttr[], string $anim, string $attr, string $fromAnim, string $fromAttr)
+{
+    //node exist checks
+    for($i = 0; $i < size($node) ; $i++){ 
+        if(`objExists  $node[$i]` == 0){ error("Sorry, Cannot find--"+$node[$i]); }
+    }
+    if(`objExists  $anim` == 0){ error("Sorry, Cannot find--"+$anim); }
+    if(`objExists  $fromAnim` == 0){ error("Sorry, Cannot find--"+$fromAnim); }
+    
+    //attribute existence checks
+    if(`attributeExists $attr $anim` == 0){ error("attribute: "+$attr+" for--"+$anim+" not found");}
+    if(`attributeExists $fromAttr $fromAnim` == 0){ error("attribute: "+$fromAttr+" for--"+$fromAnim+" not found");}
+    
+    //size
+    if(size($node) == 0){error("please enter node(s)"); }
+    if( size($node) != size($nodeAttr) ){error("check sizes of input");}
+    
+    //anim curve exists on to
+    string $to = $anim+"."+$attr;
+    if(size( na_getOutConnect($to,"animCurve") ) > 0 ){error("animCurve exists on --"+$to);}
+    
+    //no anim curve exists on from
+    string $from = $fromAnim+"."+$attr;
+    if(size( na_getOutConnect($from,"animCurve") ) == 0 ){error("no animCurve exists on --"+$from);}
+    
+    
+}
+/**
+@note note implemented
+*/
+global proc
+na_dupDrivenKey_unitTest()
+{
+    
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    polyCone -r 1 -h 2 -sx 8 -sy 1 -sz 0 -ax 0 1 0 -rcp 0 -cuv 3 -ch 1;
+    
+    //so anim curve has keys
+    setDrivenKeyframe -currentDriver pCube1.translateX pCone1.translateX;
+    setAttr "pCube1.translateX" 3;
+    setAttr "pCone1.translateX" 5;
+    setDrivenKeyframe -currentDriver pCube1.translateX pCone1.translateX;
+    setAttr "pCube1.translateX" 0;  
+    
+    //so have anim control
+    spaceLocator -p 0 0 0;
+    addAttr -ln "anim"  -at double  |locator1;
+    setAttr -e-keyable true |locator1.anim;
+    setAttr -lock true -keyable false "locator1.tx";
+    setAttr -lock true -keyable false "locator1.ty";
+    setAttr -lock true -keyable false "locator1.tz";
+    setAttr -lock true -keyable false "locator1.rx";
+    setAttr -lock true -keyable false "locator1.ry";             
+    setAttr -lock true -keyable false "locator1.rz";
+    setAttr -lock true -keyable false "locator1.sx";
+    setAttr -lock true -keyable false "locator1.sy";
+    setAttr -lock true -keyable false "locator1.sz";
+    setAttr -lock true -keyable false "locator1.v";
+    
+    
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    setDrivenKeyframe -currentDriver pCube2.translateX pCone1.translateX;
+    setAttr "pCube2.translateX" 3;
+    setAttr "pCone1.translateX" 20;
+    setDrivenKeyframe -currentDriver pCube2.translateX pCone1.translateX;
+    setAttr "pCube2.translateX" 0;  
+    
+    selectKey -clear ;
+    selectKey -add -k pCone1_translateX ;
+    selectKey -add -k animCurveUL1;
+    keyTangent -itt linear -ott linear;   
+    
+    
+    //need to make old control
+    //because at start pCone1 has 2 curves coming in
+    //na_dupDrivenKey( {"pCone1"},{"translateX"}, "locator1", "anim");
+    
+    //selectKey -clear ;
+    //selectKey -add -k locator1_anim;
+}
+
+/**
+*@}
+*/
+
+
+
+
+
+
+
+
+
+
+
+
+
+

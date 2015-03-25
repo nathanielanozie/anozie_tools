@@ -1,0 +1,174 @@
+/**@file  na_spaceSwitch_UI.mel v1.0.0
+*/
+global string $gl_spaceSwitch_radioCol = "gl_spaceSwitch_radioCol";
+
+
+
+
+/**Because we want to have the ui change according to rig, this figures out some
+parameters of ui like labels and number of widgets prioro to calling a ui builder script
+*/
+global proc na_spaceSwitch_UI_config(string $title, string $mainWindowName)
+{
+    int $colPerRow[] = {};
+    string $allLabel[] = {};
+    string $allRowTitle[] = {};
+    int $numRow = 0;
+    
+    $colPerRow = na_spaceSwitch_getNumberOfWidgetPerRow();
+    $allLabel = na_spaceSwitch_getLabelPerWidget();
+    $allRowTitle = na_spaceSwitch_getTitlePerRow();
+    $numRow = na_spaceSwitch_getNumberOfWidgetRow();
+    
+    na_spaceSwitch_UI($title,$mainWindowName,$colPerRow,$allLabel,$allRowTitle,$numRow);
+    
+    //here select radio buttons according to user scene.
+    int $currentWidget[] = na_spaceSwitch_getCurrentEnumAsUIWidget();
+    na_assertIntSizeGreaterEqualTo($currentWidget,1);
+    na_spaceSwitch_selectUI($currentWidget);
+}
+
+
+
+/**ui
+@param number columns per row 
+@param all labels 
+@param all row titles
+@param number of rows
+@bug formatting probably depends on new characters etc
+*/
+global proc na_spaceSwitch_UI(string $title, string $mainWindowName, int $colPerRow[],
+string $allLabel[],string $allRowTitle[],int $numRow)
+{
+    na_assertIntSizeGreaterEqualTo( $colPerRow,0);
+    na_assertSizeGreaterEqualTo( $allLabel,0);
+    na_assertSizeGreaterEqualTo( $allRowTitle,0);
+    na_assertIntNonNegative({$numRow});
+    if( $numRow == 0 ){error("Require space data to build UI");}
+    
+    global string $gl_spaceSwitch_radioCol;
+    
+    string $pickCmd = "na_spaceSwitch_pickType_cmd";  
+    string $buttonCmd = "na_spaceSwitch_cmd";
+    string $buttonGlobalName = "button";
+    
+    //
+    //win formatting
+    int $winWidth = 640;  
+    //int $winHeight = (size($allLabel))*18;  
+    int $winHeight = ($numRow)*100; 
+    //
+    //ui formatting
+    int $vspace = 40;
+    int $hspace = 80;
+    int $rowTitleX = 20;
+    int $itemLeftOffset = 190;//
+    int $itemTopOffset = 30;//
+    
+    int $buttonLeftOffset = 0;
+    int $buttonTopOffset = -1*($winHeight/4);
+    int $buttonX = $winWidth/2 + $buttonLeftOffset;
+    int $buttonY = $winHeight + $buttonTopOffset;
+    
+    
+    string $firstFrameLayout =
+    `frameLayout
+    -label $title
+    -labelAlign "center"
+    -collapsable true
+    -collapse true
+    `;
+    
+    //set up format for gui
+    string $form = `formLayout -numberOfDivisions 50 "form layout"`;
+    
+ 
+    //local
+    int $widget = 0;//this gets incremented by one for every widget we add
+    int $col = 0; //current column
+    int $rowY = 0;
+    int $rowX = 0;
+    int $spaceBetweenRowTitleAndRowButton = 20;
+    string $rowTitle = "";
+    string $rowLabel = "";
+    string $radioCol = "";
+    string $collection = "";
+    
+    //make radio button widget
+    //
+    for($i = 0; $i < $numRow; $i++)
+    {
+        $rowY = $i*$vspace+$itemTopOffset;
+        na_assertSizeGreaterEqualTo($allRowTitle, ($i+1) );
+        $rowTitle = $allRowTitle[$i];
+        
+        $col = $colPerRow[$i];
+        
+        //prepare to make widget
+        na_text($form, $mainWindowName,$rowTitle, $rowY, $rowTitleX );
+        $radioCol = `radioCollection`;
+        $collection = $collection+" "+$radioCol;
+        
+        for($j = 0; $j < $col; $j++)
+        {   
+            $rowX = $j*$hspace+$itemLeftOffset;
+            na_assertSizeGreaterEqualTo($allLabel, ($widget+1) );
+            $rowLabel = $allLabel[$widget];
+            
+            //make the widget
+            na_radioButton($form, $mainWindowName,$rowLabel, ($rowY+$spaceBetweenRowTitleAndRowButton), $rowX,($pickCmd+"("+$widget+")"),$radioCol);
+            
+            $widget++;//increment widget
+        }
+    }
+    
+
+
+    na_button($form, $mainWindowName,"ok", $buttonY, $buttonX,$buttonGlobalName,$buttonCmd);
+    
+   
+    $gl_spaceSwitch_radioCol = $collection;
+}
+
+
+/**used to keep ui updated with current selection
+*/
+global proc na_spaceSwitch_selectUI(int $widget[])
+{
+    global string $gl_spaceSwitch_radioCol;
+    
+    //select radio buttons on ui at specified places
+    if(size($widget) > 0){
+        string $collection = $gl_spaceSwitch_radioCol;    
+        na_selectRadioButtonOfCollectionByIndex($collection, $widget); 
+    }
+}
+
+/**widget commands
+*/
+global proc na_spaceSwitch_pickType_cmd(int $widget)
+{
+    //print("This Widget Index Was Pressed--"+$widget+"\n");    
+}
+
+
+/**ui command
+*/
+
+global proc na_spaceSwitch_cmd()
+{
+    global string $gl_spaceSwitch_radioCol;
+    
+    string $radioCol = $gl_spaceSwitch_radioCol;
+    int $widgetArray[] = na_getIDFromRadioButtonCollection($radioCol); //contains all user selections
+    na_assertIntSizeGreaterEqualTo($widgetArray,0);
+    
+    
+    for($widget in $widgetArray)
+    {   
+        na_spaceSwitch_setNewSpace($widget);
+    }
+    print("\n");
+}
+
+

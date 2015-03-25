@@ -1,0 +1,75 @@
+/**@file na_getPose.mel
+*
+*Prints command to set Pose should work on faces or bodies.(Tested Maya 2008)
+*
+*@author Nathaniel O. Anozie (ogbonnawork at gmail dot com)
+*@note date created: June 10, 2013
+*@note How to Install
+*@note source na_getPose.mel
+*@defgroup anim Animation Posing
+*@{
+*save pose syntax, gives a string we can call with eval to set face to current pose
+*would need to copy pose to text editor before reusing
+*
+*@note Modify at your own risk
+*/
+
+//-------assumes all animator controls selected on scene 
+global proc string na_getPose(){
+    print("[na_getPose] Start Computing Pose….\n");
+    string $cmd = "";
+    string $sel[] = `ls -sl`;
+    if(size($sel)==0){error("Requires Animator Controls Selected First !!!\n");}
+    string $attr[] = {};
+    for($obj in $sel){
+        $attr = {};
+        $attr = `listAttr -k -u $obj`;
+        //attr 
+        //visibility translateX translateZ
+        //visibility translateX translateZ
+        //visibility translateX translateY translateZ rotateX rotateY rotateZ scaleX scaleY scaleZ
+        //rotateX rotateY rotateZ mouthUp
+        //…
+        //print( stringArrayToString($attr," ") );
+        $cmd += ""+na_getSinglePose($obj, stringArrayToString($attr," ") );
+        //print("\n");
+    }
+    print("\n");
+    print("[na_getPose] Completed Computing Pose !!!\n");
+    print $cmd;
+    
+    //-------
+    return $cmd;
+}    
+
+
+//---------
+//result ex: "setAttr jaw_anim.rotateX 0; setAttr jaw_anim.rotateY 0; setAttr jaw_anim.rotateZ -11.81234478"
+//obj   --  the object ex: "jaw_anim" 
+//attr  --  the attributes space separated ex: "rotateX rotateY rotateZ"
+
+global proc string na_getSinglePose(string $obj, string $attr){
+    //print("[na_getSinglePose] Computing current pose ….\n");
+    //string $obj = "jaw_anim";
+    //string $attr = "rotateX rotateY rotateZ";
+    string $result = "";
+    
+    string $attrAr[] = stringToStringArray($attr," ");
+    string $cmdAr[] = {};
+    for($attr in $attrAr)
+    {
+        $cmd = "";
+        float $arg;
+        $arg = getAttr ($obj + "." + $attr);
+        $cmd = "setAttr "+($obj + "." + $attr) + " "+$arg;
+        $cmdAr[size($cmdAr)] = $cmd;
+    }
+    //print(stringArrayToString($cmdAr,"; "));
+    $result = stringArrayToString($cmdAr,"; ");
+    $result += ";";
+    
+    return $result;
+}
+//-----------
+
+

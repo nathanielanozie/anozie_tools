@@ -1,0 +1,2569 @@
+/**@file naGeneral.mel 
+*
+*@brief string operations, object type operations , miscelaneous animation shape drawing
+*object type operations (different from assert but very related)
+*--type checks curves, attributes
+*--retrieval by types
+*
+*string operations
+*--tokens, suffix/prefix subs
+*
+*miscelaneous stuff on  ...
+*-- animation (setting attributes)
+*-- shape drawing 
+*
+@author Nathaniel O. Anozie (ogbonnawork at gmail dot com)
+@note date created: Nov 23 2011
+@note Inspired by Bryan Ewert (xyz2 dot net) learning about changing tool currently active 
+*/
+
+//updated 08-25-2014 nate --- fixed expansion of selection for nurbs curves
+//updated 06-19-2013 nate --- added lattice to getExpanded
+
+
+
+/**@name String
+* String operations tokenizing, suffix/prefix substitution, suffix/prefix mirror etc
+*/
+/**@{*/
+/**supports name spaces, l_, r_ prefix and replace l with r prefix and vice versa
+na_mirrorPrefix( {"character:l_joint"});
+// Result: character:r_joint // 
+na_mirrorPrefix( {"l_joint"});
+// Result: r_joint // 
+na_mirrorPrefix( {"r_joint"});
+// Result: l_joint //                                            
+na_mirrorPrefix( {"r__joint"});
+// Error: Succesive Underscore Found in--r__joint // 
+*/
+
+global proc string[]
+na_mirrorPrefix(string $object[])
+{
+    string $result[] = {};
+    
+    string $tokens[] = {};
+    string $obj = "";
+    for($j = 0; $j < size($object); $j++)
+    {
+        $obj = $object[$j];
+        
+        $tokens=na_getTokensByThisSeparator($obj,":");
+        
+        int $numTokens = size($tokens);
+        string $mirror[] = {};
+        string $mirrorAfter[] = {};
+        switch($numTokens){
+            case 0:
+            $mirror = na_mirrorPrefixNoNameSpace({$obj});
+            break;
+            case 2:
+            $mirrorAfter = na_mirrorPrefixNoNameSpace({$tokens[1]});
+            if( size($mirrorAfter) == 0 ){ $result = {}; break; }
+            na_assertSizeEqualArg($mirrorAfter,1);
+            $mirror[0] = $tokens[0]+":"+$mirrorAfter[0];
+            break;
+            default:
+            error("Requires input begining with-- l -- or -- r -- or -- name:l");
+            break;
+        }
+        
+        if(size($mirror) != 1 )
+        {
+            $result = {};
+            break;
+        }
+        else{
+            $result[size($result)] = $mirror[0];
+        }
+        //end else 
+    }//end loop
+    
+    return $result;
+	    
+}
+
+/**replace l with r prefix and vice versa no support for name spaces
+@note
+na_mirrorPrefixNoNameSpace( {"r_ab_joint"});
+// Result: l_ab_joint // 
+na_mirrorPrefixNoNameSpace( {"r_joint"});
+// Result: l_joint // 
+na_mirrorPrefixNoNameSpace( {"l_joint"});
+// Result: r_joint // 
+na_mirrorPrefixNoNameSpace( {"l__joint"});
+// Error: Succesive Underscore Found in--l__joint // 
+*/
+global proc string[]
+na_mirrorPrefixNoNameSpace(string $object[])
+{
+    na_assertSuccessiveUnderscoreDoesNotExist($object);
+    
+    string $result[] = {};
+    
+    string $prefix[]={};
+    string $obj = "";
+    string $extension = "";
+    string $tokens[] = {};
+    for($i = 0; $i < size($object); $i++)
+    {
+        $obj = $object[$i];
+        $prefix = na_getPrefixExtension($obj,"_");
+        if(size($prefix) == 1)
+        {
+            
+            if( na_isOption( $prefix,{"l"},1) == 1 )
+            { $prefix[0] = "r";}else if( na_isOption( $prefix,{"r"},1) == 1 ){ $prefix[0] = "l"; }
+            else{ $result = {}; break; }
+            
+            //this computes the part after prefix 
+            //
+            $tokens=na_getTokensByThisSeparator($obj,"_");
+            na_assertSizeGreaterEqualTo($tokens,2);
+            stringArrayRemoveAtIndex(0,$tokens);
+            $extension = stringArrayToString($tokens,"_");
+            
+            $result[size($result)] = $prefix[0]+"_"+$extension;
+        }
+        else{
+            $result = {};
+            break;
+        }
+    }
+    
+    return $result;
+}
+/**Separate string and return tokens as list, empty list returned on no separator occurence.
+@note  ex: ("a.b.hi",".") result {a,b,hi}
+@note ex: ("a.b.hi","-") result {a.b.hi}
+@note ex: ("a.",".") gives list {"a"}
+*/
+global proc string[]
+na_getTokensByThisSeparator(string $arg, string $separator)
+{
+    string $result[];
+    string $buffer[]; 
+    tokenize $arg $separator $buffer;
+    if(size($buffer) >= 2 ){ $result = $buffer; }
+    
+    return $result;
+}
+/**Separate string and return tokens as list, input as list returned on no separator occurence.
+*/
+global proc string[]
+na_getTokensByThisSeparatorOptional(string $arg, string $separator)
+{
+    string $result[];
+    string $buffer[]; 
+    tokenize $arg $separator $buffer;
+    if(size($buffer) >= 1 ){ $result = $buffer; }
+    
+    return $result;
+}
+
+/**get tokens using more than one character for separator.  It does require separator
+to be sandwiched between two underscores. That is given a string like "H:A_anim_B","anim"
+return two things A_anim,  B.
+@note for "H:A_anim","anim".  error
+@param string $separatorName example "anim"
+@note input "H:A_anim_B" ,"anim","_"  result A_anim,  B
+@note result ommits namespace if one exists
+*/
+global proc string[]
+na_getTokensByMultipleCharSeparator(string $arg, string $separator)
+{
+    string $result[] = {};
+   
+    string $singleSep = "_";
+    //if separator not found in string give an error
+    string $sepTest = "*"+$singleSep+$separator+$singleSep+"*";
+    if( `gmatch $arg $sepTest` == 0 ){error("Requires "+$sepTest+" in "+$arg);}
+    
+   
+    //remove name space(s) if one exists
+    string $noNameSpaceArgArray[] = {};
+    $noNameSpaceArgArray = na_getTokensByThisSeparatorOptional($arg,":");
+    string $noNameSpaceArg = $noNameSpaceArgArray[size($noNameSpaceArgArray)-1];
+    
+    //figure out what the two elements to return are
+    //
+    string $leftSide = "";
+    string $underscoreSeparated[] = {};
+    $underscoreSeparated = na_getTokensByThisSeparatorOptional($noNameSpaceArg,$singleSep);
+    int $indexSeparatorInArg = 0;
+    for($indexSeparatorInArg = 0; $indexSeparatorInArg < size($underscoreSeparated); $indexSeparatorInArg++)
+    {
+        $leftSide = $leftSide+$singleSep+$underscoreSeparated[$indexSeparatorInArg];
+        if(`strcmp $underscoreSeparated[$indexSeparatorInArg] $separator` == 0){
+            break;
+        }
+
+    }
+    //for right side, little extra bit remove extra underscore
+    string $rightSide="";
+    
+    if( $indexSeparatorInArg+1 < size($underscoreSeparated) ){
+        for($j = $indexSeparatorInArg+1; $j < size($underscoreSeparated); $j++)
+        {
+            $rightSide = $rightSide+$singleSep+$underscoreSeparated[$j]; 
+        }
+    }
+    if( size($leftSide) >= 2 && size($rightSide) >= 2 )
+    {
+        $result[0] = substring( $leftSide, 2, size($leftSide) );
+        $result[1] = substring( $rightSide, 2, size($rightSide) );
+    }
+    
+    
+    
+    return $result;
+}
+/**
+*/
+global proc
+na_getTokensByMultipleCharSeparator_unitTest()
+{
+    print( na_getTokensByMultipleCharSeparator("H:A_anim_B","anim") );
+}
+global proc
+na_getTokensByMultipleCharSeparator_unitTest1()
+{
+    print( na_getTokensByMultipleCharSeparator("A_anim_B","anim") );
+}
+global proc
+na_getTokensByMultipleCharSeparator_unitTest2()
+{
+    print( na_getTokensByMultipleCharSeparator("A_anim","anim") );
+}
+/**Tokenize string input by dot and give back the leftmost string.
+*/
+global proc string[]
+na_getObjectSepPlug( string $objectAndPlug )
+{
+    string $result[] = {};
+    
+    na_assertObjectExist( {$objectAndPlug} );
+    string $sep[] = {};
+    $sep = stringToStringArray($objectAndPlug, ".");
+    
+    //expecting an object, and a plug
+    na_assertSizeEqualArg($sep, 2);
+    
+    $result = $sep;
+    return $result;
+}
+/**return plug from nodes
+@param string $node[]  objects
+@result string list input converted to plugs ex,  joint1.translateX, joint2.translateX ...
+@pre no checks on existence
+*/
+global proc string[]
+na_getPlug( string $node[], string $attribute )
+{
+    string $drivenPlusAttrArray[] = {};
+
+    string $attr = "";
+    $attr = $attribute;
+    
+    for($j = 0; $j < size($node); $j++)
+    {
+        $drivenPlusAttrArray[size($drivenPlusAttrArray)] = ($node[$j])+"."+$attr;
+    } 
+    
+    return $drivenPlusAttrArray;
+    
+}
+/**return plug from single node uses each attribute
+@param string $node  single object
+@result string list input converted to plugs ex,  joint1.translateX, joint1.translateY ...
+@pre no checks on existence
+@bug no assert
+@see na_getPlug
+*/
+global proc string[]
+na_getPlugByAttributeArray( string $node, string $attribute[] )
+{
+    string $drivenPlusAttrArray[] = {};
+
+    string $attr[] = {};
+    $attr = $attribute;
+    
+  
+    for($j = 0; $j < size($attribute); $j++)
+    {
+        $drivenPlusAttrArray[size($drivenPlusAttrArray)] = $node+"."+($attr[$j]);
+    } 
+
+    
+    return $drivenPlusAttrArray;   
+}
+
+/*Yes,1 if string argument ends with input separator followed by input extension otherwise 0. 
+@sa na_isLastTokenEqualNameAfterSeperator
+*/
+global proc int
+na_isExtension(string $object, string $extension, string $sep)
+{
+    int $result = 0;
+    
+    string $lastTokenArray[] = {};
+    $lastTokenArray = na_getExtension($object, $sep);
+    string $lastToken = "";
+    
+    if(size( $lastTokenArray ) == 1)
+    {
+        $lastToken = $lastTokenArray[0];
+        if( strcmp($lastToken,$extension) == 0 ){ $result = 1; }  
+    }
+    
+    return $result;
+}
+
+/**is last token equal name after using separator
+string $object  a string 
+string $name    what to compare last token to
+string $sep     what separator to use for tokens
+@note returns 0 if tokening not possible
+*/
+global proc int
+na_isLastTokenEqualNameAfterSeperator(string $object, string $name, string $sep)
+{
+    int $result = 0;
+ 
+    string $tokens[] = na_getTokensByThisSeparator($object,"_");
+    
+    if(size($tokens) > 0 )
+    {
+        if(`strcmp $tokens[size($tokens)-1] $name` == 0)
+        {
+            $result = 1;
+        }
+    }
+    
+    return $result;
+}
+global proc
+na_isLastTokenEqualNameAfterSeperator_unitTest()
+{
+    print( na_isLastTokenEqualNameAfterSeperator("GreatDay_WonderfulDay","WonderfulDay","_") );
+    print("\n");
+    print( na_isLastTokenEqualNameAfterSeperator("GreatDay_WonderfulDay","HappyDay","_") );
+    print("\n");
+    print( na_isLastTokenEqualNameAfterSeperator("HappyDay","HappyDay","_") );
+    print("\n");
+}
+
+/**return 1 if extension is prefix 0 otherwise
+@note
+na_isPrefixExtension("postyD:l_joint","l_","_");
+// Result: 0 // 
+na_isPrefixExtension("postyD:l_joint","l","_");
+// Result: 0 // 
+na_isPrefixExtension("postyD:l_joint","postyD:l","_");
+// Result: 1 // 
+na_isPrefixExtension("r_joint","r","_");
+// Result: 1 // 
+*/
+global proc int
+na_isPrefixExtension(string $object, string $extension, string $sep)
+{
+    int $result = 0;
+    
+    string $firstTokenArray[] = {};
+    $firstTokenArray = na_getPrefixExtension($object, $sep);
+    string $firstToken = "";
+    
+    if(size( $firstTokenArray ) == 1)
+    {
+        $firstToken = $firstTokenArray[0];
+        if( strcmp($firstToken,$extension) == 0 ){ $result = 1; }  
+    }
+    
+    return $result;
+}
+
+
+/**used for finding plug from anim curve, or getting extension for a file
+*/
+global proc string[]
+na_getExtension(string $object, string $sep)
+{
+    string $lastToken[];
+    
+    ////tokenize all using separator
+    string $buffer[] = na_getTokensByThisSeparator($object,$sep); //store tokens for every object
+    
+    //we need this to prevent index error
+    //dont really need this check because tokenize will return something even
+    //if separator not found,but this is helpful for reuse with new procs
+    if(size($buffer) > 0){
+        /////take the last token
+        $lastToken = {$buffer[ ( size($buffer)-1 ) ]};
+    }
+    
+    return $lastToken;
+}
+
+/**used for finding name for mirrored influence, or mirrored anim etc
+@note
+na_getPrefixExtension("postyD:l_joint","_");
+// Result: postyD:l // 
+na_getPrefixExtension("postyD:l_joint",".");
+// Error: size less than--2 // 
+*/
+global proc string[]
+na_getPrefixExtension(string $object, string $sep)
+{
+    string $firstToken[];
+    
+    ////tokenize all using separator
+    string $buffer[] = na_getTokensByThisSeparator($object,$sep); //store tokens for every object
+    
+    //we need this to prevent index error
+    //dont really need this check because tokenize will return something even
+    //if separator not found,but this is helpful for reuse with new procs
+    if(size($buffer) > 0){
+        /////take the last token
+        $firstToken = {$buffer[0]};
+    }
+    
+    return $firstToken;
+}
+
+/**return string array intersection of arg and option list
+@result unordered string list of intersection
+@param $arg -- what checking
+@param $option -- avaliable options
+*/
+global proc string[]
+na_getStringArrayIntersectWithOption(string $arg[], string $option[])
+{
+    na_getStringArrayIntersectWithOption_assert($arg,$option);
+    
+    string $result[] ={};
+    string $na_intersector = `stringArrayIntersector`;
+    stringArrayIntersector -edit -intersect $option $na_intersector;
+    
+    //is arg an option
+    stringArrayIntersector -edit -intersect $arg $na_intersector;
+    
+    $result = `stringArrayIntersector -query $na_intersector`;
+
+    //remove intersector
+    deleteUI $na_intersector; 
+    
+    return $result;
+}
+/**
+*/
+global proc
+na_getStringArrayIntersectWithOption_assert(string $arg[], string $option[])
+{
+    if(size($arg) == 0 || size($option) == 0){error("expecting non-zero sizes of input");}
+}
+global proc
+na_getStringArrayIntersectWithOption_unitTest()
+{
+    print( na_getStringArrayIntersectWithOption({"a","c"},{"a","b"}) );
+    print("\n");
+    print( na_getStringArrayIntersectWithOption({"c"},{"a","b"}) );
+    print("\n");
+    print( na_getStringArrayIntersectWithOption({"b","a","c"},{"a","b"}) );
+    print("\n");
+    print( na_getStringArrayIntersectWithOption({"a"},{}) );
+    print("\n");
+    print( na_getStringArrayIntersectWithOption({},{"b"}) );
+    print("\n");
+
+}
+
+/**get substring of argument by ommiting start to separator
+@note ex:
+@note na_getSubStringStartToSep( {"postyD_rig_master:r_ik_hand_anim"}, ":" );
+@note // r_ik_hand_anim // 
+@param  string $objectArray[]  old names to construct new ones out of
+@param string $sep example ":"
+*/
+global proc string[]
+na_getSubStringStartToSep( string $objectArray[], string $sep )
+{
+    string $result[] = {};
+    //tokenize the name
+    //create string array buffer
+    string $buffer[]; //store tokens for every object
+    string $newName;   //store new name for every object
+    for( $old in $objectArray )
+    {
+        //tokenize object ":" buffer
+        tokenize $old $sep $buffer;
+        
+        //the last element of array is the object
+        $newName = $buffer[ ( size($buffer)-1 ) ];
+        
+        $result[size($result)] = $newName;
+        
+        //clear token array;
+        clear $buffer;
+    }
+    return $result;
+}
+
+/**remove all specified indexes of string list and return argument, its
+alot like stringArrayRemoveAtIndex but allows removing multiple indexes at
+once and also it doesn't overwrite input.
+@param int $index[] zero based index to remove
+@param string $arg[] list of argument strings
+@note errors out if index not valid for input
+*/
+global proc string[]
+na_stringArrayRemoveAtIndex(int $index[], string $arg[])
+{
+    string $result[] = {};
+    
+    for($num in $index){ if( $num >= size($arg) ){error("Require All Index Smaller Input String List");} }
+    
+    for($i = 0; $i < size($arg); $i++ )
+    {
+        //save items not in remove index
+        if( na_isIntTypeSupported( $i, $index ) == 0 )
+        {
+            $result[size($result)] = $arg[$i];
+        }
+    }
+    
+    return $result;
+}
+/**
+*/
+global proc
+na_stringArrayRemoveAtIndex_unitTest()
+{
+    print( na_stringArrayRemoveAtIndex({2},{"Great","Day","Today","Yeah"}) );
+    print("\n");
+    print( na_stringArrayRemoveAtIndex({2,3},{"Great","Day","Today","Yeah"}) );
+    print("\n");
+    print( na_stringArrayRemoveAtIndex({0},{}) );
+}
+////get poly name given any poly component
+/*supports any component vtx,face,edge,vFace ..
+*/
+global proc string[] getPolyFromComponent(string $component)
+{
+    string $result[];
+    
+    na_assertObjectExist( {$component} );
+    na_assertTypeInList( {$component}, {"mesh"} );
+    
+    string $parts[];
+    tokenize($component,".",$parts); 
+    $result[0] = $parts[0];  
+    
+    return $result;
+}
+
+
+/**get expanded version of input
+@note supports transforms, mesh, nurbsSurface, joint, follicle, locator
+@param list of objects
+@pre object on scene
+*/
+global proc string[] 
+na_getExpanded( string $object[] )
+{
+     na_assertObjectExist($object);
+     
+    string $sel[] = {};
+    $sel = `ls -sl`;
+    
+    string $result[] = {};
+    
+    string $supportedType[] = {"transform","mesh","nurbsSurface","nurbsCurve","joint","follicle","locator","clusterHandle","lattice"};
+    na_assertTypeInList( $object, $supportedType );
+    
+    string $expandedObj[] = {};                                            
+    string $objectAll[] = {};
+    
+    //check type of object and expand if appropriate example colons expanded
+    //to individual vertices
+    for($obj in $object){
+        if( na_isType($obj,"mesh") )
+        {
+            select -r $obj;
+            $expandedObj = `filterExpand -sm 31 -expand true`;
+            $objectAll = stringArrayCatenate($objectAll,$expandedObj);
+        }
+        else if( na_isType($obj,"nurbsSurface") )
+        {
+            select -r $obj;
+            $expandedObj = `filterExpand -sm 28 -expand true`;
+            $objectAll = stringArrayCatenate($objectAll,$expandedObj);
+        }
+        else if( `objectType $obj` == "nurbsCurve"  )
+        {
+            select -r $obj;
+            $expandedObj = `filterExpand -sm 28 -expand true`;
+            $objectAll = stringArrayCatenate($objectAll,$expandedObj);
+        }
+        else{
+            $objectAll = stringArrayCatenate($objectAll,{$obj});
+        }
+    }
+    
+    
+    select -r $sel;
+    
+    $result = stringArrayRemoveDuplicates( $objectAll );
+    
+    return $result;
+}
+/**get polygon index of component, ex: ( {"pCube.e[10]" ) result-- 10
+@param $component[] list of polygon components
+*/
+global proc string[]
+na_getPolyIndexOfComponent( string $component[] )
+{
+    string $result[] = {};
+    
+    na_assertObjectExist($component);
+    na_assertTypeInList($component,{"mesh"});
+    
+    string $allTokens[] = {};
+    string $tokens[] = {};
+    //do tokenizing of '[#]' to figure out number
+    for($obj in $component)
+    {
+        $allTokens = {};
+        $tokens = {};
+        $allTokens = na_getTokensByThisSeparatorOptional($obj,"[");
+        na_assertSizeEqualArg($allTokens,2);
+        $tokens = na_getTokensByThisSeparatorOptional($allTokens[1],"]"); 
+        na_assertSizeEqualArg($tokens,1);
+        $result[size($result)] = $tokens[0];
+    }
+    na_assertSizeEqualArg($result,size($component));
+    
+    return $result;
+}
+global proc 
+na_getPolyIndexOfComponent_unitTest()
+{
+    polyCone -r 1 -h 2 -sx 8 -sy 1 -sz 0 -ax 0 1 0 -rcp 0 -cuv 3 -ch 1;
+    print( na_getPolyIndexOfComponent( {"pCone1.vtx[1]"} ) );
+}
+
+/**return string array of all joints on scene with suffix
+@note in suffix input no underscore, gives an error if suffix cant be found
+@bug select star doesn't work with referencing
+*/
+global proc string[]
+na_getJointWithSuffix(string $suffix, string $sep)
+{
+    string $result[] = {};
+
+    string $joint[] = {};
+    $joint = `ls -type joint`;
+    
+    if(size($joint) > 0 ){
+        
+        for($jnt in $joint)
+        {
+            if(na_isExtension($jnt,$suffix,$sep) == 1){
+            $result[size($result)] = $jnt; 
+            }
+        }
+        
+    }  
+    return $result;
+}
+/**@}*/
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/**@name Type checking operations
+* exampling getting 1 if selected is a curve, or is this a joint, does this transform of specified shape type etc
+*/
+/**@{*/
+/**is attribute on this control of required type
+@result int 1 if attribute is of required type 0 otherwise
+@param string $control animator control
+@param string $attr animator attribute
+@param string $type type ex: bool or enum
+*/
+global proc int
+na_isAttributeOfThisType(string $control, string $attr, string $type )
+{
+    na_isAttributeOfThisType_assert($control,$attr,$type);
+    int $result = 0;
+    string $plug = "";
+    $plug = $control+"."+$attr;
+    string $attrType = "";
+    $attrType = `addAttr -query -at $plug`;
+    
+    //note strcmp return negative numbers sometimes
+    if( `strcmp $attrType $type` == 0 ){
+        $result = 1;
+    }
+    else{ $result = 0; }
+    
+    return $result;
+}
+/**
+@note
+supported types "bool","enum","double","double3","long"
+@param string $control animator control
+@param string $attr animator attribute
+@param string $type type ex: bool or enum
+*/
+global proc
+na_isAttributeOfThisType_assert(string $control, string $attr, string $type )
+{
+    string $plug = "";
+    $plug = $control+"."+$attr;
+    if( `objExists $plug` == 0 ){error($plug+"--not found");}
+    string $supportedType[] = {"bool","enum","double","double3","long"};
+    int $isSupported = 0;
+    $isSupported = na_isOption({$type},$supportedType,1);
+    if( $isSupported == 0 ){error($type+"--not supported");}
+}
+
+
+/**return 1 if intersection found of one or more arg in option list
+@param $arg -- what checking
+@param $option -- avaliable options
+@param $isAll -- if its 0 checks at least one otherwise checks all
+@see na_getStringArrayIntersectWithOption
+*/
+global proc int 
+na_isOption(string $arg[], string $option[], int $isAll)
+{
+    int $result = 0;
+    string $intersectResult[] = {};
+
+    $intersectResult = na_getStringArrayIntersectWithOption($arg, $option);
+
+    if($isAll == 0){
+        
+        if( size($intersectResult) > 0 ){
+            $result = 1;
+        }
+        
+    }else{
+        //default
+        if( size($intersectResult) == size($arg) ){
+            $result = 1;
+        }
+    }
+    
+    return $result;
+}
+global proc
+na_isOption_unitTest()
+{
+    print( na_isOption({"a","c"},{"a","b"},0) );
+    print("\n");
+    print( na_isOption({"a","c"},{"a","b"},1) );
+    print("\n");
+    print( na_isOption({"c"},{"a","b"},0) );
+    print("\n");
+    print( na_isOption({"b","a","c"},{"a","b"},0) );
+    print("\n");
+    print( na_isOption({"b","a","c"},{"a","b"},1) );
+    print("\n");
+    print( na_isOption({"a"},{},0) );
+    print("\n");
+    print( na_isOption({},{"b"},0) );
+    print("\n");
+
+}
+/**1 if input Transform's shape is of Maya's curve type 0 otherwise
+*/
+global proc int na_isCurve(string $arg){
+    int $isCurve = 0;
+    
+    int $isTransform = 0;
+    int $isChildCurve = 0;
+    //is it a transform
+    int $isTransform = na_isType($arg,"transform");
+    
+    //does it have at least one child of type nurbsCurve
+    int $isChildCurve = na_hasChildOfType($arg,"nurbsCurve");
+    
+    if( ($isTransform == 1) && ($isChildCurve == 1) ){ $isCurve = 1; }
+    
+    return $isCurve;
+}
+/**1 if input Transform's shape is of Maya's camera type 0 otherwise
+*/
+global proc int na_isCamera(string $arg[]){
+    
+    int $result = 0;
+    
+    string $objects[]={};
+    string $child[] = getListAllObjectsByNodeType("camera");
+    string $parent[] = `listRelatives -parent $child`;
+    $objects = stringArrayCatenate( $child, $parent );
+    
+    //if anything in arg is a camera
+    if( na_isOption( $arg, $objects, 0 ) == 1 ){
+        $result = 1;
+    }
+   
+    return $result;
+}
+
+/**1 if input is readOnly 0 otherwise
+@bug I don't think it is robust
+*/
+global proc int na_isReadOnly(string $arg)
+{
+    int $result = 1;
+    string $readOnlyArray[]  = {};
+    $readOnlyArray = `ls -ro $arg`;
+    if( (size($readOnlyArray) == 0) && (na_isCamera({$arg}) == 0) && 
+    (na_isReadOnlyObjectSet({$arg}) == 0) && 
+    (na_isReadOnlyHyperLayout({$arg}) == 0) )
+    {
+        $result = 0;
+    }
+    
+    return $result;
+}
+/**is anything in argument list a read only object
+*/
+global proc int na_isReadOnlyObjectSet(string $arg[]){
+    
+    int $result = 0;
+    
+    string $objects[]={"defaultLightSet","defaultObjectSet","initialParticleSE","initialShadingGroup"};
+     
+    //if anything in arg is a readonly object
+    if( na_isOption( $arg, $objects, 0 ) == 1 ){
+        $result = 1;
+    }
+   
+    return $result;
+}
+/**is anything in argument list a read only hyperLayout
+*/
+global proc int na_isReadOnlyHyperLayout(string $arg[]){
+    
+    int $result = 0;
+    
+    string $objects[]={"hyperGraphLayout"};
+     
+    //if anything in arg is a readonly object
+    if( na_isOption( $arg, $objects, 0 ) == 1 ){
+        $result = 1;
+    }
+   
+    return $result;
+}
+
+/**return 1 per attribute if argument is keyable
+@param string $object-- a node
+@param string[] $plug -- node plug ex: (translateX)
+*/
+global proc int[] na_isKeyable(string $object, string $attrArray[])
+{
+    int $result[] = {};
+
+    string $objectAndPlug[] = {};
+    $objectAndPlug = na_getPlugByAttributeArray($object,$attrArray); 
+    na_assertObjectExist( $objectAndPlug ); 
+    
+    string $condition[]={};
+    $condition = `listAttr -k $object`;
+    
+    int $isKey = 0;
+    if(size($condition) > 0 )
+    {
+        for($i = 0; $i < size($attrArray); $i++)
+        {
+            $isKey = na_isOption( {$attrArray[$i]}, $condition , 1);
+            $result[size($result)] = $isKey;
+        }
+    }
+    
+    return $result;
+}
+
+
+/**return 1 per attribute if argument is keyable
+@param string $object-- a node
+@param string[] $plug -- node plug ex: (translateX)
+*/
+global proc int[] na_isUnLocked(string $object, string $attrArray[])
+{
+    int $result[] = {};
+
+    string $objectAndPlug[] = {};
+    $objectAndPlug = na_getPlugByAttributeArray($object,$attrArray); 
+    na_assertObjectExist( $objectAndPlug ); 
+    
+    string $condition[]={};
+    $condition = `listAttr -u $object`;
+    
+    int $isKey = 0;
+    if(size($condition) > 0 )
+    {
+        for($i = 0; $i < size($attrArray); $i++)
+        {
+            $isKey = na_isOption( {$attrArray[$i]}, $condition , 1);
+            $result[size($result)] = $isKey;
+        }
+    }
+    
+    return $result;
+}
+/**return 1 if argument is of type
+@param string $arg -- a node
+@param string $type -- a node type ex: ("nurbsCurve")
+*/
+global proc int 
+na_isType(string $arg, string $type)
+{
+    int $isType = 0;
+    string $curType = `nodeType $arg`;
+    //was objectType, doesn't give error on multiple instances
+   
+    //is this of input type
+    if(`strcmp $curType $type` == 0){$isType = 1;}
+    
+    return $isType;
+}
+/**return 1 if all object exist
+@param string $object[] -- objects
+*/
+global proc int 
+na_isAllExist(string $object[])
+{
+    //default is all object exist
+    //
+    int $result = 1;
+    
+    //if nothing in input then doesn't exist
+    if(size($object) == 0){ $result = 0; }
+    else{
+        //on first object not found we know not all objects exist
+        //
+        for($obj in $object)
+            {  if( `objExists $obj` == 0 ){ $result = 0; break; } }
+    }
+    
+    return $result;
+}
+
+/**return 1 if argument is of type
+@param string $arg -- a node
+@param string $plug -- a plug
+@param string $type -- a node type ex: ("nurbsCurve")
+*/
+global proc int na_isAttrType(string $object, string $plug, string $type)
+{
+    int $isType = 0;
+    string $objectAndPlug = "";
+    $objectAndPlug = ($object+"."+$plug);
+    if( `objExists $objectAndPlug` == 1){
+        string $curType = `getAttr -type $objectAndPlug`;
+        //is this of input type
+        if(`strcmp $curType $type` == 0){$isType = 1;}
+    }
+    return $isType;
+}
+/**
+@param object that has attributes
+@param attribute list
+@param type list 
+*/
+global proc int 
+na_isAttrTypeSupportedArray(string $object, string $attr[], string $supported[])
+{
+    int $result = 1;
+    int $isType = 0;
+    string $objectAndPlug = "";
+    string $plug = "";
+    for( $i = 0 ; $i < size($attr); $i++ )
+    {
+        $plug = $attr[$i];
+        $objectAndPlug= ($object+"."+$plug);
+        if( `objExists $objectAndPlug` == 1){
+            $isType = na_isAttrTypeSupported($object,$plug,$supported);
+            if($isType == 0){
+                $result = 0;
+                break;
+            }
+        }
+    }
+    return $result;
+}
+global proc int na_isAttrTypeSupported(string $object, string $plug, string $supported[])
+{
+    int $isType = 0;
+    string $objectAndPlug = ($object+"."+$plug);
+    if( `objExists $objectAndPlug` == 1){
+        //if its supported dont continue looping
+        for($i = 0; $i < size($supported); $i++)
+        {
+            //is the type of this supported
+            $isType = na_isAttrType($object,$plug,$supported[$i]);
+            if($isType == 1){ break;}
+        }
+    }
+    return $isType;
+}
+
+
+
+/**return 1 if argument is of any type in supported array
+@param string list $arg -- nodes to check
+@param string list $type -- a node type array ex: ({"nurbsCurve","joint"})
+@see na_isTypeSupported
+@bug no error checking
+*/
+global proc int 
+na_isTypeSupportedArray(string $arg[], string $supported[])
+{
+    int $result = 1;
+    int $isType = 0;
+    for( $i = 0 ; $i < size($arg); $i++ )
+    {
+        $isType = na_isTypeSupported($arg[$i],$supported);
+        if($isType == 0){
+            $result = 0;
+            break;
+        }
+    }
+    return $result;
+}
+/**return 1 if all arguments are of any type in supported array
+@param int list $arg -- nodes to check
+@param int list $type -- a node type array ex: ({"nurbsCurve","joint"})
+@see na_isTypeSupported
+@bug no error checking
+*/
+global proc int 
+na_isIntTypeSupportedArray(int $arg[], int $supported[])
+{
+    int $result = 1;
+    int $isType = 0;
+    for( $i = 0 ; $i < size($arg); $i++ )
+    {
+        $isType = na_isIntTypeSupported($arg[$i],$supported);
+        if($isType == 0){
+            $result = 0;
+            break;
+        }
+    }
+    return $result;
+}
+global proc na_isIntTypeSupportedArray_unitTest()
+{
+    print( na_isIntTypeSupportedArray({1,3},{1,2}) );
+    print("\n");
+    print( na_isIntTypeSupportedArray({1,3},{1,2,3}) );
+}
+
+/**return 1 if argument is of any type in supported array
+@param string $arg -- a node
+@param string list $type -- a node type array ex: ({"nurbsCurve","joint"})
+@see na_isType
+*/
+global proc int na_isTypeSupported(string $arg, string $supported[])
+{
+    int $isType = 0;
+    
+    //if its supported dont continue looping
+    for($i = 0; $i < size($supported); $i++)
+    {
+        //is the type of this supported
+        $isType = na_isType($arg,$supported[$i]);
+        if($isType == 1){ break;}
+    }
+    return $isType;
+}
+
+
+/**return 1 if argument is of any type in supported array
+@param int $arg -- a node
+@param int list $type -- a node type array ex: ({1,2})
+@see na_isType
+*/
+global proc int na_isIntTypeSupported(int $arg, int $supported[])
+{
+    int $isType = 0;
+    
+    //if its supported dont continue looping
+    for($i = 0; $i < size($supported); $i++)
+    {
+        //is the type of this supported
+        if($arg == $supported[$i]){ $isType = 1; break; }
+    }
+    return $isType;
+}
+global proc na_isIntTypeSupported_unitTest()
+{
+    print( na_isIntTypeSupported(1,{1,2}) );
+    print("\n");
+    print( na_isIntTypeSupported(1,{0,2}) );
+}
+
+/**get subset of $arg that is of any type in $supported
+@result string list subset of $arg that is of any type in $supported 
+@param string list $arg
+@param string list $supported types that should be returned
+*/
+global proc string[]
+na_getSupported(string $arg[], string $supported[])
+{
+    
+    string $result[] = {};
+    
+    for($object in $arg)
+    {
+        if(na_isTypeSupported($object,$supported) == 1){
+            $result[size($result)] = $object;
+        }
+    }
+    return $result;
+}
+
+
+
+/**return 1 if argument has at least one child of type
+@param $arg -- a node
+@param $type -- a node type ex: ("nurbsCurve")
+*/
+global proc int na_hasChildOfType(string $arg, string $type)
+{
+    int $hasChildOfType = 0;
+    string $childrenCurveShape[] = {};
+    $childrenCurveShape = `listRelatives -children -type $type $arg`;
+    //here is where the atleast shows up
+    //if changed to equal 1 say must have exactly one child of that type
+    if(size($childrenCurveShape) > 0){$hasChildOfType = 1;}
+    
+    return $hasChildOfType;
+}
+/**@}*/
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/**@name Retrieval by type operations
+* Ex: getting all joints on scene, or all vertices etc
+*/
+/**@{*/
+/**get a list of all created objects by object type
+@param  a maya name indicates what thing is selected
+@result string list of object names
+@note    transform   any transform node
+@note    joint       any joint
+@note    lambert     any lambert material
+@note    blinn     any blinn material
+@note   materialInfo    material info node
+@note   shadingEngine   shading engine
+@note    nurbsCurve    any curve shape
+@note    locator    any locator
+@note    clusterHandle  any cluster
+@note    ikHandle       any ikHandle
+@note    multiplyDivide       any divide node
+@note    curveInfo          any curve info node
+@note    skinCluster        any skin cluster
+@note   dagPose         bind pose
+@note    tweak              any tweak node
+@note    blendTwoAttr   blend two node
+@note    blendColors        blend color node
+@note    reverse        reverse node
+@note    animCurve      animation curve
+@note    unitConversion unit conversion
+@note    blendWeighted  blendWeighted node
+@note    camera         cameras
+@note    distanceDimShape   distance dimension
+@note    ikRPsolver         ik rp solver
+@note   ikSplineSolver  ik spline solver
+@note   ikSCsolver  ik sc solver
+@note   groupId         group id
+@note   expression      mel expression
+@note   script          script node
+@note   polySoftEdge    soft edge (probably means history on geo should be deleted)
+@note   polyMergeVert   poly merge vert
+@note   mesh            polygon geometry
+@note   groupParts      group parts
+@note   obectSet       object set
+@note   hyperView       hyper view
+@note   hyperLayout     hyperLayout
+@note   blendShape      blendshape
+*/ 
+global proc string[] getListAllObjectsByNodeType(string $type){
+    
+    string $option[] = {"lambert","blinn","materialInfo","shadingEngine","transform","joint","displayLayer",
+    "nurbsCurve","locator","clusterHandle","ikHandle","multiplyDivide",
+    "curveInfo","skinCluster","dagPose","tweak","blendTwoAttr","animCurve","unitConversion",
+    "blendWeighted","camera","distanceDimShape","blendColors","reverse","ikRPsolver","ikSplineSolver","ikSCsolver",
+    "groupId","expression","script","polySoftEdge","polyMergeVert","mesh","groupParts","objectSet","hyperView","hyperLayout",
+    "blendShape"};
+    int $is_type = 0;
+    
+    if( na_isOption({$type},$option, 1)  == 1 )
+        { print(selectSuccessMessage()); }
+    else{ error(selectErrorMessage()); }
+    string $allObjectOfType[];
+    string $allObjectOfType[] = `ls -type $type`;
+    return $allObjectOfType;
+}
+
+/**get a list of all created objects by selection mask
+@param selection mask
+@note  12  polygons
+@note 9   curve
+@note 22  locators  
+@note 0   ikhandles
+@note 10 nurbs
+*/
+global proc string[] getListAllObjectsByType(int $mask_arg){
+    int $mask = $mask_arg;
+    if( ($mask == 12) || ($mask == 9) || ($mask == 22) || ($mask == 0) || ($mask == 10)  ){ print(selectSuccessMessage()); }
+    else{ exit(selectErrorMessage()); }
+    
+    //store current selection
+    
+    string $currentSelection[] = `ls -sl`;
+    
+    //select every thing on scene
+    
+    select -cl;
+    string $allSceneObjects[] = `ls`;
+    select $allSceneObjects;
+    
+    //filter selection
+    
+    string $filtered[] = `filterExpand -selectionMask $mask`; 
+    
+    //remove duplicate names
+    string $allPolygonObjects[] = stringArrayRemoveDuplicates($filtered);
+    
+    //restore current selection
+    select $currentSelection;
+    
+    return $allPolygonObjects;
+}
+
+
+
+
+//get list of all joint objects
+//  no arguments needed
+global proc string[] getListAllJoints(){
+
+    string $allJoints[] = getListAllObjectsByNodeType("joint");
+    return $allJoints;
+}
+
+
+//get list of all lambert materials
+//  no arguments needed
+global proc string[] getListAllCreatedLambertMaterials(){
+    
+    string $allLambertMaterial[];
+    string $allLambert[] = getListAllObjectsByNodeType("lambert");
+    
+    //remove first element lambert1
+    //first element is not always lambert1
+    
+    int $i = 0;
+    for ($i=0; $i< size($allLambert); $i++)
+    {
+        if($allLambert[$i] != "lambert1"){
+     		$allLambertMaterial[size($allLambertMaterial)] = $allLambert[$i];
+     	}
+    }
+    
+    
+    return $allLambertMaterial;
+}
+
+
+/**get list of all display layers
+@results string list of layer names
+*/
+global proc string[] getListAllCreatedLayers(){
+    
+    string $allCreatedLayers[];
+    string $allLayers[] = getListAllObjectsByNodeType("displayLayer");
+    
+    
+    //remove first element defaultLayer
+    //first element is not always defaultLayer
+    
+    int $i = 0;
+    for ($i=0; $i< size($allLayers); $i++)
+    {
+        if($allLayers[$i] != "defaultLayer"){
+     		$allCreatedLayers[size($allCreatedLayers)] = $allLayers[$i];
+     	}
+    }
+    
+    
+    return $allCreatedLayers;
+}
+
+
+
+/**get list of all material info
+@param $mat string list of materials
+@result string list correspond to input material and requested type
+*/
+global proc string []
+getListAllMaterialInfo(string $mat[]){
+    string $result[];
+    $type = "materialInfo";
+    $result = getListAllConnectOfName($mat,$type);
+    return $result;
+}
+/**get list of all shading engine
+@param $mat string list of materials
+@result string list correspond to input material and requested type
+*/
+global proc string []
+getListAllShadingEngine(string $mat[]){
+    string $result[];
+    $type = "shadingEngine";
+    $result = getListAllConnectOfName($mat,$type);
+    return $result;
+}
+
+/**get list of all things connected to node of given type both input and output
+@param $mat string list of any transform: poly,nurb,null
+@param $type string  of any connection type
+@result string list correspond to input object and requested type
+@note only works one level, that is if something is connected to thing connected to this it doesnt check that
+*/
+global proc string []
+getListAllConnectOfName(string $object[],string $type){
+    string $result[];
+    $result = `listConnections -type $type $object`;
+    return $result;
+}
+/**given string array of node and node type return array for name first occurence of node type
+@param string array of node ex: [blendNode, tweakNode, shapeNode]
+@param string node type ex: tweak, blendShape
+*/
+global proc string[] 
+getFirstHasNodeType(string $nodeArray[], string $nodeType)
+{
+    string $result[];
+    int $i= 0;
+    string $tempType;//store node type of loop element,cleared on every step
+    //loop nodes of input
+    
+    for ($i=0;$i< size($nodeArray); $i++)
+    {
+        $tempType = `nodeType $nodeArray[$i]`;
+        //if found matching node return it
+        if( $tempType == $nodeType  )
+        {
+            $result[0] = $nodeArray[$i];
+            break;
+        }
+    }
+    
+    return $result;
+}
+
+
+/**return vertices given a polygon selection
+@param string polygon name
+@note often user may need to user vertices from a polygon selection
+this script helps with returning that
+@result string list all vertices of polygon
+*/
+global proc string[] 
+getVtxFromPoly(string $poly)
+{
+    string $result[];
+    string $sel[] = `ls -sl`; 
+    
+    //will be altering user scene
+    //with constaint command
+    //so added check necessary
+    
+    if(`objExists $poly`){
+        select -cl;
+        select -r $poly;
+        polySelectConstraint -type 0x0001 -shell true -m 3;//mode no constraint used
+        string $expanded[] = `ls -sl`;
+        $result = `filterExpand -sm 31 -expand true`;
+        polySelectConstraint -shell false;
+        
+        select -cl;
+        select -r $sel; 
+    }
+    else
+    {
+        warning("no poly exists");
+    }
+    return $result;
+}
+
+
+
+
+global proc
+na_getSelectedVtxFromPolySameIndex_unitTest()
+{
+    polyCone -r 1 -h 2 -sx 8 -sy 1 -sz 0 -ax 0 1 0 -rcp 0 -cuv 3 -ch 1;
+    polyCone -r 1 -h 2 -sx 8 -sy 1 -sz 0 -ax 0 1 0 -rcp 0 -cuv 3 -ch 1;
+    select -cl  ;
+
+    select -r pCone1.vtx[0:8];
+    string $fromVtx[] = `filterExpand -sm 31 -expand true`;
+    
+    string $toVtx[] = {};
+    $toVtx = na_getSelectedVtxFromPolySameIndex($fromVtx, "pCone1", "pCone2");
+    
+    
+    print($toVtx);
+}
+
+/**given a from poly and some vertices get equivalent vertices on to polygon
+*/
+global proc string[]
+na_getSelectedVtxFromPolySameIndex( string $fromVtx[], string $fromPoly, string $toPoly)
+{
+    //verify fromVtx are on fromPoly
+    //
+    na_assertSizeGreaterEqualTo( $fromVtx, 1 );
+    string $firstVtx = $fromVtx[0];
+    if( na_isPrefixExtension($firstVtx,$fromPoly,".") == 0 )
+    {error("Requires "+$firstVtx+" exists on--"+$fromPoly );}
+    na_assertTypeInList( $fromVtx, {"mesh"} );
+    na_assertObjectExist({$fromPoly,$toPoly});
+    
+    string $result[] = {};
+    
+    string $orig[] = $fromVtx;
+    string $origAsString = stringArrayToString($orig," ");
+    
+    //what are the names in to polygon
+    string $toAsString = substituteAllString($origAsString,($fromPoly+"."),($toPoly+"."));
+    
+    string $toVtx[] = stringToStringArray($toAsString," ");
+
+    if(size($toVtx) > 0){ $result = $toVtx; }
+    
+    
+    return $result;
+    
+}
+
+/**get shapes anywhere in dag for this node
+*/
+global proc string[] na_getShapeDag(string $node)
+{
+    //existence check
+    if(`objExists  $node` == 0){ error("Sorry, Cannot find--"+$node); }
+    
+    string $result[];
+    $result = `ls -type shape -dag $node`;    
+    return $result;
+}
+/**
+@pre assumes empty scene
+*/
+global proc
+na_getShapeDag_unitTest()
+{
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    print( na_getShapeDag("pCube1") );
+}
+
+/**get parent transform of arg, 
+@note $arg (string []) objects supported arg are 
+transform, joint, follicle, nurbsCurve, pfxHair
+@note gives error if parent is world
+*/
+global proc string[]
+na_getTransformParentOfArg(string $arg[])
+{
+    na_assertObjectExist($arg);
+    
+    string $supportedArg[] = {"transform","follicle","nurbsCurve","joint","pfxHair"};
+    na_assertTypeInList($arg, $supportedArg);
+    
+    string $result[] = {};
+    
+    for($obj in $arg)
+    {
+        $parent = `listRelatives -parent -type transform $obj`;
+        na_assertSizeEqualArg( $parent, 1 );
+    }
+
+    for($obj in $arg)
+    {
+        $parent = `listRelatives -parent -type transform $obj`;
+        $result[size($result)] = $parent[0];
+    }
+    
+    return $result;
+}
+
+/**get list all curves
+@result string list all curves
+*/
+global proc string[] getListAllCurves(){
+    string $allCurves[];
+    
+    //get all curve non transform
+    string $allNonTransformCurves[] = getListAllObjectsByType(9);
+    
+    //get all curve transform
+    //  some curves become a transform when an object is parented to it, like a joint parented to a curve
+    string $allTransformCurves[] = transformsWithAChildShapeOfType("nurbsCurve");
+    
+    //glue names together
+    appendStringArray($allCurves, $allNonTransformCurves, size($allNonTransformCurves) ) ;
+    appendStringArray($allCurves, $allTransformCurves, size($allTransformCurves) ) ;
+    
+    return $allCurves;
+}
+
+
+/**get transforms that has a specific type of child
+@param $type ex: nurbsCurve  say want all transform that have a nurbsCurve as a child
+@result string list of transforms meeting input criteria
+*/
+global proc string[] transformsWithAChildShapeOfType(string $type){
+    
+    string $transformCurves[];
+     //get list of all transform nodes
+    string $allPossibleChild[] = getListAllObjectsByNodeType($type);
+
+    //get all parents for each child that are a transform
+    string $allParentOfChildType[] = `listRelatives -parent -type transform $allPossibleChild`;
+    
+    $transformCurves = `stringArrayRemoveDuplicates($allParentOfChildType)`;
+    return $transformCurves;
+}
+
+/**get list all polygon mesh
+@result string list all polygons in scene
+*/
+global proc string[] getListAllPolygonMesh(){
+    string $allPolygonMesh[] = getListAllObjectsByType(12);
+    return $allPolygonMesh;
+}
+
+
+
+/**get list all nurbs surfaces
+@result string list all nurbs surfaces in scene
+*/
+global proc string[] getListAllNurbs(){
+    string $allNurbs[] = getListAllObjectsByType(10);
+    return $allNurbs;
+}
+/**@}*/
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+global proc
+na_isOption_unitTest()
+{
+   int $result1 = na_isOption({"translateZ","translateY"},{"translateX","translateY"},1);
+    // Result: 0 // 
+    print($result1+"\n");
+   int $result2 = na_isOption({"translateZ","translateY"},{"translateX","translateY"},0);
+    // Result: 1 // 
+    print($result2+"\n");
+    
+}
+
+
+
+
+/**make all selected nodes in hierarchy's aniamtion curves linear for specified attribute
+*/
+global proc na_linearCurveSelected( string $attr[] )
+{
+    string $nodeArray[] = {};
+    $nodeArray = `ls -sl`;
+    print $nodeArray;
+    na_stretchCleanCurve($nodeArray,$attr);
+}
+
+/**sets post infinity to linear and make curve linear
+@param string list $nodeArray  -- names of nodes
+@param string list $attr -- names of attributes whose curve were interested in for each node
+@note not sure what happens for a missing attribute on a node
+*/
+global proc na_stretchCleanCurve(string $nodeArray[], string $attrArray[])
+{
+    string $temp[] ={};
+    $temp = na_getAttributeAnimCurvesMultipleNode($nodeArray, $attrArray );
+    string $curves[] = {};
+    $curves = stringArrayRemoveDuplicates($temp);
+    
+    if(size($curves) > 0){
+        //make linear curve
+        selectKey -add -k $curves;
+        keyTangent -itt linear -ott linear;
+        
+        //post infinity
+        setInfinity -poi linear;
+        
+        print "changing interpolation of animation curves\n";
+    }
+    
+}
+
+
+
+/**get all anim curves for specific input attribute and multiple input node
+@param string list $nodeArray -- node names
+@param string list $attr -- attributes of which to find anim curves for
+@note doesn't work with blend weighted nodes, that is node must directly have the anim curve
+*/
+global proc string[]
+na_getAttributeAnimCurvesMultipleNode(string $nodeArray[], string $attr[] )
+{
+    string $result[];
+    string $tempResult[] = {};//hold for each node
+    string $node ="";    
+    for( $i = 0; $i < size($nodeArray); $i++ ){
+        $node = $nodeArray[$i];       
+        $tempResult = na_getAttributeAnimCurves($node, $attr );     
+        //store anim curve
+        $result = stringArrayCatenate($result,$tempResult); 
+    }
+    return $result;
+}
+
+
+/**get all anim curves from scene
+*/
+global proc string[]
+na_getAllAnimCurve()
+{
+    string $result[] = {};
+    $result = `ls -type animCurve`;
+    return $result;
+}
+
+/**get all anim curves for specific input attribute and one input node
+@param string $node -- node
+@param string list $attr -- attributes of which to find anim curves for
+*/
+global proc string[]
+na_getAttributeAnimCurves(string $node, string $attr[] )
+{
+    string $result[];
+    string $name = "";
+    int $is_driverAttr = 0;//does attribute exist
+    string $tempResult[] = {};//hold for each node
+    
+    if(`objExists $node`){
+        for($i = 0; $i < size($attr) ; $i++ )
+        {
+            $is_driverAttr = `attributeExists $attr[$i] $node`;
+            //can we access node
+            if($is_driverAttr == 1){
+                $name = $node+"."+$attr[$i];
+                $tempResult = `listConnections -type "animCurve" $name`;
+                
+                //store anim curve
+                $result = stringArrayCatenate($result,$tempResult);
+                clear($tempResult);
+            }
+            else{print("skipping attribute --"+$attr[$i]+"-- was not found\n");
+            }
+        }
+    }
+    
+    return $result;
+}
+
+
+global proc
+na_getAnimAttributeInList_unitTest()
+{
+    circle -c 0 0 0 -nr 0 1 0 -sw 360 -r 1 -d 3 -ut 0 -tol 0.01 -s 8 -ch 1;
+    rename "nurbsCircle1" "nurbsCircle1_anim";
+    addAttr -ln "wonderfulDay"  -at double  |nurbsCircle1_anim;
+    setAttr -e-keyable true |nurbsCircle1_anim.wonderfulDay;
+    
+    print( na_getAnimAttributeInList({"nurbsCircle1_anim"},{"wonderfulDay"}) );
+}
+
+/**get object and plug with plug in input attribute list and object in input animator controls
+@param animator controls
+@param allowable attributes to return
+@note returns empty if no attribute in allowable
+*/
+global proc string[]
+na_getAnimAttributeInList(string $anim[], string $useTheseAttr[])
+{
+    na_assertObjectExist( $anim );
+    
+    string $result[] = {};
+    string $object[] = $anim;
+    string $initial[] = $useTheseAttr;
+    
+    string $attr[] = {};
+    string $attrInInput[] = {};
+    
+    //goes through animator controls and saves common attribute with input list
+    //
+    for($obj in $object)
+    {
+        $attr = `listAttr -ud $obj`;
+        //do nothing if there are no user defined attributes
+        if(size($attr)>0){
+            $attrInInput = na_getStringArrayIntersectWithOption($initial,$attr);
+            
+            if(size($attrInInput) > 0 ){
+                
+                for($name in $attrInInput)
+                {
+                    $result[size($result)] = ($obj+"."+$name);
+                }
+            }
+        }
+        ////
+    }
+    
+    return $result;
+}
+
+/**get user attribute on anim in subset
+@param animator control
+@param allowable attributes to return
+@note return empty no user defined attribute in subset or no user defined attribute on anim
+*/
+global proc string[]
+na_getUserAttributeInList(string $anim, string $useTheseAttr[])
+{
+    string $result[] = {};
+    na_assertObjectExist( {$anim} );
+    na_assertSizeGreaterEqualTo($useTheseAttr,1);
+ 
+    string $allUserAttr[] = `listAttr -ud $anim`;
+    //if no user defined attribute do nothing
+    if(size($allUserAttr) > 0 ){
+    $result = na_getStringArrayIntersectWithOption($useTheseAttr,$allUserAttr); }
+    
+    return $result;
+}
+global proc
+na_getUserAttributeInList_unitTest()
+{
+    
+    circle -c 0 0 0 -nr 0 1 0 -sw 360 -r 1 -d 3 -ut 0 -tol 0.01 -s 8 -ch 1;
+    addAttr -ln "arm_state"  -at "enum" -en "Green:Blue:"  |nurbsCircle1;
+    setAttr -e-keyable true |nurbsCircle1.arm_state;
+    rename "nurbsCircle1" "arm_anim";
+    
+    print( na_getUserAttributeInList("arm_anim",{"arm_state"}) );
+}
+
+
+
+global proc
+na_getIntAttribute_unitTest()
+{
+    
+    circle -c 0 0 0 -nr 0 1 0 -sw 360 -r 1 -d 3 -ut 0 -tol 0.01 -s 8 -ch 1;
+    addAttr -ln "arm_state"  -at "enum" -en "Green:Blue:"  |nurbsCircle1;
+    setAttr -e-keyable true |nurbsCircle1.arm_state;
+    rename "nurbsCircle1" "arm_anim";
+    
+    print( na_getIntAttribute("arm_anim","arm_state") );
+}
+
+/**get attribute as integer
+@note it will convert boolean to an integer
+@note ex: ( "arm_anim","arm_state" )  returns integer
+@note exits on error on existence, type mismatch 
+*/
+global proc int
+na_getIntAttribute(string $anim, string $attr)
+{
+    //currently supported types
+    //
+    string $type[] = {"enum","long","int","bool"};
+    
+    int $result = 0;
+    string $objectAndPlug = "";
+    $objectAndPlug = ($anim+"."+$attr);
+    
+    na_assertObjectExist( {$objectAndPlug} );
+    na_assertAttrTypeInList( $anim, {$attr}, $type );
+    $result = `getAttr $objectAndPlug`;
+    
+    return $result;
+}
+
+global proc
+na_setIntAttribute_unitTest()
+{
+    
+    circle -c 0 0 0 -nr 0 1 0 -sw 360 -r 1 -d 3 -ut 0 -tol 0.01 -s 8 -ch 1;
+    addAttr -ln "arm_state"  -at "enum" -en "Green:Blue:"  |nurbsCircle1;
+    setAttr -e-keyable true |nurbsCircle1.arm_state;
+    rename "nurbsCircle1" "arm_anim";
+    
+    na_setIntAttribute("arm_anim","arm_state",1);
+}
+global proc
+na_setIntAttribute_unitTest_1()
+{
+    
+    circle -c 0 0 0 -nr 0 1 0 -sw 360 -r 1 -d 3 -ut 0 -tol 0.01 -s 8 -ch 1;
+    addAttr -ln "arm_state"  -at "enum" -en "Green:Blue:"  |nurbsCircle1;
+    setAttr -e-keyable true |nurbsCircle1.arm_state;
+    rename "nurbsCircle1" "arm_anim";
+    
+    setAttr -lock true "arm_anim.arm_state";
+    lockNode -l 1 "arm_anim";
+    
+    na_setIntAttribute("arm_anim","arm_state",1);
+}
+
+/**set an integer attribute even if attribute is locked
+@pre value to set is in appropriate range for attribute, the object has lockNode off
+@param string $anim object 
+@param string $attr attribute on object
+@param int $value  value to set on attribute
+@bug no checking whether value within min and max allowed
+*/
+global proc 
+na_setIntAttributeRequireNodeUnLocked(string $anim, string $attr, int $value)
+{
+    //currently supported types
+    //
+    string $type[] = {"enum","long","int","bool"}; 
+    na_assertObjectExist( {($anim+"."+$attr)} );
+    na_assertAttrTypeInList( $anim, {$attr}, $type );
+    
+    int $isNodeNoDelete[] = {};
+    $isNodeNoDelete = `lockNode -q -l $anim`;
+    na_assertIntSizeEqualArg($isNodeNoDelete,1);
+    
+    //dont do anything if node is locked
+    //
+    if( $isNodeNoDelete[0] == 0){
+        
+        //because cleaning rig probably made backend attrs locked
+        //we check if backend attr is locked if it is we unlock it, 
+        //do what we need, then change it back to being locked.
+        //
+        int $isUnLocked[] = {};
+        $isUnLocked = na_isUnLocked( $anim, {$attr} );
+        na_assertIntSizeEqualArg($isUnLocked,1);
+        if( $isUnLocked[0] == 0 ){ 
+            na_setAttributeLockOfAnim( $anim, 0, {$attr}  );
+            setAttr ($anim+"."+$attr) $value;
+            na_setAttributeLockOfAnim( $anim, 1, {$attr}  );
+        }
+        else{
+            setAttr ($anim+"."+$attr) $value;
+        }  
+    }else{
+        print("Skipping Requires --"+$anim+" lockNode off");
+    }
+}
+
+
+
+/**set an integer attribute even if attribute is locked or node has lockNode on
+@pre value to set is in appropriate range for attribute
+@param string $anim object 
+@param string $attr attribute on object
+@param int $value  value to set on attribute
+@note it will convert boolean to an integer
+@note ex: ( "arm_anim","arm_state", 1 )  sets arm_state on arm_anim to 1
+@note exits on error on existence, type mismatch 
+@bug no checking whether value within min and max allowed
+*/
+global proc 
+na_setIntAttribute(string $anim, string $attr, int $value)
+{
+    //currently supported types
+    //
+    string $type[] = {"enum","long","int","bool"}; 
+    na_assertObjectExist( {($anim+"."+$attr)} );
+    na_assertAttrTypeInList( $anim, {$attr}, $type );
+    
+    
+    int $isNodeNoDelete[] = {};
+    $isNodeNoDelete = `lockNode -q -l $anim`;
+    na_assertIntSizeEqualArg($isNodeNoDelete,1);
+    if( $isNodeNoDelete[0] == 0){
+        na_setIntAttributeRequireNodeUnLocked($anim, $attr, $value);
+    }
+    else{
+        //unlock node
+        lockNode -l 0 $anim;
+        na_setIntAttributeRequireNodeUnLocked($anim, $attr, $value);
+        //lock node back on
+        lockNode -l 1 $anim;
+    } 
+}
+
+
+
+global proc
+na_setAttributeLockOfAnim_unitTest()
+{
+    circle -c 0 0 0 -nr 0 1 0 -sw 360 -r 1 -d 3 -ut 0 -tol 0.01 -s 8 -ch 1;
+    addAttr -ln "great"  -at double  |nurbsCircle1;
+    setAttr -e-keyable true |nurbsCircle1.great;
+    
+    
+    string $attrArray[] = {};
+    string $userAttr[] = {};
+    $userAttr = `listAttr -ud "nurbsCircle1"`;
+    string $primaryAttr[] = {};
+    $primaryAttr = {"rotateX","rotateY","rotateZ","translateX","translateY","translateZ","scaleX","scaleY","scaleZ"} ;
+    $attrArray = $userAttr;
+    $attrArray = stringArrayCatenate( $attrArray, $primaryAttr);
+    
+    na_setAttributeLockOfAnim("nurbsCircle1", 1, $attrArray);
+}
+/**set lock status of anim and attribute
+@param animator control
+@param 1 to make attribute locked 0 to unLock it
+@param string list of attributes on animator control to edit
+*/
+global proc
+na_setAttributeLockOfAnim(string $anim, int $isLock, string $attrArray[])
+{
+    string $attrAndPlug[] = {};
+    $attrAndPlug = na_getPlugByAttributeArray($anim, $attrArray);
+    na_assertObjectExist($attrAndPlug);
+    
+    if( ($isLock == 1) || ($isLock == 0) ){
+        for($attr in $attrArray)
+        {
+            setAttr -l $isLock ($anim+"."+$attr);
+        }
+    }
+    
+}
+
+
+
+global proc
+na_setAttributeKeyableOfAnim_unitTest()
+{
+    circle -c 0 0 0 -nr 0 1 0 -sw 360 -r 1 -d 3 -ut 0 -tol 0.01 -s 8 -ch 1;
+    addAttr -ln "great"  -at double  |nurbsCircle1;
+    setAttr -e-keyable true |nurbsCircle1.great;
+    
+    string $userAttr[] = {};
+    $userAttr = `listAttr -ud "nurbsCircle1"`;
+    
+    string $primaryAttr[] = {};
+    $primaryAttr = {"rotateX","rotateY","rotateZ","translateX","translateY","translateZ","scaleX","scaleY","scaleZ"} ;
+
+    na_setAttributeKeyableOfAnim("nurbsCircle1", 0, $userAttr);
+     
+}
+
+/**set keybale/hide status of anim and attribute
+@param animator control
+@param 1 to make it keyable and shown in channel editor 0 otherwise
+@param string list of attributes on animator control to edit
+*/
+global proc
+na_setAttributeKeyableOfAnim(string $anim, int $isKeyable, string $attrArray[])
+{
+    string $attrAndPlug[] = {};
+    $attrAndPlug = na_getPlugByAttributeArray($anim, $attrArray);
+    na_assertObjectExist($attrAndPlug);
+    
+    if( ($isKeyable == 1) || ($isKeyable == 0) ){
+        for($attr in $attrArray)
+        {
+            //here we assume when its keybale should be shown
+            setAttr -keyable $isKeyable -channelBox $isKeyable ($anim+"."+$attr);
+            setAttr -k $isKeyable ($anim+"."+$attr);
+        }
+    }
+    
+}
+
+
+
+/////make attribute have the specified value
+//ex to hold weight on joint2: na_setFloatAttribute("liw",{"joint2"},1);
+/*
+needs arguments
+string          attribute
+string array    objects
+float           attribute value
+*/
+//note:
+//supports joints, polys, nurbs, curves ...
+//can be used for holding weights   "liw"
+//turning on off display
+
+global proc 
+na_setFloatAttribute(string $attribute, string $objects[], float $value )
+{
+    string $objectArray[] = $objects;
+    //loop objects
+    for($i=0; $i < size($objectArray); $i++ )
+    {  
+        string $object = $objectArray[$i];
+        //update attribue if object and attribute exists
+        if(`objExists $object`)
+        {
+            string $attr = $attribute; //hold weight attribute
+            int $attrValue = attributeExists($attr,$object);
+            if($attrValue == 1)
+            {
+                eval("setAttr "+$object+"."+$attr+" "+$value);
+                //ex:
+                //setAttr ($object).liw 1; 
+            }
+            else{ print("skipping "+$object+ " no attribute "+$attr+"\n"); }
+        }
+        else{ print("skipping "+$object+ " does not exist"+"\n"); }
+    }
+}
+
+
+
+
+
+
+/**add suffix all animator controls with input attributes on them
+@note ex:  leg_anim.length  becomes leg_anim.length_A
+@param animator controls
+@param allowable attributes to return
+@param suffix to add
+*/
+global proc
+na_addSuffixAnimAttributeInList(string $anim[], string $attr[], string $suffixName)
+{
+    na_assertObjectExist( $anim );
+    
+    string $object[] = $anim;
+    string $initial[] = $attr;
+    string $suffix = "_"+$suffixName;
+    
+    string $nameArray[] = na_getAnimAttributeInList($object,$initial);
+    
+    //reason error checking is so don't partially rename
+    string $tokens[] = {};
+    for($name in $nameArray){
+        $tokens = na_getTokensByThisSeparator( $name, "." );
+        na_assertSizeEqualArg($tokens,2);
+    }
+    
+    //goes through animator controls renaming attribute
+    for($name in $nameArray){
+        $tokens = na_getTokensByThisSeparator( $name, "." );
+        setAttr -l 0 $name;
+        renameAttr $name ($tokens[1]+$suffix);
+    }
+    
+}
+
+
+
+
+/**rename object using set of source names and a common suffix
+@note ex: source joint1, suffix fol, object new name becomes joint1_fol
+@param $object(string[]) objects to rename on scene
+@param $suffix(string) suffix to add to name, note an underscore is included as default so
+dont need one here
+@param $sourceName(string[]) same length as $object, base name to use
+*/
+global proc 
+na_renameBySourceNameAndSuffix(string $object[], string $suffix, string $sourceName[] )
+{
+    na_assertObjectExist($object);
+    na_assertSizeEqualArg($sourceName,size($object));
+    string $nameArray[] = {};
+    for( $i = 0; $i < size($object); $i++ )
+    {
+        $name = $sourceName[$i]+"_"+$suffix;
+        $nameArray[$i] = $name;
+    }
+    na_assertObjectDoesNotExist($nameArray);
+    for( $j = 0; $j < size($object); $j++ )
+    {
+        rename $object[$j] $nameArray[$j];
+    }
+}
+
+
+
+
+
+global proc
+na_getTokenizeElementBySeparatorAndColumn_unitTest()
+{
+    print( na_getTokenizeElementBySeparatorAndColumn( {"leg 0, leg 1","arm 0, armA 1"}, 0,","," ") );
+    print("--\n");
+    print( na_getTokenizeElementBySeparatorAndColumn( { "leg 0, leg 1" , "arm 5, armA 1" }, 1,","," ") );
+    print("--\n");
+    print( na_getTokenizeElementBySeparatorAndColumn( {
+        "0 l_arm_fk","1 l_arm_ik/fk","2 l_arm_ik",
+        "3 r_arm_fk","4 r_arm_ik/fk","5 r_arm_ik",
+        "6 l_leg_fk","7 l_leg_ik/fk","8 l_leg_ik",
+        "9 r_leg_fk","10 r_leg_ik/fk","11 r_leg_ik"
+    }, 0,","," ") );
+    
+}
+
+/**Tokenize each element by two separators. One seprator for all the list and another for each
+thing in list.  Based on an input it can give back either the first or second thing for all elements..
+@param string list
+@param zero based column index used not on overall list but on each element after separation
+@param how to sepearate lists items
+@param how to separate each item 
+@note ex: { "leg 0, leg 1" , "arm 0, armA 1" }, col = 0, sep = "," sepEach = " " returns { "leg", "leg", "arm", "armA" }
+ex: { "leg 0, leg 1" , "arm 5, armA 1" }, col = 1, sep = "," sepEach = " " returns { "0", "1", "5", "1" }
+@note na_getTokensByThisSeparator( "leg 0,","," );
+// Result:   // 
+*/
+global proc string[]
+na_getTokenizeElementBySeparatorAndColumn( string $objectArray[], int $col, string $sep, string $sepEach)
+{
+    string $result[] = {};
+    
+    string $all[] = {};
+    string $tokens[] = {};
+    
+    for($name in $objectArray){
+        //weve separated each by the overall separator
+        //
+        $all = na_getTokensByThisSeparatorOptional( $name, $sep);
+        
+        //we now have each item using column separator
+        for($object in $all)
+        {
+            $tokens = na_getTokensByThisSeparatorOptional( $object, $sepEach);
+            if( $col < size($tokens) )
+            {
+                $result[size($result)] = $tokens[$col];
+            }
+            else{ error("Requires At Least "+($col+1)+" many columns in each of --"+$object); }
+            $tokens = {};
+        } 
+        $all = {};
+    }
+    
+    return $result;
+}
+
+
+
+/**get list of all group objects
+@result string list of queried objects
+*/
+global proc string[] getListAllCreatedGroupObjects(){
+    
+    string $allGroupObjects[];
+    string $allTransform[] = getListAllObjectsByNodeType("transform");
+    
+    //a group has no shape node as children, check this
+    int $i = 0;
+    for ($i=0; $i< size($allTransform); $i++)
+    {
+        if( size(`listRelatives - shapes $allTransform[$i]`) == 0){
+     		$allGroupObjects[size($allGroupObjects)] = $allTransform[$i];
+     	}
+    }
+    
+    return $allGroupObjects;
+}
+
+
+
+
+//error messaging
+//  no arguments needed
+global proc string selectSuccessMessage()
+{
+    string $message = "returning all objects\n";
+    return $message;
+}
+//error messaging
+//  no arguments needed
+global proc string selectErrorMessage()
+{
+    string $message = "cannot return all objects - check argument for selection\n";
+    return $message;
+}
+
+
+/**get base name from imported objects.
+@note supports referenced object too, also it should support any number of imports
+@note objects don't need to be on scene
+@note nothing is renamed on scene
+@param arg (string []) names to form a base name from
+*/
+global proc string[]
+na_getBaseNameImportedObject(string $arg[] )
+{
+    string $result[];
+    
+    //should give base name from an imported, or referenced object
+    //
+    string $baseName[] = {};
+    $baseName = na_getSubStringStartToSep( $arg, ":" );
+    na_assertSizeEqualArg($baseName, size($arg) );
+    
+    $result = $baseName;
+    
+    return $result;
+}
+global proc
+na_getBaseNameImportedObject_unitTest()
+{
+   print(  na_getBaseNameImportedObject( {"postyD:ba_bind","postyD:arm_bind"} ) );
+   print("\n");
+}
+
+
+global proc
+na_removeSuffixFromArg_unitTest()
+{
+string $a = "";
+$a="postyD:ba_bind bind";
+print($a+"\n\n");
+print(  na_removeSuffixFromArg( {"postyD:ba_bind"}, {"bind"} ) );
+print("\n\n");
+
+$a="postyD:ba_bind {}";
+print($a+"\n\n");
+print(  na_removeSuffixFromArg( {"postyD:ba_bind"}, {} ) );
+print("\n\n");
+
+$a="postyD:ba_bind_bind bind";
+print($a+"\n\n");
+print(  na_removeSuffixFromArg( {"postyD:ba_bind_bind"}, {"bind"} ) );
+print("\n\n");
+
+$a = "postyD:ba_anim_bind anim";
+print($a+"\n\n");
+print(  na_removeSuffixFromArg( {"postyD:ba_anim_bind"}, {"anim"} ) );
+print("\n\n");
+
+$a= "postyD:ba_anim_bind anim,bind";
+print($a+"\n\n");
+print(  na_removeSuffixFromArg( {"postyD:ba_anim_bind"}, {"anim","bind"} ) );
+print("\n\n");
+
+}
+
+/**remove suffix from arg
+@pre underscore used as separator
+@param arg (string []) names to form a copy with removed suffix
+@param $remove (string []) any of these will be remove, it can remove at most one of them
+*/
+global proc string[]
+na_removeSuffixFromArg(string $arg[], string $removeSuffix[] )
+{
+    string $result[];
+        
+    int $changeNameIndex = 0; //when it is size it changes suffix if leave at zero look at prefix
+    string $nameSeparator = "_";
+     
+    //by default don't change names
+    $result = $arg;
+    
+    string $tokens[] = {};
+    if( size($removeSuffix) > 0 )
+    {
+        
+        for( $i=0; $i < size($arg); $i++ )
+        {
+            $tokens = {};
+            $tokens = na_getTokensByThisSeparator($arg[$i],$nameSeparator);
+            //if suffixes 
+            if( size($tokens) > 0 )
+            {
+                //if wanted deal with prefixes would use 0 instead of size here
+                //
+                $changeNameIndex = (size($tokens)-1);
+                $changeName = $tokens[$changeNameIndex];
+                
+                //if suffix is allowed to be removed remove it
+                if( stringArrayContains( $changeName, $removeSuffix  ) == 1 )
+                {
+                    //this helps us make new names based on prefix or suffix
+                    //
+                    $copyTokens = $tokens;
+                    stringArrayRemoveAtIndex( $changeNameIndex, $copyTokens  );
+           
+                    $newName = stringArrayToString( $copyTokens, $nameSeparator );
+                    $result[$i] = $newName;
+                }
+            }
+            
+        }
+        
+    }
+
+    return $result;
+}
+
+
+
+
+/**how to remove curves from argument object
+@param $arg (string) objects to remove curves from
+@note expects curve to be immediate child
+*/
+global proc na_removeCurveFromArg(string $arg[])
+{	
+	for($object in $arg){
+	    //example object is nurbsPlane1Follicle5074
+	    $childArray = `listRelatives -children -type transform 	$object`;
+	    
+	    for( $child in $childArray ){
+	        //verify this is actually a curve
+	        if( na_hasChildOfType($child,"nurbsCurve") == 1)
+	            {  delete $child; }
+	        else{print("Skipping-- "+$child+" requires it having one shape of nurbsCurve type\n");};
+	        
+	    } 
+	}
+}
+global proc na_removeCurveFromSelected_unitTest()
+{
+}
+
+
+
+/**remove shape orig from argument object
+@param $arg (string) objects
+@pre it assumes orig node has a longer name than shape
+@post it deletes any existing orig nodes
+@bug uses size of name
+*/
+global proc na_removeOrigNodeFromArg(string $arg[])
+{
+    for($obj in $arg)
+    {
+        string $shape[] = `ls -dag -type nurbsSurface -type mesh $obj`;
+        if( size($shape) == 2 )
+        {
+            //it assumes the longer named shape is the orig node
+            //this would have problem if orig node was named shorter than its shape
+            //
+            if( size( $shape[1] ) == size( $shape[0] ) ){error("Require Different Size Name For Detecting Shape Orig");}
+            if(  size( $shape[0] ) > size( $shape[1] )  )
+            {
+                delete $shape[0];
+            }
+            else{ delete $shape[1]; }
+            
+            //if deleted the wrong thing would exit here
+            $shape = `ls -dag -type nurbsSurface -type mesh $obj`;
+            if(size($shape) != 1){ error("Undo -- incorrect node deleted make sure Shape Orig Node name Longer Shape Name"); }
+            na_assertSizeEqualArg($shape,1);
+        }
+        
+    }    
+}
+global proc na_removeOrigNodeFromArg_unitTest()
+{
+    
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    select -d pCube1 ;
+    select -d;
+    joint -p 0 0 0 ;
+    select -d joint1 ;
+    select -d;
+    joint -p 1 0 0 ;
+
+    select -cl;
+    skinCluster -dr 4.5 joint1 joint2 pCube1;
+    
+    na_removeOrigNodeFromArg({"pCube1"});
+}
+
+
+
+
+global proc
+na_makeSelectToolActive()
+{
+    global string $gSelect;
+    setToolTo $gSelect;
+}
+/**Get all but the last thing selected. it uses the ordering of the ls -sl command
+@result returns empty if 1 or nothing selected
+*/
+global proc string[]
+na_getAllButLastSelected()
+{
+    string $result[] = {};
+    string $sel[] = `ls -sl`;
+
+    if(size($sel) >= 2 ){
+        int $numberAllButLastObject = size($sel) - 1;
+
+        for($j=0; $j < $numberAllButLastObject; $j++){$result[size($result)] = $sel[$j];}
+    }
+    
+    return $result;
+}
+/**Get last thing selected. It uses the ordering of the ls -sl command
+@result returns empty if 1 or nothing selected
+*/
+global proc string[]
+na_getLastSelected()
+{
+    string $result[] = {};
+    
+    string $sel[] = `ls -sl`;
+    
+    if(size($sel) >= 2 ){
+        int $numberAllButLastObject = size($sel) - 1;
+        $result = {$sel[$numberAllButLastObject]}; 
+    }
+    
+    return $result;
+}
+
+
+
+/**
+add a non keyable hidden float attribute on animator control
+@param string $anim_control node to add attribute to
+@param string $name name for attribute it creates
+@pre control exists, name not an attribute currently on control
+@bug no error checking
+*/
+global proc 
+na_addNonKeyFloatAttr(string $anim_control, string $name)
+{
+    addAttr -ln $name -at double $anim_control;
+    
+    //this is necessary so animator cannot accidentally key or delete this
+    setAttr -e-keyable false -channelBox true ($anim_control+"."+$name);
+}
+
+
+/**
+add a non keyable hidden integer attribute on animator control
+@param string $anim_control node to add attribute to
+@param string $name name for attribute it creates
+@pre control exists, name not an attribute currently on control
+@bug no error checking
+*/
+global proc 
+na_addNonKeyNonNegativeIntAttr(string $anim_control, string $name)
+{
+    addAttr -ln $name -at long -min 0 $anim_control;
+    
+    //this is necessary so animator cannot accidentally key or delete this
+    setAttr -e-keyable false -channelBox true ($anim_control+"."+$name);
+}
+
+
+
+
+
+
+/**give me the first index where input value matches input search array (returns int array)
+@param $value           string  what to look for
+@param $searchArray     string array 
+@note it behaves alot like pythons list.index(value) function, where search array acts as list
+@note it returns empty array if no index match found
+*/
+global proc int[]
+naIndex(string $value, string $searchArray[] )
+{
+    int $result[];
+    
+    //loop search array
+    for($i=0; $i < size($searchArray); $i++){
+        //if match found store index and break out of loop
+        int $matchValue = strcmp($value, $searchArray[$i]);
+        if(  $matchValue == 0 )
+        {
+            $result[0] = $i;
+            break;
+        }
+    }
+    
+    return $result;
+}
+
+
+/**get enum items given a transform and enum attribute
+@param string $object object with attribute
+@param string $attr enum attribute
+@note errors if not recognized enum type
+@see na_assertObjectExist, na_assertSizeEqualArg
+*/
+global proc string[]
+na_getEnumList( string $object, string $attr )
+{
+    string $result[] = {};
+    
+    na_assertObjectExist( {$object+"."+$attr} );
+    string $enumItemArray[] = {};
+    $enumItemArray = `attributeQuery -listEnum -node $object $attr`;
+    na_assertSizeEqualArg($enumItemArray, 1);
+    
+    $result = stringToStringArray($enumItemArray[0], ":");
+    return $result;
+}
+
+

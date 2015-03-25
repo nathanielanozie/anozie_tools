@@ -1,0 +1,57 @@
+/**@file na_blendTwoIt_UI.mel
+*/
+
+global string $gl_object = "gl_object";
+global string $gl_plug = "gl_plug";
+global string $gl_backEndName= "gl_backEndName";
+
+/**ui
+*/
+global proc
+na_blendTwoIt_UI()
+{
+    
+    global string $gl_object;
+    global string $gl_plug;
+    global string $gl_backEndName;
+    
+    //setup up title for gui
+    string $titleWindow = "na_connect.mel  add to BlendTwoAttr";
+    string $mainWindowName = "mainWindow";
+    na_window($mainWindowName,$titleWindow, 420, 190);
+    
+    //set up format for gui
+    string $form = `formLayout -numberOfDivisions 50 "form layout"`;
+    
+    //set up ui widgets
+    na_textFieldGrp($form, $mainWindowName,"object", 25, 5, $gl_object);
+    na_textFieldGrp($form, $mainWindowName,"attribute", 55, 5, $gl_plug);
+    na_textFieldGrp($form, $mainWindowName,"backend name", 85, 5, $gl_backEndName);
+    
+    na_button($form, $mainWindowName,"ok", 125, 200,"button","na_blendTwoIt_cmd");
+    
+    showWindow $mainWindowName;
+    
+    
+}
+
+/**ui command
+*/
+global proc
+na_blendTwoIt_cmd()
+{
+    global string $gl_object;
+    global string $gl_plug;
+    global string $gl_backEndName;
+ 
+    //used
+    string $object="";
+    string $plug = "";
+    string $name = "";
+
+    $object = `textFieldGrp -query -text $gl_object`;
+    $plug= `textFieldGrp -query -text $gl_plug`; 
+    $name= `textFieldGrp -query -text $gl_backEndName`; 
+
+    na_blendTwoIt($object, $plug, $name);
+}

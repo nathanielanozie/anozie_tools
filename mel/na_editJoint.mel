@@ -1,0 +1,81 @@
+/**@file na_quickRotateOrder.mel Edit joint tools
+@brief Example change rotate order, or local rotation axis
+@author Nathaniel O. Anozie (ogbonnawork at gmail dot com)
+@note date created: Apr 11, 2012
+@note Modify at your own risk
+@note Inspired By Jason Schleifer Animator Friendly Rigging (jasonschleifer dot com), halfway and segmenting tools
+@bug not generalized only zxy, no ui, no asserts, no unit tests
+*@addtogroup jointDraw
+*@{
+*/
+
+
+//quick rotate order
+//zxy -- 2
+/**change rotate order on multiple node
+@param string list $objectArray
+@bug uses only zxy equivalent to 2
+*/
+global proc
+na_setRotateOrder(string $objectArray[])
+{
+    int $rotateOrderIndex = 2; //zxy
+    
+    string $object = "";
+    for($i = 0; $i < size($objectArray); $i++)
+    {
+        $object = $objectArray[$i];
+        if( `objExists $object` ){
+            setAttr ($object+".rotateOrder") $rotateOrderIndex;
+        }
+    }
+    print("successfully changed rotate order\n");
+}
+
+
+/*Given root joint selected change local rotation axis to specified order. ex: ("zxy")
+@note "zxy" means y evaluated first, z last
+*/
+global proc 
+na_setJointLocalRotationAxis(string $trioAxis)
+{
+    //save selection
+    string $curSel[] = `ls -sl`;    
+    select -hierarchy;
+    string $nameSkeleton[] = `ls -sl`;
+    select -cl;
+
+    
+    if(size($nameSkeleton)>=2){
+        //fix ends orientation
+        string $end =  $nameSkeleton[size($nameSkeleton)-1];
+        string $tempEnd[] = `duplicate -rr $end`;
+        if(size($tempEnd)!=1){error("Requires Fixing End of Hierarchy");}
+        parent $tempEnd $end;
+        
+        select -r ($nameSkeleton[0]+".rotateAxis"); 
+        joint -e -zso -oj $trioAxis -sao "ydown" -ch; 
+        delete $tempEnd[0];
+        rotate -r -os 0.0 0.0 0.0;
+               
+        for( $i=1; $i<size($nameSkeleton); $i++)
+        {
+            select -r ($nameSkeleton[$i]+".rotateAxis");
+            rotate -r -os 180.0 0.0 0.0;
+        }
+        
+        //fix end continued
+        if( size($nameSkeleton)==2 ){
+        select -r ($end+".rotateAxis");
+        rotate -r -os 180.0 0.0 0.0;
+        }
+    }
+
+    //return current selection because parenting changes selection
+    select -r $curSel;
+}
+
+
+/**
+*@}
+*/

@@ -1,0 +1,97 @@
+/**@brief stretching character arm, legs etc ui
+@note na_scaleStretchSetStretchFactor({"joint1","joint2","joint3"},{0.5*(1),0.5*(1.1),0.5*(1)}, "X" );
+*/
+
+global string $gl_startJoint = "gl_startJoint";
+global string $gl_endJoint = "gl_endJoint";
+global string $gl_prefix = "gl_prefix";
+global string $gl_curve = "gl_curve";
+global string $gl_jointStretchAxis = "gl_jointStretchAxis";
+
+/**ui
+*/
+global proc na_stretchWithNodeFromCurve_UI()
+{
+    global string $gl_startJoint;
+    global string $gl_endJoint;
+    global string $gl_prefix;
+    global string $gl_curve;
+    
+    
+    //setup up title for gui
+    string $titleWindow = "na_stretchWithNodeFromCurve.mel  Stretch Joints";
+    string $mainWindowName = "mainWindow";
+    na_window($mainWindowName,$titleWindow, 430, 200);
+    
+    //set up format for gui
+    string $form = `formLayout -numberOfDivisions 50 "form layout"`;
+    
+    
+    //curve
+    na_textFieldGrp($form, $mainWindowName,"curve", 5, -10, $gl_curve);
+    
+    
+    //
+    //start and end
+    na_textFieldGrp($form, $mainWindowName,"start joint", 25, -10, $gl_startJoint);
+    na_textFieldGrp($form, $mainWindowName,"end joint", 45, -10, $gl_endJoint);
+    na_textFieldGrp($form, $mainWindowName,"prefix", 65, -10, $gl_prefix);
+    
+    //joint axis stretch 
+    na_text($form, $mainWindowName,"joint stretch axis", 105, 90);
+    string $col_jointStretchAxis = `radioCollection`;
+    na_radioButton($form, $mainWindowName,"x", 102, 200,"jointStretchAxis_pickType_cmd(0)",$col_jointStretchAxis);
+    na_radioButton($form, $mainWindowName,"y", 102, 240,"jointStretchAxis_pickType_cmd(1)",$col_jointStretchAxis);
+    na_radioButton($form, $mainWindowName,"z", 102, 280,"jointStretchAxis_pickType_cmd(2)",$col_jointStretchAxis);
+    
+    
+    
+    
+    na_button($form, $mainWindowName,"ok", 140, 180,"button","na_stretchWithNodeFromCurve_cmd");
+    
+    showWindow $mainWindowName;
+}
+
+/**widget commands
+*/
+global proc jointStretchAxis_pickType_cmd(int $type)
+{
+    global string $gl_jointStretchAxis;
+    if($type == 0){ $gl_jointStretchAxis = "X"; }
+    else if($type == 1){ $gl_jointStretchAxis = "Y"; }
+    else {$gl_jointStretchAxis = "Z";}
+}
+
+
+/**ui command
+*/
+
+global proc na_stretchWithNodeFromCurve_cmd()
+{
+    global string $gl_startJoint;
+    global string $gl_endJoint;
+    global string $gl_prefix;
+    global string $gl_curve;
+    global string $gl_jointStretchAxis;
+    
+    //main variables used by script
+    string $jointStretchAxis = "";
+    string $start = ""; 
+    string $end = ""; 
+    string $prefix = "";
+    string $nodeName = "";
+    ///
+    
+    //got main variables
+    $jointStretchAxis = $gl_jointStretchAxis;
+    $start = `textFieldGrp -query -text $gl_startJoint`;
+    $end = `textFieldGrp -query -text $gl_endJoint`;
+    $prefix = `textFieldGrp -query -text $gl_prefix`;
+    $nodeName = `textFieldGrp -query -text $gl_curve`;
+    
+
+    na_stretchWithNodeFromCurve($nodeName, $start, $end,$prefix, $jointStretchAxis );
+
+}
+
+

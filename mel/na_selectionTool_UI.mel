@@ -1,0 +1,80 @@
+/**
+*/
+global string $gl_selection = "";
+
+
+/**ui
+*/
+global proc na_selectionToolUI()
+{    
+    global string $gl_selection;
+    
+    //setup up title for gui
+    string $titleWindow = "na_selectGeneral.mel";
+    string $mainWindowName = "mainWindow";
+    na_window($mainWindowName,$titleWindow, 250, 140);
+    
+    
+    //set up format for gui
+    string $form = `formLayout -numberOfDivisions 50 "form layout"`;
+    
+    //add ui elements like textfields,buttons, and/or radio buttons
+    
+    na_button($form, $mainWindowName,"save", 10,90,"button1","na_selectionTool_cmd_save");
+    na_button($form, $mainWindowName,"select", 45,90,"button2","na_selectionTool_cmd_select");
+    na_button($form, $mainWindowName,"print", 85,90,"button3","na_selectionTool_cmd_print");
+    
+    showWindow $mainWindowName;
+}
+
+
+/**ui command
+*/
+global proc na_selectionTool_cmd_save()
+{
+    
+    global string $gl_selection;
+    
+    string $arg = "";
+    $gl_selection = "";
+    
+    $arg = na_selectionToolSave();
+    if(size($arg) == 0){
+        na_selectionToolStringErrorMessage();
+    }
+    else{
+        $gl_selection = $arg;
+    }
+}
+
+global proc na_selectionTool_cmd_select()
+{
+    global string $gl_selection;
+    
+    string $sel = "";
+    $sel = $gl_selection;
+    if(size($sel) == 0){
+        na_selectionToolStringErrorMessage();
+    }
+    else{
+        na_selectionToolSelect($sel);
+    }
+    
+    
+}
+
+
+global proc na_selectionTool_cmd_print()
+{
+    global string $gl_selection;
+    
+    string $sel = "";
+    $sel = $gl_selection;
+    if(size($sel) == 0){
+        na_selectionToolStringErrorMessage();
+    }
+    else{
+        na_selectionToolPrint($sel);
+    }
+    
+}

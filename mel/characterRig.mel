@@ -1,0 +1,1222 @@
+/** given values from user-interface make a biped rig with skeleton and ik arms and legs
+@author Nathaniel Anozie
+ogbonnawork at gmail dot com
+@note last revised: 03/10/2013 -- added leg,spine,wrist rigs
+@note last revised: 02/19/2013 -- added put lots of files into one for simpler use of tool
+@note last revised: 01/06/2012 -- added change one bone position affecting all later bones in one direction
+@note created: 12/03/2010
+@note Modify at your own risk
+*/
+
+//last updated: 07/11/2013 -- working on hiding stuff. made spine better.
+//last updated: 07/10/2013 -- add auto geo option it works for fingers too
+//last updated: 07/09/2013 -- added making fk controls. added foot and hand option.  fixed human palm bug
+//last updated: 07/08/2013 -- fixed lra legs and arms, added start for ik-fk option.
+
+
+//SPECIFY TYPE OF RIG--- YES or NO
+global string $gl_IS_ARM_IK = "gl_IS_ARM_IK";
+global string $gl_IS_LEG_IK = "gl_IS_LEG_IK";
+//
+
+//SPECIFY TYPE OF HAND OR FOOT--- YES or NO
+global string $gl_IS_HAND = "gl_IS_HAND";
+global string $gl_IS_FOOT = "gl_IS_FOOT";
+//
+
+//SPECIFY TO ADD AUTOMATIC GEO -- YES or NO
+global string $gl_IS_AUTOGEO = "gl_IS_AUTOGEO";
+
+
+
+global proc
+characterRigSourceFile(string $f)
+{
+    
+    
+    string $cmd = "source \""+$f+"\"";
+    if( catch( eval($cmd)  ) )
+    {
+        print("Warning Cannot open file "+$f+"\n");
+    }
+    else{
+        print("Added --- "+$f +"\n" );
+    }
+}
+
+global proc 
+characterRigInit()
+{
+    print("[characterRigInit] Adding Rig Files \n");
+    
+    //sources
+    string $rigDependencies[] = {
+	    "makeHand.mel",
+	    "spreadHand.mel",
+	    "curlHand.mel",
+	    "cubeIcon.mel",
+	    "na_hierarchy.mel",
+	    "naGeneral.mel",
+	    "na_ui.mel",
+	    "naMath.mel",
+	    "na_addAttribute.mel",
+	    "na_fkControl.mel",
+	    "na_sdkGeneral.mel",
+	    "legBones.mel",
+	    "wristRotation.mel",
+	    "makeUpperBody.mel",
+	    "na_segment.mel",
+	    "na_assertGeneral.mel"
+	};
+	
+    for($f in $rigDependencies)
+    {
+        characterRigSourceFile($f);
+    }
+}
+
+
+
+/**make previs rig ui
+*/
+global proc 
+characterRig()
+{
+    global string $gl_IS_ARM_IK;
+    global string $gl_IS_LEG_IK;
+    global string $gl_IS_HAND;
+    global string $gl_IS_FOOT;
+    global string $gl_IS_AUTOGEO;
+    
+    //bring in external dependencies
+    characterRigInit();
+    
+    string $header_title = "naRig v0.0 \n (c) \n Nathaniel Anozie 2013";
+    //could have a radio button for every part and a single slider
+    
+    //delete window pref for this window if it exists
+    if(`windowPref -exists PrevisRig`){ windowPref -remove PrevisRig;}
+    //delete window if it exists
+    if( `window -exists PrevisRig` ){  deleteUI -window PrevisRig; }
+    //create a window
+    window -title $header_title -width 200 -height 230 -sizeable false PrevisRig;
+    //columnLayout;
+    string $form = `formLayout -numberOfDivisions 320`;
+    
+    
+    
+    button -label "done" -command "done()" doneBtn;
+    
+    button -label "edit" -command "print(\" Make movable icons after you position should have a skeleton \");edit();" editBtn;
+    
+    formLayout -edit -attachForm 	doneBtn "bottom" 10
+    -attachForm 	doneBtn "left" 20
+    -attachForm 	editBtn "bottom" 30
+    -attachForm 	editBtn "left" 20
+    
+    $form;
+    
+    //add check box
+    na_checkBox($form, "PrevisRig", "Arm IK", 30, 100, "$gl_IS_ARM_IK = \"YES\";", "$gl_IS_ARM_IK = \"NO\";");
+    na_checkBox($form, "PrevisRig", "Leg IK", 10, 100, "$gl_IS_LEG_IK = \"YES\";", "$gl_IS_LEG_IK = \"NO\";");
+    
+    na_checkBox($form, "PrevisRig", "HANDS", 80, 100, "$gl_IS_HAND = \"YES\";", "$gl_IS_HAND = \"NO\";");
+    na_checkBox($form, "PrevisRig", "FEET", 100, 100, "$gl_IS_FOOT = \"YES\";", "$gl_IS_FOOT = \"NO\";");  
+    
+    na_checkBox($form, "PrevisRig", "Auto Geo", 150, 100, "$gl_IS_AUTOGEO = \"YES\";", "$gl_IS_AUTOGEO = \"NO\";");
+    
+    showWindow;
+}
+
+
+
+
+/**this should draw joints it doesnt make joints movable
+*/
+proc int 
+buildSkeleton()
+{
+    int $status = 0;
+    
+    float $userJointPosition[] = getJointPosition();
+    string $nameSkeleton[] = getJointName();
+    string $defaultHierarchy[] = getDefaultHierarchy();
+    string $rotationOrder = "zxy"; //default rotation order
+    $status = naBuildSkeleton( $nameSkeleton, $userJointPosition, $defaultHierarchy, $rotationOrder );
+    
+    return $status;
+}
+
+
+
+/**get translations for all joints assuming naming conventions and order
+*/
+/*
+////needs no arguments
+*/
+/*
+//return float array of form [xyz,xyz,...,xyz]
+//if you want x,y,z of the LT_ANKLE
+//and names are [LT_THIGH,LT_KNEE,LT_ANKLE,LT_HEEL]
+//i = 2
+//x = defaultPosition[i*3+0]
+//y = defaultPosition[i*3+1]
+//z = defaultPosition[i*3+3]
+*/
+global proc float[] 
+getJointPosition()
+{
+    //use users positions
+    float $userJointPosition[];
+    
+    //assumes default controls and default joints are in same order and are exactly identical
+    //ommitting suffix
+    string $defaultControls[] = getDefaultControls();
+    
+    //this gets world locations of widgets user moves
+    //into position for his/her mesh
+    //so skeleton drawing can commence
+    for( $i=0; $i<size($defaultControls); $i++)
+    {
+        if( `objExists $defaultControls[$i]` )
+        { 
+            
+            float $xyz[] = `xform -q -ws -t $defaultControls[$i]`;
+            $userJointPosition[size($userJointPosition)] = $xyz[0];
+            $userJointPosition[size($userJointPosition)] = $xyz[1];
+            $userJointPosition[size($userJointPosition)] = $xyz[2];
+        }
+    }
+    
+    return $userJointPosition;
+}
+
+
+
+
+////build skeleton, and make it movable
+/*
+currently does not support repeated presses of done
+*/
+global proc 
+done()
+{
+    ////////////////
+    print("[characterRig.mel] Setting Global Data !!!\n");
+    global string $gl_IS_ARM_IK;
+    global string $gl_IS_LEG_IK;
+    global string $gl_IS_HAND;
+    global string $gl_IS_FOOT;
+    global string $gl_IS_AUTOGEO;
+    
+    int $isArmIK = 0;
+    int $isLegIK = 0;
+    int $isHand = 0;
+    int $isFoot = 0;
+    int $isFoot = 0;
+    int $isAutoGeo = 0;
+    
+    if( strcmp($gl_IS_ARM_IK,"YES") == 0){ $isArmIK = 1; }
+    if( strcmp($gl_IS_LEG_IK,"YES") == 0){ $isLegIK = 1; }
+    if( strcmp($gl_IS_HAND,"YES") == 0){ $isHand = 1; }
+    if( strcmp($gl_IS_FOOT,"YES") == 0){ $isFoot = 1; } 
+    if( strcmp($gl_IS_AUTOGEO,"YES") == 0){ $isAutoGeo = 1; }
+    print("[characterRig.mel] Completed Setting Global Data -->!!!\n"+
+    "global string $gl_IS_ARM_IK\n"+
+    "global string $gl_IS_LEG_IK\n"+
+    "global string $gl_IS_HAND\n"+
+    "global string $gl_IS_FOOT\n"+
+    "global string $gl_IS_AUTOGEO\n <-------"
+    );
+    print("");
+    
+    ///////////////
+    
+    int $isSpine = 1;
+    
+    
+    
+    print("[buildSkeleton] draw the actual skeleton joints, 1 success \n");
+	int $status = buildSkeleton();
+	print($status+" from [buildSkeleton] \n");
+	
+	string $standardWarning = "[warning] Depending on Naming of foot and hand !!!\n";
+	//add simple iks
+	//----------------------
+	if($status == 1)
+	{
+	    
+	    print($standardWarning);
+	    legBones($isLegIK);
+	    makeHand($isArmIK);
+	    
+	    //either make fingers or 
+	    ///
+	    if($isHand){
+	        wristRotation();//rotating of wrist
+	        spreadHandAttr();//spreading of fingers
+	        spreadHandControl();
+	        curlHandAttr();//curling of fingers
+	        curlHandControl();
+	    }else{
+	        catch(`delete LEFT_PALM RIGHT_PALM`);   
+	    }
+	    ///
+	    
+	    //either leave foot or remove 
+	    ///
+	    if($isFoot == 0){catch(`delete LT_HEEL RT_HEEL`);}
+	    
+	    print("[WARNING] FK spine with bugs all that is supported ... Ribbon, Spine IK not Supported\n");
+	    if($isSpine){
+	        
+	        string $upBodyJoints[] = {
+	            "ROOT",
+	            "SPINE_1",
+	            "SPINE_2",
+	            "NECK"
+	        };
+	        characterRig_makeUpperBody($upBodyJoints);
+	    }
+	    ///
+	    
+	    //add auto geo or dont
+	    ///
+	    if($isAutoGeo){
+	        print($standardWarning);
+	        string $addToGeoJoints[] = {
+	            "LEFT_CLAVICLE",
+	            "RIGHT_CLAVICLE",
+	            "LEFT_PALM",
+	            "RIGHT_PALM",
+	            "ROOT",
+	            "LT_THIGH",
+	            "RT_THIGH"
+	        };
+	        characterRig_addAutoGeo($addToGeoJoints);    
+	    }
+	    ///
+	    
+        print("[WARNING] Stretchy Rigs Not yet Supported");
+	    
+	    characterRig_removeWidgets();  
+	    characterRig_groupRig($isArmIK,$isLegIK);
+	    
+	    
+	}
+	else
+	{
+	    print("error building skeleton -- please be sure edit is pressed before done");
+	}
+	
+}
+
+{
+    
+    
+}
+
+
+//add geo to input joints
+global proc characterRig_addAutoGeo( string $addToGeoJoints[] )
+{
+    print("[characterRig_addAutoGeo] Adding auto geo ...\n");
+    for($arg in $addToGeoJoints){
+        if(`objExists $arg`){
+            na_addGeoSinglePlaneJoint($arg);
+            print("[characterRig_addAutoGeo] complete --->"+$arg);
+        }
+        else{
+            print("[characterRig_addAutoGeo] skipping --->"+$arg);
+        }
+    }
+    
+    //make sure geo not at endjoints they would look messed up there
+    print("[characterRig_addAutoGeo] make sure geo not at endjoints ... Warning will remove all transform from end joint no checking for mesh type\n");
+    ///
+    //string $sel[] = `ls -type joint`;
+    //all input joints and all its children
+    string $sceneAddToGeoJoints = "";
+    for($arg in $addToGeoJoints){
+        if(`objExists $arg`){
+            $sceneAddToGeoJoints += " "+$arg;
+        }
+    }
+    eval("select -r "+$sceneAddToGeoJoints);
+    select -hierarchy `ls -sl`;
+    string $sel[] = `ls -sl`;
+    //
+    
+    for($arg in $sel){
+        if(`objExists $arg`){
+            //figure out if this is an end joint, if it is and it has any transform children remove it
+            if(size(`listRelatives -children -type joint $arg`) == 0 ){
+                string $possibleMesh[] = `listRelatives -children -type transform $arg`;
+                if(size($possibleMesh) > 0 ){print("deleting---"+$possibleMesh[0]+"\n");delete $possibleMesh[0];}
+            }
+        }
+    }
+    ///
+}
+
+//remove widgets
+global proc characterRig_removeWidgets()
+{
+    print("[characterRig_removeWidgets] Removing Widgets ...\n");
+    select -cl;
+    select "*_wdg";
+    delete;    
+}
+//group rig depending on whether it is ik or not
+global proc characterRig_groupRig(int $isArmIK, int $isLegIK)
+{
+    if($isArmIK && $isLegIK){
+	    print("Grouping IK Rig ...\n");
+	    select -r LT_THIGH LEFT_CLAVICLE RT_THIGH RIGHT_CLAVICLE LT_KNEE_CON RT_KNEE_CON LT_FOOT_CON RT_FOOT_CON LEFT_ELBOW_CON LEFT_WRIST_CON RIGHT_ELBOW_CON RIGHT_WRIST_CON LT_LEG_IK RT_LEG_IK LT_ARM_IK RT_ARM_IK ROOT_CON ROOT;
+	    group -n naRig; xform -os -piv 0 0 0;        
+    }
+    
+    
+    ////-------------
+    print("[characterRig_groupRig] Making Layers To Hide and Make non Editable Geo and IKs \n");
+    print("[characterRig_groupRig] Warning ... No Support for Multi Characters");
+    
+    ////
+    string $geo_ly = "characterRig_geo_ly";
+    string $ik_ly = "characterRig_ikHandle_ly";
+    
+    print("[characterRig_groupRig] Making Layers -->\n"+
+    $geo_ly+"\n"+
+    $ik_ly+"\n");
+    createDisplayLayer -name $geo_ly -number 1 -empty;
+    createDisplayLayer -name $ik_ly -number 1 -empty;
+    ////
+    
+    ///adding to layers
+    string $geoAr[] = `ls -type mesh`;
+    print("[characterRig_groupRig] Adding --> Geo -->"+ stringArrayToString($geoAr," ")+"\n");
+    editDisplayLayerMembers -noRecurse $geo_ly $geoAr;
+    setAttr ($geo_ly + ".visibility") 1;
+    setAttr ($geo_ly + ".displayType") 2; //make layer not easily selected but shon
+    
+    string $ikAr[] = `ls -type ikHandle`;
+    print("[characterRig_groupRig] Adding --> Iks -->"+ stringArrayToString($ikAr," ")+"\n");
+    editDisplayLayerMembers -noRecurse $ik_ly $ikAr;
+    setAttr ($ik_ly + ".visibility") 0;
+    ////
+    ////---------
+    
+}
+
+////help with build skeleton by showing widgets user can move to fit his/her mesh
+/*
+needs no arguments
+dependencies: rigdata.mel, buildSimpleSkeleton.mel
+*/
+global proc 
+edit()
+{
+    print "please fit skeleton to your mesh";
+    
+    //if widgets have been made dont remake them
+    drawDefaultControls();  
+    //add so widgets can be automoved
+    characterRigSourceFile("na_widgetAutoMover.mel");
+}
+
+
+
+
+
+
+/*didnt look like it was ever called
+global proc 
+duplicateSkeleton(string $rotationOrder)
+{
+string $sel[] = `ls -sl`;
+
+//get bones
+string $nameSkeleton[] = getListAllJoints();
+float $userJointPosition[] = getComponentWorldPosition( $nameSkeleton );
+string $defaultHierarchy[] = characterRigGetOrder( $nameSkeleton );
+
+//remove nulls from default hierarchy
+
+
+naBuildSkeleton( $nameSkeleton, $userJointPosition, $defaultHierarchy,$rotationOrder );
+
+select -r $sel;
+}
+*/
+
+/**given any nodes print parent child relation ship
+@param string list $nameObjects -- objects
+@result ex: hiererachy {child parent, child parent ... child parent} 
+*/
+global proc string[]
+characterRigGetOrder(string $nameObjects[])
+{
+    
+    string $result[];
+    
+    for( $i=0; $i<size($nameObjects); $i++)
+    {
+        //skip if it is not a child 
+        string $nonWorldParents[] = `listRelatives -allParents $nameObjects[$i]`;
+        
+        if(size($nonWorldParents) < 2){
+            if(size($nonWorldParents) == 1){
+                //save child name, skelton at index i
+                string $child = $nameObjects[$i];
+                //save parent name could be at any index
+                //assumes at most one parent
+                string $parent = $nonWorldParents[0];
+                
+                //print pair as child followed by parent
+                
+                //print( "---"+$child+"---,"+"---"+$parent+"---"+",\n" );
+                $result[size($result)] = $child;
+                $result[size($result)] = $parent;
+            }//end 
+        }//end number parents check
+        else
+        {
+            error("error in print hierarchy, you might want to check for multiple instances");
+        }
+    }
+    
+    //should get the positions to use
+    
+    return $result;
+}
+
+
+
+////build a skeleton at points and with hierarchy we specify, return 1 if it was succesful, zero otherwise
+//currently supports: a biped like rigging system, it should extend to a quadped,bird...
+/*
+////needs arguments
+string list     name to use for created joints
+float list      world positions to draw joints
+string list     the hierarchy to use for drawn joints
+string          the rotation order ex: zxy
+*/
+global proc int 
+naBuildSkeleton( string $nameSkeleton[], float $userJointPosition[], string $defaultHierarchy[], string $rotationOrder)
+{
+    print("[naBuildSkeleton] Making All Skeleton");
+    
+    int $status = 0; //failure
+    
+    //make sure we have a position for ever joint
+    if(size($userJointPosition) == (3*size($nameSkeleton)) ){
+        
+        //save selection
+        string $curSel[] = `ls -sl`;
+        select -cl;
+        
+        string $usedNames[];//names that were actually used for the skeleton
+        
+        //create leg skeleton
+        for( $i=0; $i<size($nameSkeleton); $i++)
+        {
+            //since we cant have to 
+            //things with same name for creating joints
+            //add a prefix if we need to
+            string $nameJnt = $nameSkeleton[$i]; 
+            //if( `objExists $nameJnt`  ){ $nameJnt = $existPrefix+$nameJnt; }
+            if( `objExists $nameJnt`  ){ error("Please Remove Existing Joint -->"+$nameJnt+"<-- Then Remake"); }
+            $usedNames[size($usedNames)] = $nameJnt;
+            
+            //make joint
+            //DONT MAKE A JOINT FOR RIGHT or RT sides
+            if( size(match("RT",$nameJnt)) == 0 && size(match("RIGHT",$nameJnt)) == 0 ){
+                joint -p $userJointPosition[$i*3+0] $userJointPosition[$i*3+1] $userJointPosition[$i*3+2] -n $nameJnt;
+                select -cl;
+                
+            }
+        }
+        
+        
+        //insert parenting here
+        //ensure our names are okay for parenting
+        string $defaultHierarchyWithUsedNames[] = translateToNewNames($defaultHierarchy, $nameSkeleton, $usedNames);
+        makeHierarchy($defaultHierarchyWithUsedNames);
+        
+        //insert orienting here
+        //check for fingers, cause orienting here may mean different spread and curl axis        
+        makeOrienting($usedNames,$rotationOrder);
+        
+        //fix for palm, we will parent it to a better joint and rename it
+        //---after done LEFT_PALM should have okay rotation axis to add driven keys
+        duplicate -n NEW_LEFT_PALM -rr LEFT_WRIST ;
+        parent -w NEW_LEFT_PALM;
+        pointConstraint -n tmp_palm_cnt -offset 0 0 0 -weight 1 LEFT_PALM NEW_LEFT_PALM ;
+        delete tmp_palm_cnt;
+        parent LEFT_PALM NEW_LEFT_PALM;
+        rename LEFT_PALM OLD_LEFT_PALM;
+        rename NEW_LEFT_PALM LEFT_PALM;
+        //-----
+        
+        
+        //mirror the joint here
+        if(`objExists LT_THIGH`){ mirrorJoint -mirrorYZ -mirrorBehavior -searchReplace "LT" "RT" LT_THIGH; }
+        else{ error("Requires A Base Joint for Leg !!!\n"); }
+        print("[WARNING] Renaming Of Joints Not Yet Allowed ...\n");
+        if(`objExists LEFT_CLAVICLE`){ mirrorJoint -mirrorYZ -mirrorBehavior -searchReplace "LEFT" "RIGHT" LEFT_CLAVICLE; }
+        else{ error("Requires A Base Joint for Arm !!!\n"); }
+        if(`objExists LEFT_PALM`){ mirrorJoint -mirrorYZ -mirrorBehavior -searchReplace "LEFT" "RIGHT" LEFT_PALM; }
+        else{ error("Requires A Base Joint for HAND !!!\n"); }
+        
+        //removing unnecessary joints here
+        catch(`delete LT_REV_ANKLE`);
+        
+        //adding any needed joints
+        
+        print("[WARNING] Adding Joints Not Yet Allowed ...\n");
+        
+        //return current selection because joint drawing changes selection
+        select -r $curSel;
+        
+        $status = 1; //success
+    }
+    
+    
+    
+    return $status;
+    
+}
+
+
+
+
+
+////This orients joints
+/*
+needs arguments
+
+string array    name components existing on scene
+string          rotation order ex: zxy,means y evaluated first, z last
+*/
+global proc 
+makeOrienting(string $nameSkeleton[], string $rotationOrder)
+{
+    print("[makeOrienting] Start ...\n");
+    //save selection
+    string $curSel[] = `ls -sl`;
+    select -cl;
+    
+    //assumes names exist
+    //loop joints
+    //making local rotation of specified form
+    for( $i=0; $i<size($nameSkeleton); $i++)
+    {
+        string $joint = $nameSkeleton[$i];
+        if(`objExists $joint`){
+            select -r ($joint+".rotateAxis");
+            rotate -r -os -180 0 0 ;
+            joint -e -zso -oj $rotationOrder -sao "ydown" -ch; 
+            
+            //setting rotation order of joint here
+            print("[Warning] Assumes to always use zxy rotation order");
+            setAttr ($joint+".rotateOrder") 2;
+            //
+            
+        }
+    }
+    
+    //return current selection because parenting changes selection
+    select -r $curSel;
+    
+    print("[makeOrienting] Complete!\n");
+}
+
+
+
+/////supposed we wanted some argument using a different set of names
+//it will leave as is if thing cannot be translated
+//translateToNewNames({"c","c","b"}, {"a","b","c"}, {"a_","b_","c_"} );
+// Result: c_ c_ b_ // 
+//
+/*
+needs arguments
+
+string array  thing to translate
+string array  old names
+string array  new names
+*/
+//naGeneral -- naIndex(value, wheretosearch)
+global proc string[]
+translateToNewNames(string $argArray[], string $old[], string $new[])
+{
+    string $result[];
+    
+    //new names and old names should have bijection
+    if(size($old) == size($new) ){
+        
+        //loop argument array
+        for( $i=0; $i < size($argArray); $i++ )
+        {
+            //find index in old
+            int $indexInOld[] = naIndex($argArray[$i], $old);
+            if(size($indexInOld) == 0){ print("could not find in old names:"+$argArray[$i]); 
+            $result[size($result)] = $argArray[$i];}
+            else{
+                //use the index in old in new
+                $result[size($result)] = $new[$indexInOld[0]];
+            }
+        }
+    }
+    else{print("skipping -- check lengths");}
+    //done returned identical to arg but with new names
+    return $result;
+}
+
+
+
+
+
+
+
+////get skeleton names should be drawn after user finished positioning skeleton
+/*
+////needs no arguments
+dependencies:rigdata.mel--getDefaultNameJoint()
+*/
+global proc string[] 
+getJointName()
+{
+    //assumes default controls and default joints are in same order and are exactly identical
+    //ommitting suffix
+    string $userJointName[];
+    string $defaultJoints[] = getDefaultNameJoint();
+    //allow deltion of widgets
+    //notice it looks identical to getting position
+    //so things match up
+    string $defaultControls[] = getDefaultControls();
+    if(size($defaultJoints) == size($defaultControls))
+    {
+        for( $i=0; $i<size($defaultControls); $i++)
+        {
+            //making use of assumption
+            //widgets and joints in exact same order
+            if( `objExists $defaultControls[$i]` )
+                {    $userJointName[size($userJointName)] = $defaultJoints[$i]; }
+        }
+    }
+    return $userJointName;
+}
+
+
+
+
+
+
+
+
+
+
+/**draw biped widgets at assumed locations
+*/
+global proc 
+drawDefaultControls()
+{
+    //get cur selection 
+    string $curSel[] = `ls -sl`;
+    
+    float $diameterIcon[] = getDiameterIconForWidget();// the diameter for the icon user moves
+    
+    //if there is exactly one diameter for an icon
+    if(size($diameterIcon) == 1)
+    {
+        string $defaultControls[] = getDefaultControls();
+        float $defaultPositions[] = getDefaultJointPosition();
+        
+        //draw a positionable icon at default positions
+        //loop controls
+        for($i=0; $i < size($defaultControls); $i++)
+        {
+            //insert check, dont draw control if it exists already
+            if( `objExists $defaultControls[$i]` == 0 ){
+                //make the thing user can move to fit mesh
+                string $icon = cubeIcon($diameterIcon[0]); //can possibly make different diameters for diff icons
+                //could change to different kinds of icons here
+                //name the thing user can move to fit mesh
+                rename $icon $defaultControls[$i];
+                
+                //move the thing at correct default position, note default positions look like [xyz,xyz,xyz...] that is
+                //all the coordinates are in a one dimensional array
+                select -r $defaultControls[$i];
+                move -rpr $defaultPositions[$i*3+0] $defaultPositions[$i*3+1] $defaultPositions[$i*3+2];
+            }
+            else{
+                print("exists, skipping "+$defaultControls[$i]+"\n");
+            }
+        }
+        //end loop control
+        
+    }//end if drawing parameter found
+    
+    //return user selection
+    select -cl;
+    if(size($curSel) > 0){ select -r $curSel; }
+    
+}
+
+////return success 1 if all widgets are in place by user and skeleton can be built
+/*
+needs no arguments
+*/
+global proc int
+isAllWidgetsReady()
+{
+    int $status = 1;
+    string $defaultControls[] = getDefaultControls();
+    for($i=0; $i< size($defaultControls); $i++)
+    {
+        //not found
+        if( `objExists $defaultControls[$i]` == 0 ){  
+            $status = 0; 
+            //what was the first thing not found
+            print("all widgets are necessary for this rig -- please restart tool and dont delete this widget "+$defaultControls[$i]);
+        break; }
+    }  
+    return $status;
+}
+
+////clear all widgets
+/*
+needs no arguments
+*/
+global proc 
+clearAllWidgets()
+{
+    //save selection
+    string $curSel[] = `ls -sl`;
+    select -cl;
+    
+    //delete widgets
+    //assumes existence of all widgets
+    //it will give an error if one is missing
+    string $defaultControls[] = getDefaultControls();
+    
+    for($i=0; $i< size($defaultControls); $i++)
+    {
+        //if found delete it
+        if(`objExists $defaultControls[$i]`)
+        {  
+            select -r $defaultControls[$i];  
+            delete;
+        }
+    }  
+    
+    
+    
+    //restore selection
+    select -r $curSel;
+}
+
+////get diameters for the icon user moves to fit skeleton to mesh
+//if its too small would be hard to select by user
+//if its too big, they may overlap especially in tight areas like fingers
+/*
+needs no arguments
+*/
+global proc float[]
+getDiameterIconForWidget()
+{
+    float $diameterIcon[];
+    $diameterIcon[size($diameterIcon)] = 0.1;
+    return $diameterIcon;
+}
+
+
+
+////returns names for widgets user moves to fit to mesh
+/*
+needs no arguments
+dependencies:
+rigData.mel--getDefaultNameJoint()
+*/
+global proc string[]
+getDefaultControls()
+{
+    string $defaultControls[];
+    string $defaultJoints[] = getDefaultNameJoint();
+    string $suffix[] = getSuffixForDefaultControls();
+    if(size($suffix) == 1){
+        //loop joints
+        for($i=0; $i < size($defaultJoints); $i++){$defaultControls[size($defaultControls)] = ($defaultJoints[$i])+$suffix[0];}
+    }
+    return $defaultControls;   
+}
+
+
+////returns string suffix for widgets user moves to fit to mesh
+/*
+needs no arguments
+*/
+global proc string[]
+getSuffixForDefaultControls()
+{
+    string $suffix[];
+    $suffix[size($suffix)] = "_wdg";
+    return $suffix;
+}
+
+
+
+
+/**default widget positions before user starts moving them to position his or her skeleton
+*/
+//needs no arugments
+//return float array of form [xyz,xyz,...,xyz]
+//if you want x,y,z of the LT_ANKLE
+//and names are [LT_THIGH,LT_KNEE,LT_ANKLE,LT_HEEL]
+//i = 2
+//x = defaultPosition[i*3+0]
+//y = defaultPosition[i*3+1]
+//z = defaultPosition[i*3+3]
+
+global proc float[] 
+getDefaultJointPosition()
+{
+    print("[WARNING] Requires Ordering.  Having this and joints to be removed or added automatically would improve this !!!...\n");
+    //chubby rough positions
+    float $defaultPosition[]={
+        2.023,-2.78,-0.929,
+        1.65,-7.811,-0.129,
+        1.691,-12.171,-0.89,
+        1.691,-13.342,-0.89,
+        1.691,-13.703,0.54,
+        1.691,-13.737,1.902,
+        3.691,-12.171,-0.89,
+        3.691,-13.342,-0.89,
+        3.691,-13.703,0.54,
+        3.691,-13.737,1.902,
+        -2.023,-2.78,-0.929,
+        -1.65,-7.811,-0.129,
+        -1.691,-12.171,-0.89,
+        -1.691,-13.342,-0.89,
+        -1.691,-13.703,0.54,
+        -1.691,-13.737,1.902,
+        -3.691,-12.171,-0.89,
+        -3.691,-13.342,-0.89,
+        -3.691,-13.703,0.54,
+        -3.691,-13.737,1.902,
+        -0,-1.675,-1.203,
+        -0,0.325,-3.006,
+        -0,2.241,-2.458,
+        -0,4.043,-1.016,
+        -0,6.53,-0.911,
+        -0,6.021,0.739,
+        11.978,3.043,-2.533,
+        12.085,3.043,-0.598,
+        12.038,3.043,-1.516,
+        11.712,3.043,-1.916,
+        11.165,2.743,-0.278,
+        12.652,3.199,-2.458,
+        13.198,3.151,-2.626,
+        13.859,3.043,-2.576,
+        12.711,3.199,-0.633,
+        13.283,3.151,-0.668,
+        13.782,3.043,-0.685,
+        12.712,3.199,-1.516,
+        13.212,3.151,-1.516,
+        13.712,3.043,-1.516,
+        12.71,3.199,-1.986,
+        13.707,3.043,-2.056,
+        14.206,3.043,-2.09,
+        11.715,2.4,0.309,
+        12.142,2.046,0.792,
+        2.023,2.432,-1.078,
+        3.43,2.925,-1.716,
+        6.133,2.925,-2.137,
+        9.729,2.925,-1.716,
+        10.712,3.043,-1.216,
+        -11.978,3.043,-2.533,
+        -12.085,3.043,-0.598,
+        -12.038,3.043,-1.516,
+        -11.712,3.043,-1.916,
+        -11.165,2.743,-0.278,
+        -12.652,3.199,-2.458,
+        -13.198,3.151,-2.626,
+        -13.859,3.043,-2.576,
+        -12.711,3.199,-0.633,
+        -13.283,3.151,-0.668,
+        -13.782,3.043,-0.685,
+        -12.712,3.199,-1.516,
+        -13.212,3.151,-1.516,
+        -13.712,3.043,-1.516,
+        -12.71,3.199,-1.986,
+        -13.707,3.043,-2.056,
+        -14.206,3.043,-2.09,
+        -11.715,2.4,0.309,
+        -12.142,2.046,0.792,
+        -2.023,2.432,-1.078,
+        -3.43,2.925,-1.716,
+        -6.133,2.925,-2.137,
+        -9.729,2.925,-1.716,
+        -10.712,3.043,-1.216
+    };
+    
+    return $defaultPosition;
+}
+
+global proc string[] 
+getDefaultNameJoint()
+{
+    string $nameSkeleton[]; //holds all joint names
+    
+    //what is the name of joint (not controls)
+    string $nameSkeletonLeg[] = { "LT_THIGH"
+        ,"LT_KNEE"
+        ,"LT_ANKLE"
+        ,"LT_HEEL"
+        ,"LT_BALL"
+        ,"LT_TOE"
+        ,"LT_REV_ANKLE"
+        ,"LT_REV_HEEL"
+        ,"LT_REV_BALL"
+        ,"LT_REV_TOE"
+        ,"RT_THIGH"
+        ,"RT_KNEE"
+        ,"RT_ANKLE"
+        ,"RT_HEEL"
+        ,"RT_BALL"
+        ,"RT_TOE"
+        ,"RT_REV_ANKLE"
+        ,"RT_REV_HEEL"
+        ,"RT_REV_BALL"
+        ,"RT_REV_TOE"
+    };
+    //save names
+    for( $i=0; $i<size($nameSkeletonLeg); $i++){$nameSkeleton[size($nameSkeleton)] = $nameSkeletonLeg[$i];}    
+    
+    //new
+    string $nameSkeletonUpperBody[] = { "ROOT",
+        "SPINE_1",
+        "SPINE_2",
+        "NECK",
+        "HEAD",
+        "JAW"
+    };
+    for( $i=0; $i<size($nameSkeletonUpperBody); $i++){$nameSkeleton[size($nameSkeleton)] = $nameSkeletonUpperBody[$i];}    
+    
+    //new
+    string $nameSkeletonHand[] = {
+        "PINKY_LEFT",
+        "INDEX_LEFT",
+        "MIDDLE_LEFT",
+        "RING_LEFT",
+        "THUMB_LEFT",
+        "Pinky_1_LEFT", 
+        "Pinky_2_LEFT",
+        "Pinky_end_LEFT",
+        "Index_1_LEFT",
+        "Index_2_LEFT",
+        "Index_end_LEFT",
+        "Middle_1_LEFT",
+        "Middle_2_LEFT",
+        "Middle_end_LEFT",
+        "Ring_1_LEFT",
+        "Ring_2_LEFT",
+        "Ring_end_LEFT",
+        "Thumb_1_LEFT",
+        "Thumb_end_LEFT",
+        "LEFT_CLAVICLE",
+        "LEFT_SHOULDER",
+        "LEFT_ELBOW",
+        "LEFT_WRIST",
+        "LEFT_PALM",
+        "PINKY_RIGHT",
+        "INDEX_RIGHT",
+        "MIDDLE_RIGHT",
+        "RING_RIGHT",
+        "THUMB_RIGHT",
+        "Pinky_1_RIGHT", 
+        "Pinky_2_RIGHT",
+        "Pinky_end_RIGHT",
+        "Index_1_RIGHT",
+        "Index_2_RIGHT",
+        "Index_end_RIGHT",
+        "Middle_1_RIGHT",
+        "Middle_2_RIGHT",
+        "Middle_end_RIGHT",
+        "Ring_1_RIGHT",
+        "Ring_2_RIGHT",
+        "Ring_end_RIGHT",
+        "Thumb_1_RIGHT",
+        "Thumb_end_RIGHT",
+        "RIGHT_CLAVICLE",
+        "RIGHT_SHOULDER",
+        "RIGHT_ELBOW",
+        "RIGHT_WRIST",
+        "RIGHT_PALM"
+    };
+    for( $i=0; $i<size($nameSkeletonHand); $i++){$nameSkeleton[size($nameSkeleton)] = $nameSkeletonHand[$i];}    
+    
+    
+    return $nameSkeleton;
+}
+
+
+
+////This parents joints of biped
+//assumes all names exist
+//[child parent, child parent, child parent]
+//it can have any length
+global proc string[]
+getDefaultHierarchy()
+{
+    
+    string $defaultHierarchy[];
+    
+    //for leg
+    string $defaultHierarchyLeg[]={
+        "LT_KNEE",
+        "LT_THIGH",
+        
+        "LT_ANKLE",
+        "LT_KNEE",
+        
+        "LT_HEEL",
+        "LT_ANKLE",
+        
+        "LT_BALL",
+        "LT_HEEL",
+        
+        "LT_TOE",
+        "LT_BALL",
+        
+        "LT_REV_HEEL",
+        "LT_REV_ANKLE",
+        
+        "LT_REV_BALL",
+        "LT_REV_HEEL",
+        
+        "LT_REV_TOE",
+        "LT_REV_BALL",
+        
+        "RT_KNEE",
+        "RT_THIGH",
+        
+        "RT_ANKLE",
+        "RT_KNEE",
+        
+        "RT_HEEL",
+        "RT_ANKLE",
+        
+        "RT_BALL",
+        "RT_HEEL",
+        
+        "RT_TOE",
+        "RT_BALL",
+        
+        "RT_REV_HEEL",
+        "RT_REV_ANKLE",
+        
+        "RT_REV_BALL",
+        "RT_REV_HEEL",
+        
+        "RT_REV_TOE",
+        "RT_REV_BALL"
+    };
+    //save names
+    for( $i=0; $i<size($defaultHierarchyLeg); $i++){$defaultHierarchy[size($defaultHierarchy)] = $defaultHierarchyLeg[$i];}  
+    
+    //new
+    string $defaultHierarchySpine[]= {
+        "SPINE_1",
+        "ROOT",
+        
+        "SPINE_2",
+        "SPINE_1",
+        
+        "NECK",
+        "SPINE_1",
+        
+        "NECK",
+        "SPINE_2",
+        
+        "HEAD",
+        "NECK",
+        
+        "JAW",
+        "HEAD"
+    };
+    for( $i=0; $i<size($defaultHierarchySpine); $i++){$defaultHierarchy[size($defaultHierarchy)] = $defaultHierarchySpine[$i];}  
+    
+    
+    //new
+    string $defaultHierarchyHand[]= {
+        "PINKY_LEFT","LEFT_PALM",
+        "INDEX_LEFT","LEFT_PALM",
+        "MIDDLE_LEFT","LEFT_PALM",
+        "RING_LEFT","LEFT_PALM",
+        "THUMB_LEFT","LEFT_PALM",
+        "Pinky_1_LEFT","PINKY_LEFT",
+        "Pinky_2_LEFT","Pinky_1_LEFT",
+        "Pinky_end_LEFT","Pinky_2_LEFT",
+        "Index_1_LEFT","INDEX_LEFT",
+        "Index_2_LEFT","Index_1_LEFT",
+        "Index_end_LEFT","Index_2_LEFT",
+        "Middle_1_LEFT","MIDDLE_LEFT",
+        "Middle_2_LEFT","Middle_1_LEFT",
+        "Middle_end_LEFT","Middle_2_LEFT",
+        "Ring_1_LEFT","RING_LEFT",
+        "Ring_2_LEFT","Ring_1_LEFT",
+        "Ring_end_LEFT","Ring_2_LEFT",
+        "Thumb_1_LEFT","THUMB_LEFT",
+        "Thumb_end_LEFT","Thumb_1_LEFT",
+        "LEFT_SHOULDER","LEFT_CLAVICLE",
+        "LEFT_ELBOW","LEFT_SHOULDER",
+        "LEFT_WRIST","LEFT_ELBOW",
+        //"LEFT_PALM","LEFT_WRIST",
+        "PINKY_RIGHT","RIGHT_PALM",
+        "INDEX_RIGHT","RIGHT_PALM",
+        "MIDDLE_RIGHT","RIGHT_PALM",
+        "RING_RIGHT","RIGHT_PALM",
+        "THUMB_RIGHT","RIGHT_PALM",
+        "Pinky_1_RIGHT","PINKY_RIGHT",
+        "Pinky_2_RIGHT","Pinky_1_RIGHT",
+        "Pinky_end_RIGHT","Pinky_2_RIGHT",
+        "Index_1_RIGHT","INDEX_RIGHT",
+        "Index_2_RIGHT","Index_1_RIGHT",
+        "Index_end_RIGHT","Index_2_RIGHT",
+        "Middle_1_RIGHT","MIDDLE_RIGHT",
+        "Middle_2_RIGHT","Middle_1_RIGHT",
+        "Middle_end_RIGHT","Middle_2_RIGHT",
+        "Ring_1_RIGHT","RING_RIGHT",
+        "Ring_2_RIGHT","Ring_1_RIGHT",
+        "Ring_end_RIGHT","Ring_2_RIGHT",
+        "Thumb_1_RIGHT","THUMB_RIGHT",
+        "Thumb_end_RIGHT","Thumb_1_RIGHT",
+        "RIGHT_SHOULDER","RIGHT_CLAVICLE",
+        "RIGHT_ELBOW","RIGHT_SHOULDER",
+        "RIGHT_WRIST","RIGHT_ELBOW"
+        //,
+        //"RIGHT_PALM","RIGHT_WRIST"
+    };
+    for( $i=0; $i<size($defaultHierarchyHand); $i++){$defaultHierarchy[size($defaultHierarchy)] = $defaultHierarchyHand[$i];}  
+    
+    
+    return $defaultHierarchy;
+}
+
+
+
+//
+
+
+
+
+
+
+
+
+
+
+
+
+

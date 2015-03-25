@@ -1,0 +1,52 @@
+//author: Nathaniel Anozie (ogbonnawork at gmail dot com)
+//
+//
+
+//modify at own risk
+
+// updated 08-25-2014 nate ----- initial commit
+
+
+global proc na_twoTargetRootFollowBaseRootRotate(){
+    
+    //get base to follow two targets, assumes rotation following only
+    //requires selected roots only, target 1, target 2, base
+    //requires identical number and type of elements in each hierarchy
+    
+    string $sel[] = `ls -sl`;
+    if(size($sel) == 3){
+        string $target1Root = $sel[0];
+        string $target2Root = $sel[1];
+        string $baseRoot = $sel[2];
+        
+        //get joint lists
+        string $target1Ar[] = `listRelatives -allDescendents -type joint $target1Root`;
+        string $target2Ar[] = `listRelatives -allDescendents -type joint $target2Root`;
+        string $baseAr[] = `listRelatives -allDescendents -type joint $baseRoot`;
+        $target1Ar = stringArrayCatenate($target1Ar,{$target1Root});//dont leave out roots
+        $target2Ar = stringArrayCatenate($target2Ar,{$target2Root});
+        $baseAr = stringArrayCatenate($baseAr,{$baseRoot});
+        
+        if(  (size($target1Ar) == size($target2Ar)) && (size($target1Ar) == size($baseAr))   ){
+            
+            for($i = 0; $i < size($target1Ar); $i++){
+                //get base to follow targets via rotation, assumes offset on average interpolation
+                string $cmd = "";
+                string $parent1 = $target1Ar[$i];
+                string $parent2 = $target2Ar[$i];
+                string $child = $baseAr[$i];
+                $cmd+= "orientConstraint -mo "+$parent1+" "+$child+";";
+                $cmd+= "orientConstraint -mo "+$parent2+" "+$child+";";
+                
+                print("Running this Command ---\n");
+                print("eval(\""+$cmd+"\")\n");
+                eval($cmd);
+            }
+            
+        }
+        else{print("Error! Requires equal number joints in each target and base");}
+        
+    }
+    else{print("Error! Select two targets chain roots then base");}
+
+}

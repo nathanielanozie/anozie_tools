@@ -1,0 +1,238 @@
+/**@brief Tools for adding ik stretching to a straight chain rig
+@author Nathaniel O. Anozie (ogbonnawork at gmail dot com)
+@bug 
+@note date created: Mar 22, 2012
+@note date last modified: Apr 19, 2012
+@note How to Install
+@source stretchIK.mel
+@note released 
+@note Modify at your own risk
+@note v1.0.0
+@note -- added geo stretch
+
+*/
+
+
+global string $gl_startJoint = "gl_startJoint";
+global string $gl_endJoint = "gl_endJoint";
+global string $gl_ikStretchType = "gl_ikStretchType";
+global string $gl_scaleGeometry = "gl_scaleGeometry";
+global string $gl_distName = "gl_distName";
+global string $gl_distAttribute = "gl_distAttribute"; 
+global string $gl_jointStretchAxis = "gl_jointStretchAxis";
+global string $gl_geoStretchAxis = "gl_geoStretchAxis";
+global string $gl_isShrinkToMinimum = "gl_isShrinkToMinimum";
+
+/**ui
+*/
+global proc na_stretchIK_UI()
+{
+    global string $gl_startJoint;
+    global string $gl_endJoint;
+    global string $gl_ikStretchType;
+    global string $gl_scaleGeometry;
+    global string $gl_distName;
+    global string $gl_distAttribute; 
+    global string $gl_jointStretchAxis;
+    global string $gl_geoStretchAxis;
+    global string $gl_isShrinkToMinimum;
+    
+    //setup up title for gui
+    string $titleWindow = "na_stretchIK.mel  Stretch Joints";
+    string $mainWindowName = "mainWindow";
+    na_window($mainWindowName,$titleWindow, 430, 440);
+    
+    //set up format for gui
+    string $form = `formLayout -numberOfDivisions 50 "form layout"`;
+    
+    
+    
+    na_textFieldGrp($form, $mainWindowName,"start joint", 5, -10, $gl_startJoint);
+    na_textFieldGrp($form, $mainWindowName,"end joint", 25, -10, $gl_endJoint);
+    na_textFieldGrp($form, $mainWindowName,"distance node", 45, -10, $gl_distName);
+    na_textFieldGrp($form, $mainWindowName,"distance attribute", 65, -10, $gl_distAttribute);
+    
+    
+    //joint axis stretch 
+    na_text($form, $mainWindowName,"joint stretch axis", 105, 20);
+    string $col_jointStretchAxis = `radioCollection`;
+    na_radioButton($form, $mainWindowName,"x", 102, 140,"jointStretchAxis_pickType_cmd(0)",$col_jointStretchAxis);
+    na_radioButton($form, $mainWindowName,"y", 102, 180,"jointStretchAxis_pickType_cmd(1)",$col_jointStretchAxis);
+    na_radioButton($form, $mainWindowName,"z", 102, 220,"jointStretchAxis_pickType_cmd(2)",$col_jointStretchAxis);
+
+    
+     //geo axis stretch 
+    na_text($form, $mainWindowName,"geo stretch axis", 124, 20);
+    string $col_geoStretchAxis = `radioCollection`;
+    na_radioButton($form, $mainWindowName,"x", 134, 140,"geoStretchAxis_pickType_cmd(0)",$col_geoStretchAxis);
+    na_radioButton($form, $mainWindowName,"y", 134, 180,"geoStretchAxis_pickType_cmd(1)",$col_geoStretchAxis);
+    na_radioButton($form, $mainWindowName,"z", 134, 220,"geoStretchAxis_pickType_cmd(2)",$col_geoStretchAxis);
+ 
+    
+    //stretch type
+    $gl_ikStretchType = `textScrollList -numberOfRows 2 -allowMultiSelection false
+    -append "translate" -append "scale"
+    -selectItem "translate"
+    -showIndexedItem 1`;  
+    
+    formLayout -edit 
+    -attachForm $gl_ikStretchType "top" 160
+    -attachForm $gl_ikStretchType "left" 180
+    $form;
+    na_text($form, $mainWindowName,"stretch type", 160, 20);
+    
+    
+    //stretch option
+    na_text($form, $mainWindowName,"stretch to min", 280, 20);
+    string $col_isShrinkToMinimum = `radioCollection`;
+    na_radioButton($form, $mainWindowName,"yes", 275, 140,"isShrinkToMinimum_pickType_cmd(0)",$col_isShrinkToMinimum);
+    na_radioButton($form, $mainWindowName,"no", 275, 200,"isShrinkToMinimum_pickType_cmd(1)",$col_isShrinkToMinimum);
+    
+    
+    //scale geo
+    $gl_scaleGeometry = `textScrollList -numberOfRows 2 -allowMultiSelection false
+    -append "no" -append "yes"
+    -selectItem "yes"
+    -showIndexedItem 1`;  
+    
+    formLayout -edit 
+    -attachForm $gl_scaleGeometry "top" 300
+    -attachForm $gl_scaleGeometry "left" 180
+    $form;    
+    na_text($form, $mainWindowName,"scale geometry", 300, 20);
+
+    na_button($form, $mainWindowName,"ok", 390, 180,"button","na_stretchIK_cmd");
+    
+    showWindow $mainWindowName;
+}
+
+/**widget commands
+*/
+global proc jointStretchAxis_pickType_cmd(int $type)
+{
+    global string $gl_jointStretchAxis;
+    if($type == 0){ $gl_jointStretchAxis = "X"; }
+    else if($type == 1){ $gl_jointStretchAxis = "Y"; }
+    else {$gl_jointStretchAxis = "Z";}
+}
+/**widget commands
+*/
+global proc geoStretchAxis_pickType_cmd(int $type)
+{
+    global string $gl_geoStretchAxis;
+    if($type == 0){ $gl_geoStretchAxis = "X"; }
+    else if($type == 1){ $gl_geoStretchAxis = "Y"; }
+    else {$gl_geoStretchAxis = "Z";}
+}
+/**widget commands
+*/
+global proc isShrinkToMinimum_pickType_cmd(int $type)
+{
+    global string $gl_isShrinkToMinimum;
+    if($type == 0){ $gl_isShrinkToMinimum = "yes"; }
+    else{ $gl_isShrinkToMinimum = "no"; }
+}
+
+
+
+/**ui command
+*/
+
+global proc na_stretchIK_cmd()
+{
+
+    
+    global string $gl_startJoint;
+    global string $gl_endJoint;
+    global string $gl_ikStretchType;
+    global string $gl_scaleGeometry;
+    global string $gl_distName;
+    global string $gl_distAttribute; 
+    global string $gl_jointStretchAxis;
+    global string $gl_geoStretchAxis;
+    global string $gl_isShrinkToMinimum;
+    
+    //main variables used by script
+    string $jointStretchAxis = "";
+    string $geoStretchAxis = "";
+    string $start = ""; 
+    string $end = ""; 
+    string $nodeName = "";
+    string $nodeAttr = "";
+    int $isShrinkToMin = 0;
+    ///
+    
+    if( `strcmp $gl_isShrinkToMinimum "yes"` == 0){$isShrinkToMin = 1;}
+    
+    
+    string $ikStretchTypeArray[] = `textScrollList -query -selectItem $gl_ikStretchType`;
+    string $scaleGeometryArray[] = `textScrollList -query -selectItem $gl_scaleGeometry`;
+
+    
+    //got main variables
+    $jointStretchAxis = $gl_jointStretchAxis;
+    $geoStretchAxis = $gl_geoStretchAxis;
+    $start = `textFieldGrp -query -text $gl_startJoint`;
+    $end = `textFieldGrp -query -text $gl_endJoint`;
+    $nodeName = `textFieldGrp -query -text $gl_distName`;
+    $nodeAttr = `textFieldGrp -query -text $gl_distAttribute`;
+
+    
+    
+    //stretch stuff
+    if( `strcmp $ikStretchTypeArray[0] "translate"` == 0)
+    {
+        na_stretchTranslateIK($isShrinkToMin,$start,$end,$jointStretchAxis,$nodeName,$nodeAttr);
+        
+    }
+    else
+    {
+        na_stretchScaleIK($isShrinkToMin,$start,$end,$jointStretchAxis,$nodeName,$nodeAttr);
+    }
+    
+    //should geo be scaled
+    if( `strcmp $scaleGeometryArray[0] "yes"` == 0)
+    {
+        //assume scale for geo axis same as joint
+        na_stretchGeo($isShrinkToMin,$start,$end,$geoStretchAxis,$nodeName,$nodeAttr);
+    }
+    else{ print("skipping scaling geometry\n"); }
+    
+    
+}
+
+
+/**assumes empty scene
+*/
+global proc 
+na_stretchIK_UI_unitTest()
+{
+    joint -p 0 0 0 ;
+    joint -p 6 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint1;
+    select -cl  ;
+    select -r joint1 ;
+    //num segments, start joint, end joint, prefix for newly created joints
+    eval( "source \"na_segment.mel\";" );
+    na_segment(4, "joint1", "joint2", "pre");
+    
+    
+    select -cl  ;
+    select -r joint1.rotatePivot ;
+    select -add joint2.rotatePivot ;
+    ikHandle; 
+    select -cl  ;
+    distanceDimension -sp 0 0 -2 -ep 5 0 -3 ;
+    select -cl  ;
+    select -r locator1 ;
+    move -rpr 0 0 0 ;
+    select -cl  ;
+    select -r locator2 ;
+    move -rpr 6 0 0 ;
+    select -r ikHandle1 ;
+    parent ikHandle1 locator2 ;
+    setAttr ikHandle1.visibility 0;
+    select -cl  ;
+    
+    na_stretchIK_UI();
+}

@@ -1,0 +1,89 @@
+/**@brief ui for tool for duplicating set driven keys
+@author Nathaniel O. Anozie (ogbonnawork at gmail dot com)
+@bug 
+@note date created: May 15 2012
+@note date last modified: May 15 2012
+@note source na_dupHandRig.mel
+@note source na_ui.mel
+@see na_ui.mel
+*/
+
+
+global string $gl_fromJoint = "gl_fromJoint";
+global string $gl_toJoint = "gl_toJoint";
+global string $gl_fromAnim = "gl_fromAnim";
+global string $gl_toAnim = "gl_toAnim";
+
+/**ui
+*/
+global proc
+na_dupHandRigUI()
+{
+    global string $gl_fromJoint;
+    global string $gl_toJoint;
+    global string $gl_fromAnim;
+    global string $gl_toAnim;
+
+    
+    
+    //setup up title for gui
+    string $titleWindow = "na_dupHandRig.mel  Add new anim control";
+    string $mainWindowName = "mainWindow";
+    na_window($mainWindowName,$titleWindow, 420, 220);
+
+    //set up format for gui
+    string $form = `formLayout -numberOfDivisions 50 "form layout"`;
+    
+    
+    na_textFieldGrp($form, $mainWindowName,"from joint(s) space separated", 25, 20, $gl_fromJoint);
+    na_textFieldGrp($form, $mainWindowName,"to joint(s) space separated", 55, 20, $gl_toJoint);
+    na_textFieldGrp($form, $mainWindowName,"from anim", 85, 20, $gl_fromAnim);
+    na_textFieldGrp($form, $mainWindowName,"to anim", 115, 20, $gl_toAnim);
+
+    
+    na_button($form, $mainWindowName,"ok", 160, 170,"button","na_dupHandRig_cmd");
+    
+    showWindow $mainWindowName;
+    
+    
+}
+
+
+/**ui command
+*/
+global proc
+na_dupHandRig_cmd()
+{
+   
+    global string $gl_fromJoint;
+    global string $gl_toJoint;
+    global string $gl_fromAnim;
+    global string $gl_toAnim;
+
+    
+    //temp
+    string $fromJoint="";
+    string $toJoint="";
+    
+    //used
+    string $fromJointArray[] = {};
+    string $toJointArray[] = {};
+    string $fromAnim="";
+    string $toAnim="";
+
+    
+    $fromJoint = `textFieldGrp -query -text $gl_fromJoint`;
+    $toJoint = `textFieldGrp -query -text $gl_toJoint`;
+    $fromAnim = `textFieldGrp -query -text $gl_fromAnim`;
+    $toAnim = `textFieldGrp -query -text $gl_toAnim`;
+
+    
+    
+    $fromJointArray = stringToStringArray($fromJoint," ");
+    $toJointArray = stringToStringArray($toJoint," ");
+    
+  
+
+   na_dupHandRig($fromAnim,$toAnim,$fromJointArray,$toJointArray);
+    
+}

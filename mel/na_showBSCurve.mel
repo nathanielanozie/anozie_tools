@@ -1,0 +1,33 @@
+//author: Nathaniel Anozie (ogbonnawork at gmail dot com)
+//
+//
+
+//modify at own risk
+
+// updated 08-13-2014 nate ----- initial commit
+
+
+global proc na_showBSCurve( string $object[] ){
+    
+    //show blendshape curve given object hooked up to it
+    //object -- animator control
+    
+    if(size($object) >= 1){
+        string $result[] = {};
+        
+        //assumes straight forward to get input from animator control
+        for($arg in $object){
+            string $curves[] = {};
+            $curves = `listConnections -plugs true -destination true -source false $arg`;
+            $result = stringArrayCatenate($result,$curves);
+        }
+        
+        //show graph of set driven key for editing
+        select -r $result;
+        GraphEditor;
+        FrameSelected;
+        fitPanel -selected;
+    }
+    else{print("Please select object hooked up to blendshape");}
+
+}

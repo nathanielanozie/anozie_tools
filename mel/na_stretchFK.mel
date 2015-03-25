@@ -1,0 +1,260 @@
+/**@file na_stretchFK.mel
+*@brief Uses setDrivenKeys to drive forward kinematics stretching behavior
+*@author Nathaniel O. Anozie (ogbonnawork at gmail dot com)
+*@note date created: Apr 5 2012
+*@note Modify at your own risk
+*
+*@addtogroup stretch
+*@{
+*/
+
+
+
+/**
+@param string $jointArray joints we wish to add stretch to
+@param string $downChainAxisTranslate  axis for stretching on non geo
+@param string $downChainAxisScale axis for stretching on geo (not used when $isGeoToBeScaled zero)
+@param int $isGeoToBeScaled one if want geo to be scaled too (should support if geo not at every joint)
+@param string $nameFKStretchAttr stretch attribute name on each joint (it will create these)
+@pre assumes rig at default when this is first called to get correct default lengths for stretching
+@note start joint receives no stretching
+@see na_selectJointsInHierarchySubset
+@see na_stretchFK_assert
+@see na_stretchFK_geo
+@bug geo not scaled when translation of joints is used
+*/
+global proc
+na_stretchFK(string $jointArray[], string $downChainAxisTranslate, string $downChainAxisScale, int $isGeoToBeScaled, string $nameFKStretchAttr)
+{
+    na_stretchFK_assert($jointArray, $downChainAxisTranslate, $isGeoToBeScaled, $nameFKStretchAttr);
+    
+    string $joint[] = {};//get joints between start and end
+    float $valueFactor[] = {};//get joint default lengths
+    float $frame[] = {};
+    $frame = {1,0,2};//frames
+    $valueFactor = {1,0,2};//at default scale 1, at 0 scale is 0 at length 2 geo should have 2 times default scale
+    
+    na_stretchFK_joint($jointArray, $downChainAxisTranslate,$valueFactor,$frame,$nameFKStretchAttr);
+     
+    //optional scale geometry
+    if( $isGeoToBeScaled == 1)
+    {
+        na_stretchFK_geo($jointArray, $downChainAxisScale,$valueFactor,$frame,$nameFKStretchAttr);
+    }
+
+}
+/**
+@pre expects empty scene
+*/
+global proc
+na_stretchFK_unitTest_1()
+{
+    select -d;
+    joint -p 0 0 0 ;
+    joint -p 4 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint1;
+    joint -p 8 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint2;
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    // Result: pCube1 polyCube1 // 
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    // Result: pCube2 polyCube2 // 
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    // Result: pCube3 polyCube3 // 
+    select -r pCube1 ;
+    parent pCube1 joint1 ;
+    // Result: pCube1 // 
+    select -r pCube2 ;
+    move -rpr 3.5 -0.5 -0.5 ;
+    move -rpr 4 0 0 ;
+    parent pCube2 joint2 ;
+    // Result: pCube2 // 
+    select -r pCube3 ;
+    move -rpr -x 8 ;
+    parent pCube3 joint3 ;
+    // Result: pCube3 // 
+    select -cl  ;
+    select -r pCube3 ;
+    move 7.5 -0.5 0.5 pCube3.scalePivot pCube3.rotatePivot ;
+    select -cl  ;
+    select -r pCube2 ;
+    move 3.5 -0.5 0.5 pCube2.scalePivot pCube2.rotatePivot ;
+    select -r pCube1 ;
+    move -0.5 -0.5 0.5 pCube1.scalePivot pCube1.rotatePivot ;
+    select -tgl pCube2 ;
+    select -tgl pCube3 ;
+    scale -r 3.909481 1 1 ;
+    setAttr "pCube3.scaleX" 4;
+    setAttr "pCube1.scaleX" 4;
+    setAttr "pCube2.scaleX" 4;
+    makeIdentity -apply true -t 1 -r 1 -s 1 -n 0;
+    select -cl  ;
+    na_stretchFK({"joint1","joint2","joint3"}, "X","X", 1, "length");
+}
+/**
+@pre expects empty scene
+*/
+global proc
+na_stretchFK_unitTest_3()
+{
+    joint -p 0 0 0 ;
+    joint -p 2 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint1;
+    joint -p 4 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint2;
+    joint -p 6 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint3;
+    joint -p 8 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint4;
+    select -cl  ;
+    
+    na_stretchFK( {"joint1","joint2","joint3","joint4","joint5"}, "X","X", 0, "length");
+}
+/**
+@pre expects empty scene
+*/
+global proc
+na_stretchFK_unitTest_2()
+{
+    select -d;
+    joint -p 0 0 0 ;
+    joint -p 4 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint1;
+    
+    na_stretchFK({"joint1", "joint2"}, "X","X", 0, "length");
+}
+/**
+*/
+global proc
+na_stretchFK_assert(string $jointArray[], string $downChainAxis, int $isGeoToBeScaled, string $nameFKStretchAttr)
+{
+    if(size($jointArray) == 0){error("cannot find input to stretch");}
+    
+    //non-existence attr
+    string $attr = "";
+    string $joint="";
+    $attr = "translate"+$downChainAxis;
+    for( $i = 0; $i < size($jointArray); $i++)
+    {
+        $joint = $jointArray[$i];
+        if(`attributeExists $nameFKStretchAttr $joint` == 1){ error("attribute: "+$nameFKStretchAttr+" for--"+$joint+" exists already");}
+    }
+    if(`attributeExists $attr $joint` == 0){ error("attribute: "+$attr+" for--"+$joint+" not found");}
+}
+
+
+
+/**
+@note assumes rig at default when this is first called because it assumes
+the default length is what it is currently
+@param string $jointArray joint
+@param string $downChainAxis ex: X
+@param float list $value set driven key values
+@param float list $frame set driven key frames
+@param string $nameFKStretchAttr name for control for stretch
+@see na_stretchFK_joint_assert
+@see na_addAttribute
+@see na_stretch_drivenKey
+@see na_stretchCleanCurve
+@see na_getPlug
+*/
+global proc
+na_stretchFK_joint(string $jointArray[], string $downChainAxis, float $valueFactor[] , float $frame[], string $nameFKStretchAttr)
+{
+    na_stretchFK_joint_assert($jointArray, $downChainAxis,$valueFactor,$frame,$nameFKStretchAttr);
+    
+    //add length attribute
+    //
+    na_addAttribute({$nameFKStretchAttr}, $jointArray);
+    
+    //do set driven keys
+    //
+    string $attr = "";
+    $attr = "translate"+$downChainAxis;
+    string $drivenPlusAttrArray[] = {};    
+    $drivenPlusAttrArray = na_getPlug( $jointArray, $attr );
+    
+    na_stretch_drivenKey($jointArray, $drivenPlusAttrArray, $attr, $valueFactor, $frame, $nameFKStretchAttr); 
+    
+    //make curve smoothly interpolated
+    na_stretchCleanCurve( $jointArray, {$attr});
+}
+
+
+
+/**
+*/
+global proc
+na_stretchFK_joint_assert(string $jointArray[], string $downChainAxis, float $value[] , float $frame[], string $nameFKStretchAttr)
+{
+    string $attr = "";
+    $attr = "translate"+$downChainAxis;
+    
+    for($i = 0; $i < size($jointArray); $i++ )
+    {
+        $joint= $jointArray[$i];
+        if(`objExists  $joint` == 0){ error("Sorry, Cannot find--"+$joint); }
+        
+        if(`attributeExists $attr $joint` == 0){ error("attribute: "+$attr+" for--"+$joint+" not found");}
+        
+        if(size($value) != size($frame) ){ error("size mismatch set driven key data"); }
+    }
+}
+
+
+/**
+@note 
+*/
+global proc
+na_stretchFK_geo(string $joint[], string $downChainAxis, float $value[] , float $frame[], string $nameFKStretchAttr)
+{
+    
+    na_stretchFK_geo_assert($joint,$downChainAxis,$value,$frame,$nameFKStretchAttr);
+    
+    string $geoArray[] = {};
+    $geoArray = na_getGeoFromNodeArray($joint);
+    
+    //do set driven keys
+    //
+    //going to scale geometry so we get its scale attribute
+    string $attr = "";
+    $attr = "scale"+$downChainAxis;
+    
+    string $jointUsed[]={};
+    string $drivenPlusAttrArray[] = {};
+    //
+    //start at 2nd joint which scales first geometry, end joint geometry not scale reason for minus one
+    for($j = 0; $j < (size($geoArray)-1); $j++)
+    {
+        $drivenPlusAttrArray[size($drivenPlusAttrArray)] = ($geoArray[$j])+"."+$attr;
+    } 
+    //start at 2nd joint reason for beginning at 1 index
+    for($j = 1; $j < size($joint); $j++)
+    {
+        $jointUsed[size($jointUsed)] = $joint[$j];
+    } 
+    na_stretch_drivenKey($jointUsed, $drivenPlusAttrArray, $attr, $value, $frame, $nameFKStretchAttr);
+    
+    //make curve smoothly interpolated
+    na_stretchCleanCurve( $geoArray, {$attr});
+}
+/**
+*/
+global proc
+na_stretchFK_geo_assert(string $jointArray[], string $downChainAxis, float $value[] , float $frame[], string $nameFKStretchAttr)
+{
+    if(size($jointArray) < 2){ error("need at least 2 joints to scale geometry with stretch");}
+   
+    //cant scale geometry without an animator control to be used for it
+    for($i = 0; $i < size($jointArray); $i ++ )
+    {
+        $joint = $jointArray[$i];
+        if(`attributeExists $nameFKStretchAttr $joint` == 0){ error("attribute: "+$nameFKStretchAttr+" for--"+$joint+" not found");}
+    }
+    if(size($value) != size($frame)){ error("size mismatch set driven key data"); }
+    
+}
+
+/**
+*@{
+*/

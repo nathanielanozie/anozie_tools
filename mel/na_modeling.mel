@@ -1,0 +1,158 @@
+/**@file na_modeling.mel Tools for modeling like showing cvs,or getting geo duplicated at placed at these selected joints ...
+@author Nathaniel O. Anozie (ogbonnawork at gmail dot com)
+@note date created: Sep 06 2012
+*/
+
+/**duplicate geometry at destination translation
+@pre joint list, then a single geometry item
+*/
+global proc 
+na_duplicateGeoAtDestinationBySelected_translate()
+{
+    string $geo[] = na_getLastSelected();
+    string $destination[] = na_getAllButLastSelected();
+    string $message = "Please select all destination Objects, then single geometry poly,nurbs";
+    if(size($destination)==0 || size($geo)!=1){ error($message); }
+    
+    na_assertTypeInList($geo,{"transform","joint"});
+    na_assertTypeInList($destination,{"transform","joint"});
+    na_duplicateGeoAtDestination($geo[0], $destination, 1);
+}
+/**duplicate geometry at destination translation and rotation
+@pre joint list, then a single geometry item
+*/
+global proc 
+na_duplicateGeoAtDestinationBySelected_translateRotate()
+{
+    string $geo[] = na_getLastSelected();
+    string $destination[] = na_getAllButLastSelected();
+    string $message = "Please select all destination Objects, then single geometry poly,nurbs";
+    if(size($destination)==0 || size($geo)!=1){ error($message); }
+    
+    na_assertTypeInList($geo,{"transform","joint"});
+    na_assertTypeInList($destination,{"transform","joint"});
+    na_duplicateGeoAtDestination($geo[0], $destination, 2);
+}
+global proc 
+na_duplicateGeoAtDestinationBySelected_translate_unitTest()
+{
+    polyCone -r 1 -h 2 -sx 8 -sy 1 -sz 0 -ax 0 1 0 -rcp 0 -cuv 3 -ch 1;
+    select -d;
+    joint -p 0 0 -2 ;
+    joint -p 0 2 -1 ;
+    joint -e -zso -oj xyz -sao yup joint1;
+    joint -p 0 3 1 ;
+    joint -e -zso -oj xyz -sao yup joint2;
+    joint -p 0 4 3 ;
+    joint -e -zso -oj xyz -sao yup joint3;
+    joint -p 0 6 2 ;
+    joint -e -zso -oj xyz -sao yup joint4;
+    joint -p 0 6 4 ;
+    joint -e -zso -oj xyz -sao yup joint5;
+    joint -p 0 5 5 ;
+    joint -e -zso -oj xyz -sao yup joint6;
+    select -cl  ;
+    
+    select -r joint1 joint2 joint3 joint4 joint5 joint6 joint7 pCone1;
+
+    na_duplicateGeoAtDestinationBySelected_translate();
+}
+global proc 
+na_duplicateGeoAtDestinationBySelected_translateRotate_unitTest()
+{
+    polyCone -r 1 -h 2 -sx 8 -sy 1 -sz 0 -ax 0 1 0 -rcp 0 -cuv 3 -ch 1;
+    select -d;
+    joint -p 0 0 -2 ;
+    joint -p 0 2 -1 ;
+    joint -e -zso -oj xyz -sao yup joint1;
+    joint -p 0 3 1 ;
+    joint -e -zso -oj xyz -sao yup joint2;
+    joint -p 0 4 3 ;
+    joint -e -zso -oj xyz -sao yup joint3;
+    joint -p 0 6 2 ;
+    joint -e -zso -oj xyz -sao yup joint4;
+    joint -p 0 6 4 ;
+    joint -e -zso -oj xyz -sao yup joint5;
+    joint -p 0 5 5 ;
+    joint -e -zso -oj xyz -sao yup joint6;
+    select -cl  ;
+    
+    select -r joint1 joint2 joint3 joint4 joint5 joint6 joint7 pCone1;
+
+    na_duplicateGeoAtDestinationBySelected_translateRotate();
+}
+
+
+/**duplicate geometry at destination
+@param string $geo -- what geometry to use, supports transform, joint
+@param string $destinationObject[] -- what to match geo to,
+supported types: joint, transform
+@param int $destinationMatchOption -- 1 geo match point only
+--2 match point and orient, anything else it prints error
+*/
+global proc 
+na_duplicateGeoAtDestination(string $geo, string $destinationObject[], int $destinationMatchOption)
+{
+    na_assertTypeInList({$geo},{"transform","joint"});
+    na_assertTypeInList($destinationObject,{"transform","joint"});
+    
+    string $message1 = "destinationMatchOption: 1 pointConstraint matching\n";
+    string $message2 = "destinationMatchOption: 2 parentConstraint matching\n";
+    string $error_message = $message1+$message2;
+    
+    string $constraint = "";
+    switch($destinationMatchOption){
+        case 1:
+        $constraint = "pointConstraint";
+        break;
+        case 2:
+        $constraint = "parentConstraint";
+        break;
+        default:
+        error($error_message);
+        break;
+    }	
+    na_assertObjectExist({$geo});
+    na_assertObjectExist($destinationObject);
+    
+    
+    
+    //duplicating and placing geometry at destination
+    string $dupGeo[] = {};
+    for($i = 0; $i < size($destinationObject); $i++)
+    {
+        $joint = $destinationObject[$i];
+        $dupGeo = {};
+        $dupGeo = `duplicate -rr $geo`;
+        string $constr[] = eval( $constraint+" "+"-weight 1  "+$joint+" "+$dupGeo[0]);
+        delete $constr[0];
+    }
+    
+}
+/**assume empty scene
+*/
+global proc 
+na_duplicateGeoAtDestination_unitTest()
+{
+    polyCone -r 1 -h 2 -sx 8 -sy 1 -sz 0 -ax 0 1 0 -rcp 0 -cuv 3 -ch 1;
+    select -d;
+    joint -p 0 0 -2 ;
+    joint -p 0 2 -1 ;
+    joint -e -zso -oj xyz -sao yup joint1;
+    joint -p 0 3 1 ;
+    joint -e -zso -oj xyz -sao yup joint2;
+    joint -p 0 4 3 ;
+    joint -e -zso -oj xyz -sao yup joint3;
+    joint -p 0 6 2 ;
+    joint -e -zso -oj xyz -sao yup joint4;
+    joint -p 0 6 4 ;
+    joint -e -zso -oj xyz -sao yup joint5;
+    joint -p 0 5 5 ;
+    joint -e -zso -oj xyz -sao yup joint6;
+    select -cl  ;
+    
+    select -r joint1 joint2 joint3 joint4 joint5 joint6 joint7;
+    string $jnt[] = `ls -sl`;
+    
+    na_duplicateGeoAtDestination( "pCone1",$jnt,1 );
+}

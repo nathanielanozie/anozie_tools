@@ -1,0 +1,51 @@
+/**file na_editJoint_UI.mel A neat example of simple user interface using some of the ui mel tools
+*
+*@defgroup uiDraw UI examples
+*@{
+*Simple user interface example
+*
+*/
+
+global string $gl_trioAxis = "gl_trioAxis";
+
+
+/**ui
+*/
+global proc na_editJoint_UI()
+{    
+    global string $gl_trioAxis;
+    
+    
+    //setup up title for gui
+    string $titleWindow = "In Joint Drawing Tools";
+    string $mainWindowName = "mainWindow";
+    na_window($mainWindowName,$titleWindow, 430, 120);
+    
+    
+    //set up format for gui
+    string $form = `formLayout -numberOfDivisions 50 "form layout"`;
+    
+    //add ui elements like textfields,buttons, and/or radio buttons
+    na_textFieldGrp($form, $mainWindowName,"Axis \n(down chain,world up,other)\nex: 'xyz'", 5, 10, $gl_trioAxis);
+    na_button($form, $mainWindowName,"ok", 75,160,"button","na_editJoint_cmd");
+    
+    showWindow $mainWindowName;
+}
+
+
+/**ui command
+*/
+
+global proc na_editJoint_cmd()
+{
+    global string $gl_trioAxis;
+    
+    string $axis = "";
+    $axis = `textFieldGrp -query -text $gl_trioAxis`;
+    na_setJointLocalRotationAxis($axis);
+}
+
+
+/**
+*@}
+*/

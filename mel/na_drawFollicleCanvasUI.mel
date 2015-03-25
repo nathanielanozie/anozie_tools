@@ -1,0 +1,48 @@
+
+global string $gl_numJoint = "gl_numJoint";
+global string $gl_numThick = "gl_numThick";
+
+
+/**ui
+*/
+global proc na_drawFollicleCanvasUI()
+{    
+    global string $gl_numJoint;
+    global string $gl_numThick;
+    
+    //setup up title for gui
+    string $titleWindow = "na_rivetGeneral.mel  Draw Skin Canvas";
+    string $mainWindowName = "mainWindow";
+    na_window($mainWindowName,$titleWindow, 330, 150);
+    
+    
+    //set up format for gui
+    string $form = `formLayout -numberOfDivisions 50 "form layout"`;
+    
+    //add ui elements like textfields,buttons, and/or radio buttons
+    na_intFieldGrp($form, $mainWindowName,"number v patches \n ex: number interior joints +2", 5, 10, $gl_numJoint);
+    na_intFieldGrp($form, $mainWindowName,"number u patches \n ex: 1", 50, 10, $gl_numThick);
+
+    na_button($form, $mainWindowName,"ok", 85,150,"button","na_drawFollicleCanvas_cmd");
+    
+    showWindow $mainWindowName;
+}
+
+
+/**ui command
+*/
+
+global proc na_drawFollicleCanvas_cmd()
+{
+    global string $gl_numJoint;
+    global string $gl_numThick;
+    
+    int $numJoint = 0;
+    $numJoint = `intFieldGrp -query -value1 $gl_numJoint`;
+    
+    int $numThick = 0;
+    $numThick = `intFieldGrp -query -value1 $gl_numThick`;
+    
+    
+    na_drawFollicleCanvas($numJoint,$numThick);
+}

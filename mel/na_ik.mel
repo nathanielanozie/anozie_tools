@@ -1,0 +1,69 @@
+/*ik drawing tools for rigging, cloth sim
+
+@author Nathaniel Anozie
+ogbonnawork at gmail.com
+
+@note Modify at own risk
+
+@note Inspired by Anoop A.K (codecg dot com) learning about iksc,ikrp drawing in mel
+*/
+
+//last updated: 12/05/2014 -- added ik rp drawing given root joint
+
+
+//given selected root, draw 2 joint ik sc 
+global proc ikSC_2()
+{
+    string $sel[] = `ls -sl`;
+    if(size($sel) == 1){
+        string $root = $sel[0];
+        select -r $root;
+        string $check[] =`listRelatives -children -type joint $root`;
+        if(size($check) != 1){ error("Error Nothing to Draw IK SC with, check end"); }
+        
+        pickWalk -direction down;//using this so get full path
+        string $children[] = {};
+        $children = `ls -sl -type joint`;
+        if(size($children) != 1){print("Error Nothing to end IK SC at");}
+        else{
+            string $end =  $children[0];
+            select -r $root $end;  //make ik sc
+            ikHandle -sol ikSCsolver;//other ikRPsolver
+            select -cl;
+        }
+    }	
+}
+
+
+//given selected root, draw 3 joint ik rp 
+global proc ikRP_3()
+{
+    string $sel[] = `ls -sl`;
+    if(size($sel) == 1){
+        string $root = $sel[0];
+        select -r $root;
+        string $check[] =`listRelatives -children -type joint $root`;
+        if(size($check) != 1){ error("Error Nothing to Draw IK with, check end"); } 
+        //not checking total number children just whether not making one with two children at same hierarchy level, 
+        //it wouldnt know which one to end at
+        
+        pickWalk -direction down;//using this so get full path
+        string $children[] = {};
+        $children = `ls -sl -type joint`;
+        if(size($children) != 1){print("Error Nothing to end IK at");}
+        else{
+            
+            //make sure there is a 3rd joint in chain to use as end
+            pickWalk -direction down;//using this so get full path
+            string $children[] = {};
+            $children = `ls -sl -type joint`;
+            if(size($children) != 1){print("Error Nothing to end IK SC at");}
+            else{
+                string $end =  $children[0];
+                select -r $root $end;  //make ik sc
+                ikHandle -sol ikRPsolver;//other ikSCsolver
+                select -cl;
+            }
+        }
+    }	
+}

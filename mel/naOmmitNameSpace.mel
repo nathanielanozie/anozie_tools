@@ -1,0 +1,392 @@
+/**@file naOmmitNameSpace.mel 
+@brief v1.0.3 ommit name space of various objects. ex: remove namespace on ik solver imported, or blendColorsNodes etc.
+@author Nathaniel O. Anozie (ogbonnawork at gmail dot com)
+@note Date Created: September 04, 2011
+@note Acknowledgement:    Anoop A.K  www dot codecg dot com for learning  about array manipulation
+@note                    Brian Ewert www dot xyz2 dot net  for learning about groups
+@note                    Rob Bateman web tutorials for learning about render layers
+                    
+@note Why: After I imported new objects using default import maya settings. I ended up with namespaces.  This relates to
+simplifying names.
+
+@note examples
+	na_renameMaterials() 
+		to rename all materials in scene omitting namespace
+
+
+@note added ik handle, locator, cluster support
+@note added render Layer support
+@note refined rename material to include material info and shading engine
+@note added solver, blendColor, blendTwoAttr, multiplyDivide support
+@note added lots of other backend nodes ex: objectSet, groupPart, etc
+*/
+
+
+/**rename materials
+*/
+global proc na_renameMaterials(){
+    string $mat[] = getListAllCreatedLambertMaterials();
+    
+    string $blinn[] = getListAllObjectsByNodeType("blinn");
+    
+    //use mat to get list of all material info
+    string $matInfo[] = getListAllMaterialInfo($mat);
+    
+    //get list of all shading engine
+    string $shade[] = getListAllShadingEngine($mat);
+    
+    na_renameByRemovingNameSpace( $blinn );
+    
+    na_renameByRemovingNameSpace( $mat );
+    
+    na_renameByRemovingNameSpace( $matInfo );
+    
+    na_renameByRemovingNameSpace( $shade );
+}
+
+
+
+/**rename mesh objects	
+*/
+global proc na_renameMeshObjects(){
+   string $objects[] = getListAllObjectsByType(12);
+   na_renameByRemovingNameSpace( $objects );
+}
+/**rename mesh nodes
+*/
+global proc na_renameMesh(){
+    string $objects[] = getListAllObjectsByNodeType("mesh");
+    na_renameByRemovingNameSpace( $objects );   
+}
+
+/**rename curve objects
+*/
+global proc na_renameCurveObjects(){
+   string $objects[] = getListAllCurves();
+   na_renameByRemovingNameSpace( $objects );
+}
+
+/**rename group objects
+*/
+global proc na_renameGroupObjects(){
+   string $objects[] = getListAllCreatedGroupObjects();
+   na_renameByRemovingNameSpace( $objects );
+}
+
+/**rename joint objects
+*/
+global proc na_renameJointObjects(){
+   string $objects[] = getListAllJoints();
+   na_renameByRemovingNameSpace( $objects );
+}
+
+
+/**rename layers
+*/
+global proc na_renameLayers(){
+    string $layers[] = getListAllCreatedLayers();
+    na_renameByRemovingNameSpace( $layers );
+    
+}
+
+/**rename nurbs surface
+*/
+global proc na_renameNurbs(){
+    string $objects[] = getListAllNurbs();
+    na_renameByRemovingNameSpace( $objects );
+    
+}
+
+/**rename clusters
+*/
+global proc na_renameClusters(){
+    
+    string $objects[]={};
+    string $child[] = getListAllObjectsByNodeType("clusterHandle");
+    string $parent[] = `listRelatives -parent $child`;
+    $objects = stringArrayCatenate( $child, $parent );
+    
+    na_renameByRemovingNameSpace( $objects );   
+}
+/**rename ikhandles
+*/
+global proc na_renameIKHandles(){
+    
+    string $objects[]={};
+    string $child[] = getListAllObjectsByNodeType("ikHandle");
+    string $parent[] = `listRelatives -parent $child`;
+    $objects = stringArrayCatenate( $child, $parent );
+    
+    na_renameByRemovingNameSpace( $objects );    
+}
+/**rename ikhandles
+*/
+global proc na_renameRPSolver(){
+    
+    string $objects[]={};
+    string $child[] = getListAllObjectsByNodeType("ikRPsolver");
+    string $parent[] = `listRelatives -parent $child`;
+    $objects = stringArrayCatenate( $child, $parent );
+    
+    na_renameByRemovingNameSpace( $objects );    
+}
+/**rename ikSplineSolver nodes
+*/
+global proc na_renameIkSplineSolver(){
+    string $objects[]={};
+    string $child[] = getListAllObjectsByNodeType("ikSplineSolver");
+    string $parent[] = `listRelatives -parent $child`;
+    $objects = stringArrayCatenate( $child, $parent );
+    
+    na_renameByRemovingNameSpace( $objects );  
+    
+}
+/**rename ikSCsolver nodes
+*/
+global proc na_renameIkSCsolver(){
+    string $objects[]={};
+    string $child[] = getListAllObjectsByNodeType("ikSCsolver");
+    string $parent[] = `listRelatives -parent $child`;
+    $objects = stringArrayCatenate( $child, $parent );
+    
+    na_renameByRemovingNameSpace( $objects );    
+}
+
+
+/**rename locators
+*/
+global proc na_renameLocators(){
+    
+    string $objects[]={};
+    string $child[] = getListAllObjectsByNodeType("locator");
+    string $parent[] = `listRelatives -parent $child`;
+    $objects = stringArrayCatenate( $child, $parent );
+    
+    na_renameByRemovingNameSpace( $objects );  
+}
+/**rename divide nodes
+*/
+global proc na_renameMultiplyDivide(){
+    string $objects[] = getListAllObjectsByNodeType("multiplyDivide");
+    na_renameByRemovingNameSpace( $objects );
+    
+}
+
+
+/**rename blend two nodes
+*/
+global proc na_renameBlendshape(){
+    string $objects[] = getListAllObjectsByNodeType("blendShape");
+    na_renameByRemovingNameSpace( $objects );
+    
+}
+
+/**rename blend two nodes
+*/
+global proc na_renameBlendTwo(){
+    string $objects[] = getListAllObjectsByNodeType("blendTwoAttr");
+    na_renameByRemovingNameSpace( $objects );
+    
+}
+/**rename blend two nodes
+*/
+global proc na_renameBlendColor(){
+    string $objects[] = getListAllObjectsByNodeType("blendColors");
+    na_renameByRemovingNameSpace( $objects );
+    
+}
+/**rename reverse nodes
+*/
+global proc na_renameReverse(){
+    string $objects[] = getListAllObjectsByNodeType("reverse");
+    na_renameByRemovingNameSpace( $objects );   
+}
+/**rename skin cluster nodes
+*/
+global proc na_renameSkin(){
+    string $objects[] = getListAllObjectsByNodeType("skinCluster");
+    na_renameByRemovingNameSpace( $objects );
+}
+/**rename dagPose
+*/
+global proc na_renameDagPose(){
+    string $objects[] = getListAllObjectsByNodeType("dagPose");
+    na_renameByRemovingNameSpace( $objects );
+}
+
+
+/**rename tweak nodes
+*/
+global proc na_renameTweak(){
+    string $objects[] = getListAllObjectsByNodeType("tweak");
+    na_renameByRemovingNameSpace( $objects );
+}
+
+/**rename animCurve
+*/
+global proc na_renameAnimCurve(){
+    string $objects[] = getListAllObjectsByNodeType("animCurve");
+    na_renameByRemovingNameSpace( $objects );
+}
+/**rename unit conversion
+*/
+global proc na_renameUnitConversion(){
+    string $objects[] = getListAllObjectsByNodeType("unitConversion");
+    na_renameByRemovingNameSpace( $objects );
+}
+/**rename blendWeighted nodes
+*/
+global proc na_renameBlendWeighted(){
+    string $objects[] = getListAllObjectsByNodeType("blendWeighted");
+    na_renameByRemovingNameSpace( $objects );   
+}
+
+/**rename curve info nodes
+*/
+global proc na_renameCurveInfo(){
+    string $objects[] = getListAllObjectsByNodeType("curveInfo");
+    na_renameByRemovingNameSpace( $objects );
+    
+}
+
+
+/**rename groupId nodes
+*/
+global proc na_renameGroupId(){
+    string $objects[] = getListAllObjectsByNodeType("groupId");
+    na_renameByRemovingNameSpace( $objects );   
+}
+/**rename groupParts nodes
+*/
+global proc na_renameGroupParts(){
+    string $objects[] = getListAllObjectsByNodeType("groupParts");
+    na_renameByRemovingNameSpace( $objects );   
+}
+/**rename expression nodes
+*/
+global proc na_renameExpression(){
+    string $objects[] = getListAllObjectsByNodeType("expression");
+    na_renameByRemovingNameSpace( $objects );   
+}
+/**rename script nodes
+*/
+global proc na_renameScript(){
+    string $objects[] = getListAllObjectsByNodeType("script");
+    na_renameByRemovingNameSpace( $objects );   
+}
+/**rename polySoftEdge nodes
+*/
+global proc na_renamePolySoftEdge(){
+    string $objects[] = getListAllObjectsByNodeType("polySoftEdge");
+    na_renameByRemovingNameSpace( $objects );   
+}
+
+
+/**rename objectSet nodes
+*/
+global proc na_renameObjectSet(){
+    string $objects[] = getListAllObjectsByNodeType("objectSet");
+    na_renameByRemovingNameSpace( $objects );   
+}
+/**rename hyperView nodes
+*/
+global proc na_renameHyperView(){
+    string $objects[] = getListAllObjectsByNodeType("hyperView");
+    na_renameByRemovingNameSpace( $objects );   
+}
+/**rename hyperLayout nodes
+*/
+global proc na_renameHyperLayout(){
+    string $objects[] = getListAllObjectsByNodeType("hyperLayout");
+    na_renameByRemovingNameSpace( $objects );   
+}
+
+/**rename polyMergeVert nodes
+*/
+global proc na_renamePolyMergeVert(){
+    string $objects[] = getListAllObjectsByNodeType("polyMergeVert");
+    na_renameByRemovingNameSpace( $objects );   
+}
+
+
+
+/**rename distance node
+*/
+global proc na_renameDistanceDimension(){
+    
+    string $objects[]={};
+    string $child[] = getListAllObjectsByNodeType("distanceDimShape");
+    string $parent[] = `listRelatives -parent $child`;
+    $objects = stringArrayCatenate( $child, $parent );
+    
+    na_renameByRemovingNameSpace( $objects );  
+}
+
+
+
+
+/**renames a non read only node and/or a locked node
+@param $old string old name
+@param $new string new name
+*/
+proc na_renameNonReadOnly(string $old, string $newName)
+{    
+    //rename if object is on scene and its new name not used on scene
+    if(`objExists $old` && (`objExists $newName` == 0) ){
+        
+        //rename the object may need to change lock node status temporarily
+        //also important have check whether read only before unlocking
+        int $isNodeNoDelete[] = {};
+        
+        if(na_isReadOnly($old)==0)
+        {
+            $isNodeNoDelete = `lockNode -q -l $old`;
+            na_assertIntSizeEqualArg($isNodeNoDelete,1);
+            if( $isNodeNoDelete[0] == 0){
+                rename $old $newName;
+            }
+            else{
+                //unlock node
+                lockNode -l 0 $old;
+                rename $old $newName;
+                //lock node back on the new name
+                lockNode -l 1 $newName;
+            }
+        }
+        //
+    }else{ print("node not found, skipping: "+$old); }
+    
+}
+
+
+
+/*rename by removing name space in old names
+@param  $oldNames a string array to rename, examples are ads:car1, ads:characterA  
+*/
+global proc na_renameByRemovingNameSpace( string $oldNames[] )
+{
+    string $newNameArray[] = {};
+    $newNameArray = na_getSubStringStartToSep( $oldNames, ":" );
+    na_assertSizeEqualArg($newNameArray, size($oldNames) );
+    
+    string $newName = "";
+    for( $i=0; $i < size($oldNames); $i++ )
+    {
+        $newName = $newNameArray[$i];
+        //make sure new name isnt on scene already
+        //this may happen for multiple characters imported where
+        //we couldn't just ommit the namespace without causing name clashing
+        //
+        if( `objExists $newName` == 0)
+        {
+            //rename node it supports a locked or readonly node etc
+            na_renameNonReadOnly( $oldNames[$i], $newName );
+        }
+        
+    }
+}
+
+
+
+
+

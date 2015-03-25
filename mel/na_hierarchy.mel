@@ -1,0 +1,1338 @@
+/**@file na_hierarchy.mel
+@brief v1.0.2 hierarchy operations like parenting or print out 
+hierarchy for joint chain in format [child parent, child parent,...]
+@author Nathaniel O. Anozie (ogbonnawork at gmail dot com)
+@bug no optiona to get length subset of hierarchy
+@note date created: Jan 10, 2012
+@note How to Install
+@note source naGeneral.mel
+@note source naMath.mel
+@note source na_segment.mel
+@note -- added getting length of hierarchy , tried fixing bug add geo where non unique names joint
+@note Modify at your own risk
+*/
+
+//updated 11-16-2014 nate --- adding geo addition support with non unique name joints
+//updated 07-16-2013 nate --- fixed select only single chain joint hierarchy bug
+
+
+/**move pivot to the parent or the child of selected
+@param $directionForPivot (string) either "up" or "down" 
+*/
+proc
+na_movePivotOfSelected(string $directionForPivot)
+{
+    na_assertAllInList( {$directionForPivot}, {"up","down"} );
+    
+    string $obj[] = `ls -sl`;
+    for($ob in $obj)
+    {
+        select -r $ob;
+        string $movePivotHere[] = {};
+        $movePivotHere = eval( "pickWalk -d "+$directionForPivot );
+        if(size($movePivotHere) == 1)
+        {
+            float $pos[] = {};
+            $pos = `xform -q -ws -t $movePivotHere[0]`;
+            string $attr[] = {};
+            $attr = {"scalePivot","rotatePivot"};
+            move $pos[0] $pos[1] $pos[2] ($ob+"."+$attr[0]) ($ob+"."+$attr[1]);
+        }
+    }
+    
+    select -r $obj;
+}
+
+/**finds parent of selected object and moves pivot of selected to match parent
+@pre selected objects with exactly one parent, it skips if no parent found
+@note useful when parented joints and transform created and want transforms pivot at its parent joint
+*/
+global proc
+na_movePivotToParentOfSelected()
+{
+    na_movePivotOfSelected("up");
+}
+global proc
+na_movePivotToChildOfSelected()
+{
+    na_movePivotOfSelected("down");
+}
+
+
+
+
+/**this adds suffix to transforms created when parent skeleton joints
+@pre transforms have name "transform#", it looks at all of scene
+*/
+global proc
+na_renameTransformFromParentSkeleton()
+{
+    string $sel[] = `ls -sl`;
+    
+    select "transform*";
+    ls -sl;
+    string $obj[] = `ls -sl`;
+    
+    for($ob in $obj){
+        select -r $ob;
+        string $prefix[] = {};
+        $prefix = `pickWalk -d down`;
+        $suffix = "grp";
+        if( size($prefix) == 1 )
+        {    
+            rename $ob ($prefix[0]+"_"+$suffix);
+        }
+    };
+    
+    //restore user selection, if user selected something we 
+    //renamed initially it won't be there so this accounts for that
+    //
+    string $replaceSelection[] = stringArrayRemoveExact( $obj,$sel );
+    select -r $replaceSelection;
+}
+
+
+
+global proc
+na_getGeoInWorldWhileFollowAnimRig_unitTest()
+{
+    select -d;
+    joint -p 0 0 0 ;
+    joint -p 1 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint1;
+    joint -p 2 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint2;
+    joint -p 3 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint3;
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1; 
+    move -rpr 1 0 0 ;
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    move -rpr 2 0 0 ;
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    move -rpr 3 0 0 ;
+    select -r pCube1 ;
+    parent pCube1 joint1 ;
+    select -r pCube2 ;
+    parent pCube2 joint2 ;
+    select -r pCube3 ;
+    parent pCube3 joint3 ;
+    
+    select -r pCube1 ;
+    move 0 0 0 pCube1.scalePivot pCube1.rotatePivot ;
+    select -r pCube3 ;
+    select -cl  ;
+    select -r pCube2 ;
+    move 1 0 0 pCube2.scalePivot pCube2.rotatePivot ;
+    select -r pCube3 ;
+    move 2 0 0 pCube3.scalePivot pCube3.rotatePivot ;
+    
+    na_getGeoInWorldWhileFollowAnimRig({"pCube1","pCube2","pCube3"});
+    
+}
+/** Get geo in world hierarchy while following animation rig
+@pre geo single instance shape and it is part of animation rig by being child of a joint or transform
+*/
+global proc string[]
+na_getGeoInWorldWhileFollowAnimRig(string $geoArray[])
+{
+    na_assertObjectExist($geoArray);
+    na_assertTypeInList( $geoArray, {"transform"} );
+    
+    string $geo[] = $geoArray;
+    string $parent[] = {};
+    
+    //uses single geo instance assumption, and joint parent assumption
+    $parent = `listRelatives -parent -f $geo`;
+    na_assertTypeInList( $parent, {"joint","transform"} );
+    na_assertSizeEqualArg( $parent, size($geo) );
+    
+    
+    //parent $geo to the world so
+    parent -w $geo;
+    
+    //goal is to have geometry scaling and moving along with rig in separate hierarchy
+    //
+    string $to = "";
+    string $toArray[] = {};
+    string $toTemp[] = {};
+    
+    for($i = 0; $i < size($geo); $i++)
+    {
+        $from = $parent[$i];
+        
+        //to preserve orient we make a duplicate
+        $toTemp = `duplicate -rr $from`;
+        na_assertSizeEqualArg( $toTemp, 1 );
+        $to =  $toTemp[0];
+        delete `listRelatives -children -f $to`;
+        
+        
+        //geometry almost moving with rig
+        parentConstraint -mo -weight 1 $from $to;
+        
+        connectAttr -f ($from+".scaleX") ($to+".scaleX");
+        connectAttr -f ($from+".scaleY") ($to+".scaleY");
+        connectAttr -f ($from+".scaleZ") ($to+".scaleZ");
+        
+        //geometry moving with rig
+        if( size(`listRelatives -parent -f $to`) != 0 ){
+            parent -w $to;
+        }
+        parent $geo[$i] $to;
+        
+        $toArray[size($toArray)] = $to;
+    }
+    
+    
+    return $toArray;
+}
+
+
+
+global proc
+na_duplicatePolygonOrJointToWorld_unitTest()
+{
+    select -d;
+    joint -p 0 0 0 ;  
+    select -d joint1 ;
+    select -d;
+    joint -p 2 0 0 ;
+    select -d joint2 ;
+    select -d;
+    joint -p 4 0 0 ;
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    select -d pCube1 ;
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    select -r pCube2 ;
+    move -rpr -x 5 ;
+    
+    na_duplicatePolygonOrJointToWorld( {"joint1","joint2","pCube1","pCube2"},"rig");
+    
+}
+
+/**duplicate polygon or a joint to world
+*/
+global proc string[]
+na_duplicatePolygonOrJointToWorld( string $object[],string $suffix)
+{
+    na_assertObjectExist($object);
+    na_assertTypeInList( $object, {"joint","transform"} );
+    string $result[] = {};
+    //string $suffix = "object";
+    
+    string $name[] = {};
+    
+    for($i = 0; $i < size($object); $i++)
+    {
+        if( na_isType( $object[$i], "joint") == 1 ){
+            $name = na_duplicateJointToWorld( {$object[$i]}, $suffix );
+            na_assertSizeEqualArg( $name, 1 );
+            $result[size($result)] = $name[0];
+        }else if( na_isType( $object[$i], "transform") == 1) {
+            $name = na_duplicatePolygonToWorld( {$object[$i]}, $suffix );
+            na_assertSizeEqualArg( $name, 1 );
+            $result[size($result)] = $name[0];
+        }
+        
+    }
+    
+    return $result; 
+}
+
+
+
+global proc
+na_duplicateJointToWorld_unitTest()
+{
+    select -d;
+    joint -p 0 0 0 ;
+    joint -p 2 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint1;
+    select -cl  ;
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    move -r -os -wd 0 0 -2 ;
+    select -cl  ;
+    select -r joint2 ;
+    setAttr joint2.rotateOrder 2;
+    select -r pCube1 ;
+    setAttr pCube1.rotateOrder 4;
+    
+    na_duplicateJointToWorld({"joint1","joint2"},"rig");
+    na_duplicateJointToWorld({"joint1","joint2","pCube1"},"rig");
+}
+
+/**given some joints duplicate them,it ignores parenting information
+@param joints
+@param suffix for joints
+@note it gives an error if cant use names provided
+*/
+global proc string[]
+na_duplicateJointToWorld(string $object[],string $suffix)
+{
+    string $sel[] = `ls -sl`;
+    
+    na_assertObjectExist($object);
+    na_assertTypeInList( $object, {"joint"} );
+    
+    //make sure names are not on scene already
+    string $name = "";
+    string $nameArray[] = {};
+    for($j=0; $j < size($object); $j++)
+    {
+        $obj = $object[$j];
+        $name = $obj+"_"+$suffix;
+        $nameArray[size($nameArray)] = $name;
+    }
+    na_assertObjectDoesNotExist($nameArray);
+    
+    //only duplicate the parent only
+    //
+    string $duplicate[] = {};
+    for($i=0; $i < size($object); $i++)
+    {
+        $obj = $object[$i];
+        $duplicate = `duplicate -rr -po $obj`;
+        //because of bug if already a child of world and try 
+        //to parent to world
+        if( size(`listRelatives -parent $duplicate`)==1)
+            {parent -w $duplicate;}
+        rename $duplicate $nameArray[$i];
+    }
+    
+    select -r $sel;
+    
+    return $nameArray;
+}
+global proc string[]
+na_duplicatePolygonToWorld(string $object[],string $suffix)
+{
+    string $sel[] = `ls -sl`;
+    
+    na_assertObjectExist($object);
+    na_assertTypeInList( $object, {"transform"} );
+    
+    //make sure names are not on scene already
+    string $name = "";
+    string $nameArray[] = {};
+    for($j=0; $j < size($object); $j++)
+    {
+        $obj = $object[$j];
+        $name = $obj+"_"+$suffix;
+        $nameArray[size($nameArray)] = $name;
+    }
+    na_assertObjectDoesNotExist($nameArray);
+    
+    //only duplicate the parent only
+    //
+    string $duplicate[] = {};
+    for($i=0; $i < size($object); $i++)
+    {
+        $obj = $object[$i];
+        $duplicate = `duplicate -rr $obj`;
+        //because of bug if already a child of world and try 
+        //to parent to world
+        if( size(`listRelatives -parent $duplicate`)==1)
+            {parent -w $duplicate;}
+        rename $duplicate $nameArray[$i];
+    }
+    
+    select -r $sel;
+    
+    return $nameArray;
+}
+
+/**
+@pre empty scene
+*/
+global proc
+na_getGeoFromNodeArray_unitTest()
+{
+    joint -p 0 0 0 ;
+    joint -p 3 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint1;
+    joint -p 6 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint2;
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    select -d pCube1 ;
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    select -d pCube2 ;
+    select -r pCube1 ;
+    parent pCube1 joint1 ;
+    select -r pCube2 ;
+    parent pCube2 joint3 ;
+    select -r pCube2 ;
+    move -rpr -x 6 ;
+    
+    print(na_getGeoFromNodeArray( {"joint1","joint2","joint3"} ));
+}
+/**
+@pre empty scene
+*/
+global proc
+na_getGeoFromNodeArray_unitTest_2()
+{
+    select -d;
+    joint -p 0 0 0 ;
+    joint -p 4 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint1;
+    joint -p 8 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint2;
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    move -rpr 4 0 0 ;
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    move -rpr 8 0 0 ;
+    select -r pCube1 ;
+    parent pCube1 joint1 ;
+    select -r pCube2 ;
+    parent pCube2 joint2 ;
+    select -r pCube3 ;
+    parent pCube3 joint3 ;
+    
+    
+    print(na_getGeoFromNodeArray( {"joint1","joint2","joint3"} ));
+}
+/**
+@note produces result only if node has one transform with valid shape type
+@note supported return types transforms with shape mesh, nurbsSurface, subdiv
+@see na_getGeoFromNodeArray_assert
+@see na_getShapeDag
+*/
+global proc string[]
+na_getGeoFromNodeArray( string $nodeArray[] )
+{
+    na_getGeoFromNodeArray_assert( $nodeArray );
+    string $result[]={};
+    
+    string $geo[]={};
+    string $geoDag[]={};
+    string $shapeGeoArray[] = {};
+    string $childNode[] = {};
+    
+    for($i = 0; $i < size($nodeArray); $i ++ )
+    {
+        $node = $nodeArray[$i];
+        
+        $shapeGeoArray = na_getShapeDag( $node );
+        $geoDag = `listRelatives -parent $shapeGeoArray`;
+        $childNode = `listRelatives -children -type transform $node`;
+        //geo must be a child of node
+        if(size($geoDag) > 0 && size($childNode) > 0){
+            $geo = na_getStringArrayIntersectWithOption($geoDag,$childNode);
+        }
+        //else{ $geo = {""}; }//blank inserted for no geometry 
+        $result = stringArrayCatenate($result,$geo);  
+        clear($geoDag);
+        clear($childNode);
+        clear($geo);
+    }
+    
+    return $result;
+    
+}
+
+
+/**
+@see na_getShapeDag
+@see na_getStringArrayIntersectWithOption
+@see na_isOption
+*/
+global proc 
+na_getGeoFromNodeArray_assert( string $nodeArray[] )
+{
+    
+    if(size($nodeArray) == 0 ){error("cannot find input to retrieve geometry from");}
+    
+    string $shapeGeoArray[] = {};
+    string $childNode[]={};
+    string $geo[]={};
+    string $geoDag[]={};
+    
+    string $node = "";
+    
+    //produces result only if node has one transform with valid shape type
+    //supported return types transforms with shape mesh, nurbsSurface, subdiv
+    for($i = 0; $i < size($nodeArray); $i ++ )
+    {
+        $node = $nodeArray[$i];
+        
+        if(`objExists  $node` == 0){ error("Sorry, Cannot find--"+$node); }
+        
+        //this shape may not have node as its parent so we do an additional check
+        //also this may give multiple shapes of which we need to figure out which
+        //one is child of node
+        $shapeGeoArray = na_getShapeDag( $node );
+        
+        if(size($shapeGeoArray) == 0 ){print("cannot find geometry for--"+$node+"--skipping\n"); }
+        else{
+            //is there some geoemetry that is immediate child of the node
+            $childNode = `listRelatives -children -type transform $node`;
+            //geo must be a child of node
+            $geoDag = `listRelatives -parent $shapeGeoArray`;
+            $geo = na_getStringArrayIntersectWithOption($geoDag,$childNode);
+            if(size($geo) == 0){error("cannot find geometry with parent--"+$node); }
+            
+            //error if unknown node type, checking all shapes
+            if(  na_isTypeSupportedArray($shapeGeoArray,{"mesh","nurbsSurface","subdiv"}) == 0  ){ error("unknown geometry type--"+$node); }
+        }
+        
+        clear($shapeGeoArray);
+        clear($geo);
+        clear($childNode);
+        clear($geoDag);
+    }
+    
+}
+
+
+
+
+
+/**
+@pre expect clean maya scene
+@pre naMath.mel
+@pre naSegment.mel
+@pre naGeneral.mel
+*/
+global proc
+na_addGeoSinglePlaneJoint_userTest_1()
+{
+    joint -p 0 0 0 ;
+    joint -p 7 0 0 ;
+    joint -e -zso -oj xyz -sao yup "joint1";
+    
+    na_addGeoSinglePlaneJoint("joint1");//pivot in negative x direction
+}
+global proc
+na_addGeoSinglePlaneJoint_userTest_2()
+{
+    joint -p 0 0 0 ;
+    joint -p 0 5 0 ;
+    joint -e -zso -oj xyz -sao yup "joint1";
+    
+    na_addGeoSinglePlaneJoint("joint1");//pivot in negative y direction
+}
+
+
+
+
+/**add cube geometry with no spaces, to all descendant joints of input
+@bug two times called get messed up behavior
+*/
+global proc 
+na_addGeoSinglePlaneJoint(string $joint)
+{
+    string $sel[] = `ls -sl`;
+	
+    if( `objExists $joint` == 0 ){ error("cannot find node--"+$joint); };
+    
+    //verify input is a joint
+    //found all joints  
+	string $hierarchy[] = {};
+	$hierarchy = na_selectJointsInHierarchy($joint);
+    
+	//we need at least two joints for this method
+	if(size($hierarchy) > 1){
+	    
+	    float $pos[] = {};
+	    string $nameArray[] = {};  //holds names of created geometry
+	    float $len[] = {}; //lengths for each joint excluding last 
+	    
+	    //found all positions
+	    $pos = getComponentWorldPosition($hierarchy);
+	    
+	    //get distances between parent and child joint pairs
+	    //note: ebd joint should not get a length because no geometry parented to end joint
+	    for($i = 0; $i < (size($hierarchy)-1); $i++ ){
+	        
+	        float $tempLength[] = na_getLength( $hierarchy[$i], $hierarchy[$i+1] );
+	        if(size($tempLength) == 1){
+	        $len[size($len)] = $tempLength[0]; }
+	    }
+	    
+	    
+	    
+	    //end joint doesn't get geometry
+	    if(size($len) == (size($hierarchy) - 1) ){
+	        
+	        //make geo at correct position with correct rotation and parent to proper joint      
+	        //
+	        $nameArray = na_makeGeoWithPivotDirection($hierarchy, $pos, $len);
+	        print("finished adding geometry");
+	    }
+	    else{ print("error please check"); }
+	    
+	    
+	}
+	else{
+	    print("parenting to one joint");
+	}
+	
+	
+	select -r $sel;
+}
+
+
+
+
+
+
+
+
+
+/**create a cube and place it at the positions of hierarchy with appropriate pivot location
+@result string list -- names created cubes
+@bug in adding geo, little error checking
+*/
+global proc string[]
+na_makeGeoWithPivotDirection(string $hierarchy[], float $pos[] , float $len[])
+{
+    string $result[] ={};
+    string $prefix = "";
+	string $suffix = "";
+    string $name = "";
+    
+    //make geo for each joint
+    $prefix = "temp_";
+    $suffix = "_geo";
+    
+    
+    
+    if(size($hierarchy) > 0 ){
+        
+        //why minus 1 here?
+        //for figuring out how to rotate geometry need two points so we wont be adding geometry to end joint 
+        //of hierarchy
+        //
+        for( $i = 0; $i < (size($hierarchy)-1) ; $i++ )
+        {
+            $result[size($result)] = $prefix+($i+1)+$suffix+"_"+$hierarchy[$i];//for uniqueness still may get issues
+            $name = $result[$i];
+            print($name+"\n");
+            
+            
+            //each cube can have a different length
+            //using a cube that has its pivot at top and we can adjust the width and depth.
+            string $jntPoly[] = na_makeCubeTopPivot($len[$i],$name,0.5,0.5);
+            if(size($jntPoly) != 1){error("Error Creating geometry to parent for >>"+$name);}
+            $nameG = $jntPoly[0];
+              
+            /////
+            //geometry handling
+            //move geo to correct positions
+            //xform -ws -t $pos[$i*3+0] $pos[$i*3+1] $pos[$i*3+2] $name;
+            move -rpr $pos[$i*3+0] $pos[$i*3+1] $pos[$i*3+2] $nameG ;
+            
+            //move geo to correct rotation
+            float $startPos[] = {}; //parent world position
+            float $endPos[] = {}; //child world position
+            float $rot[] = {};  //hold rotation each geo needs to point down chain
+            
+            $startPos = {$pos[$i*3+0], $pos[$i*3+1], $pos[$i*3+2]};
+            $endPos = {$pos[($i+1)*3+0], $pos[($i+1)*3+1], $pos[($i+1)*3+2]};
+            
+            $rot = na_getRotationPointStartToEnd( $startPos, $endPos);
+            
+            if(size($rot) == 3){ xform -ws -ro $rot[0] $rot[1] $rot[2] $nameG; }
+            else{ print("skipping rotating geometry"); }
+            
+            //parent geo to proper joint
+            na_parent({$nameG},{$hierarchy[$i]});
+            ///////
+            
+        }//end loop joins
+    }
+    
+    return $result;
+}
+
+
+
+
+/**compute rotation to get a thing to point to another place 
+in this method were going to use aim constraints and locators
+@pre assumes thing local rotation axis follows right hand rule with +y up, +z left, -x into screen
+@i think this is necessary because the method creates things that follow this
+@param float $fromPos[] -- 3 elements for from world position 
+@param float $toPos[] -- 3 elements for to world position , the place we want to aim at
+*/
+global proc float[]
+na_getRotationPointStartToEnd( float $fromPos[], float $toPos[] )
+{
+    //compute rotation to get a thing to point to another place in this method were going to use aim constraints and locators
+    //fromPos -- from position, toPos --where we want to point
+    
+    string $sel[] = `ls -sl`;
+    float $result[] = {};
+    
+    //toPos_loc  a locator placed at toPos
+    string $toPos_loc[] = `spaceLocator -p 0 0 0`;
+    xform -ws -t $toPos[0] $toPos[1] $toPos[2] $toPos_loc[0];
+    print $toPos_loc;
+    
+    //result_loc  a locator placed at fromPos, it is where we retreive rotation result from
+    string $result_loc[] = `spaceLocator -p $fromPos[0] $fromPos[1] $fromPos[2]`;
+    xform -ws -t $fromPos[0] $fromPos[1] $fromPos[2] $result_loc[0];
+    
+    //make result_loc have proper rotations to point to toPos_loc
+    //
+    select -r $toPos_loc[0] ;
+    select -add $result_loc[0] ;
+    aimConstraint -offset 0 0 0 -weight 1 -aimVector 0 -1 0 -upVector 0 1 0 -worldUpType "objectrotation" -worldUpVector 0 1 0 -worldUpObject $toPos_loc[0];
+    
+    //save rotation
+    //
+    //
+    $result = `xform -q -ws -ro $result_loc[0]`;
+    //
+    
+    //remove created locators
+    delete $toPos_loc;
+    delete $result_loc;
+    
+    
+    select -r $sel;
+    
+    return $result;
+}
+
+
+
+/**make 1 cube with pivot at origin and pivot at top.  Uses specified height(len), width and depth
+@note its local rotation axis follows right hand rule with +y up, +z left, -x into screen
+@param float $len -- height
+@param string $name -- name
+@param float $width -- width
+@param float $depth --depth
+@pre $name must not be used on scene already
+@post returns string list with one element name of geo
+*/
+global proc
+string [] na_makeCubeTopPivot(float $len, string $name, float $width, float $depth)
+{
+    string $result[] = {};
+ 
+    //make cube
+    string $polyName[] = {};
+    $polyName = `polyCube -n $name -w $width -h $len -d $depth  -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 0`;
+    
+    //move pivot to top of geometry, 
+    //by moving geometry down and pivot up can achieve this
+    //how far down to move geometry to top, down half its height
+    float $t = 0.0;
+    $t = (-0.5)*$len;
+    
+    //arguments name may have | which maya turns into _, when creating stuff so not using that one
+    setAttr ($polyName[0]+"."+"translateY") $t;
+    xform -ws -t 0 0 0 ($polyName[0]+".scalePivot");
+    xform -ws -t 0 0 0 ($polyName[0]+".rotatePivot");
+    
+    $result = $polyName;
+	return $result;
+}
+
+
+
+
+
+
+
+
+/**make curve info node for array of curves
+@param string list $curve -- curves
+@param string list $name -- node names
+@note because curves are a little different from other nodes 
+@note that is we need a curve selected to make it
+*/
+global proc
+na_makeCurveInfoNode(string $curve[], string $name[] )
+{
+    //set some variables
+    string $sel[] = `ls -sl`;
+    string $arg = "";
+    int $isCurve = 0;
+    string $name_arg = "";
+    string $node =""; //just used for temporary name, maya creates node of this name, then we rename it
+    
+    for($i = 0; $i < size($curve); $i++){
+        
+        $arg = $curve[$i];
+        $name_arg = $name[$i];
+        
+        //make sure were dealing with a curve
+        $isCurve = na_isCurve($arg);
+        if( $isCurve == 1  ){
+            select -cl;
+            select -r $arg;
+            
+            //make the node of interest of correct name
+            $node = `arclen -ch 1`;
+            rename $node $name_arg;
+        }
+        else{ print("skipping -- expecting curve argument"); }
+    }
+    
+    select -r $sel;
+}
+
+
+
+
+
+
+
+
+
+
+/**give me all joints in this single hierarchy in order from root first. it is not select -hierarchy because
+all joints need to be on same joint chain.
+@param string $joint -- root joint
+*/
+global proc string[]
+na_selectJointsInHierarchy(string $joint)
+{
+    string $result[] = {};
+    
+    //---select all joints in hierarchy of selected root
+    string $sel[] = `ls -sl`;
+    if(size($sel) == 1){
+        select -hierarchy; select -r `ls -sl -type joint`;
+    }
+    else{ 
+        warning("Treating Each thing selected as a Root !!!\n");
+        //error("Requires a single selected root !!!\n");
+        string $addToSel[] = {};
+        for($arg in $sel){
+            select -r $arg;
+            select -hierarchy; select -r `ls -sl -type joint`;
+            $addToSel = stringArrayCatenate($addToSel, `ls -sl`);
+            select -cl;
+        }
+        $addToSel = stringArrayRemoveDuplicates($addToSel);
+        select -r $addToSel;
+    }    
+    
+    /*
+    string $sel[] = `ls -sl`;
+    
+    string $childJoint[] = {};
+    string $arg = "";
+    
+    if( size( `ls -type joint {$joint}` ) == 1 ){
+        $arg = $joint;
+        $result[size($result)] = $arg;
+    }
+    else{ error("[na_selectJointsInHierarchy]"); }
+    
+    //---->go through joint hierarchy
+    print("[na_selectJointsInHierarchy] Going through Joint Hierarchy...\n");
+    //use max iterations as all hierarchy
+    int $maxJointLength = size(`listRelatives -ad -type joint $arg`); 
+    
+    
+    //so we can start looping.
+    $childJoint = `listRelatives -type joint $arg`; //not all decendants is important
+    
+    for( $i = 0; $i < $maxJointLength; $i++){
+        
+        if( size($childJoint) == 0  )
+        {
+            print("[na_selectJointsInHierarchy] Found no more joints so exiting!\n");
+            $childJoint = {};
+            break;
+        }
+        else if( size($childJoint) > 1  )
+        {
+            print("[na_selectJointsInHierarchy] Found more than 1 child joint so exiting!\n");
+            $childJoint = {};
+            break;
+        }
+        else if( size($childJoint) == 1  )
+        {
+            $arg = $childJoint[0];
+            $result[size($result)] = $arg;
+            //so we can go to next joint in hierarchy
+            $childJoint = {};
+            $childJoint = `listRelatives -type joint $arg`;
+        }
+        else{
+            $childJoint = {};
+        }
+        
+    }
+    
+    select -r $sel;
+    */
+    
+    $result = `ls -sl`;//filter expand selection not needed because they are joints??
+    
+    return $result;
+}
+/*old has a bug it doesnt know to not look at groups
+global proc string[]
+na_selectJointsInHierarchy(string $joint)
+{
+string $result[] ={};
+
+string $jointFromEnd[] = {};
+$jointFromEnd = `listRelatives -ad -type joint $joint`;
+
+$result[size($result)] = $joint;
+//we want something in reverse so the end index is size less one
+//the first index can be 0 so we have the option of equal to
+for($i = (size($jointFromEnd)-1); $i >=0; $i -- )
+{
+$result[size($result)] = $jointFromEnd[ $i ];
+}
+
+return $result;
+}
+*/
+
+
+/**give me all joints in this single hierarchy in order from start to end joint
+@note error if start and end are not in same hierarchy
+@param string $joint -- root joint
+@see na_selectJointsInHierarchySubset_assert
+@see naIndex
+*/
+global proc string[]
+na_selectJointsInHierarchySubset(string $start, string $end)
+{
+    na_selectJointsInHierarchySubset_assert($start,$end);
+    
+	string $result[] ={};
+	
+	string $all[] = {};
+	//entire hierarchy in order
+	$all = na_selectJointsInHierarchy($start);
+	
+	int $startIndex[] = {};
+	int $endIndex[] = {};
+	
+	$startIndex = naIndex($start, $all);
+	$endIndex = naIndex($end, $all);
+	
+	for($i = $startIndex[0]; $i <= $endIndex[0]; $i++ )
+	{
+	    //save subset hierarchy
+	    $result[size($result)] = $all[$i];
+	}
+	return $result;
+}
+/**
+@see na_selectJointsInHierarchy
+@see na_isOption
+@see naIndex
+*/
+global proc
+na_selectJointsInHierarchySubset_assert(string $start, string $end)
+{
+    ///existence
+    if( `objExists $start` == 0 ){error("cannot find--"+$start);}
+    if( `objExists $end` == 0 ){error("cannot find--"+$end);}
+    
+    ///arg the same
+    if( `strcmp $start $end` == 0 ){error("need different start and end joint"); }
+    
+    ///hierarchy check
+    string $all[] = {};
+	//entire hierarchy in order
+	$all = na_selectJointsInHierarchy($start);
+	
+	//are there more than start joint in hierarchy
+	if(size($all) <= 1){error("need two or more joints in a subset");}
+	
+	int $endInHierarchy = 0;
+	//is end in hierarchy
+	$endInHierarchy = na_isOption({$end},$all,1);
+	
+	if($endInHierarchy == 0){error($end+"--not found in hierarchy of--"+$start); }
+	
+	//each joint of subset hierarchy at most one child joint check
+	int $startIndex[] = {};
+	int $endIndex[] = {};
+	$startIndex = naIndex($start, $all);
+	$endIndex = naIndex($end, $all);
+	
+	string $child[] = {};
+	for($i = $startIndex[0]; $i <= $endIndex[0]; $i++ )
+	{
+	    clear($child);
+	    $child = `listRelatives -children -type "joint" $all[$i]`;
+	    if( size($child) > 1){error("sorry cannot handle joint with more than one joint children--"+$all[$i]); }
+	}
+	
+}
+
+/**
+@pre expects empty scene
+*/
+global proc
+na_selectJointsInHierarchySubset_unitTest()
+{
+    
+    joint -p 0 0 0 ;
+    joint -p 2 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint1;
+    joint -p 4 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint2;
+    joint -p 5 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint3;
+    joint -p 7 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint4;
+    joint -p 8 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint5;
+    print( na_selectJointsInHierarchySubset("joint2","joint5") );
+}
+/**
+@pre expects empty scene
+*/
+global proc
+na_selectJointsInHierarchySubset_unitTest_1()
+{
+    
+    joint -p 0 0 0 ;
+    joint -p 2 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint1;
+    joint -p 4 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint2;
+    joint -p 5 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint3;
+    joint -p 7 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint4;
+    joint -p 8 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint5;
+    select -cl  ;
+    select -r joint4 ;
+    parent -w;
+    print( na_selectJointsInHierarchySubset("joint2","joint5") );
+}
+/**
+@pre expects empty scene
+*/
+global proc
+na_selectJointsInHierarchySubset_unitTest_2()
+{
+    
+    joint -p 0 0 0 ;
+    joint -p 3 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint1;
+    
+    print( na_selectJointsInHierarchySubset("joint1","joint2") );
+}
+/**
+@pre expects empty scene
+*/
+global proc
+na_selectJointsInHierarchySubset_unitTest_3()
+{
+    
+    joint -p 0 0 0 ;
+    joint -p 3 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint1;
+    select -cl  ;
+    select -r joint2 ;
+    parent -w;
+    
+    print( na_selectJointsInHierarchySubset("joint1","joint2") );
+}
+/**
+@pre expects empty scene
+*/
+global proc
+na_selectJointsInHierarchySubset_unitTest_4()
+{
+    
+    joint -p 0 0 0 ;
+    
+    print( na_selectJointsInHierarchySubset("joint1","joint1") );
+}
+/**
+@pre expects empty scene
+*/
+global proc
+na_selectJointsInHierarchySubset_unitTest_5()
+{ 
+    joint -p 0 0 0 ;
+    joint -p 4 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint1;
+    joint -p 5 0 -2 ;
+    joint -e -zso -oj xyz -sao yup joint2;
+    select -cl  ;
+    select -r joint2;
+    joint -p 5 0 2 ;
+    joint -e -zso -oj xyz -sao yup joint2;
+    
+    print( na_selectJointsInHierarchySubset("joint1","joint3") );
+}
+
+
+
+/**give me all joints in this hierarchy no order
+*/
+global proc string[]
+na_selectJointsInHierarchyMultiChainNoOrder(string $joint)
+{
+	string $result[] ={};
+	$result = `listRelatives -ad -type joint $joint`;
+	$result[size($result)] = $joint;
+	
+	return $result;
+}
+
+
+
+
+
+
+/**no checking on parenting
+*/
+proc 
+na_parentHelper(string $child, string $parent)
+{
+    string $sel[] = `ls -sl`;
+    
+    select -cl  ;
+    select -r $child;
+    select -tgl $parent;
+    parent;  
+    select -r $sel;
+}
+
+/**parent an array to an array supproted types, transform, joint, or nurbsCurve
+@param string list $parent -- parents
+@param string list $child -- children
+@pre either exact same number, or exactly 1 parent, also if types don't match it will skip and continue on with others
+*/
+global proc 
+na_parent(string $child[], string $parent[])
+{
+    string $supportedTypes[] = {"joint","nurbsCurve","transform"};
+    
+    int $isJointParent = 0;
+    int $isJointChild = 0;
+    
+    //either were going to parent everything to single parent
+    if( size($parent) == 1 ){
+        $isJointParent = na_isTypeSupported($parent[0],$supportedTypes);
+        
+        for($i = 0; $i < size($child); $i++ ){         
+            $isJointChild = na_isTypeSupported($child[$i],$supportedTypes);
+            if( ($isJointParent == 1) && ($isJointChild == 1)  )
+            {
+                na_parentHelper($child[$i],$parent[0]);
+            }
+            else{print("skipping problem completing parenting -- check input types\n");};         
+        }
+    }
+    //
+    //
+    //or were going to parent each child thing to each corresponding parent thing
+    else if( ( size($parent) > 1 ) && (size($parent) == size($child)) ){
+        
+        for($i = 0; $i < size($child); $i++ ){
+            
+            $isJointParent = na_isTypeSupported($parent[$i],$supportedTypes);
+            $isJointChild = na_isTypeSupported($child[$i],$supportedTypes);
+            if( ($isJointParent == 1) && ($isJointChild == 1)  )
+            {
+                na_parentHelper($child[$i],$parent[$i]);
+            }
+            else{print("skipping problem completing parenting -- check input types\n");};
+            
+        }
+    }
+    else{ print("skipping problem completing parenting\n"); }
+    
+}
+
+
+/**
+@pre empty scene
+*/
+global proc 
+na_parent_userTest_1()
+{
+    select -cl;
+    joint -p 0 0 0 ;
+    select -cl;
+    joint -p 7 0 0 ;
+    
+    na_parent({"joint2"}, {"joint1"});
+    
+}
+
+
+/**
+@pre empty scene
+*/
+global proc 
+na_parent_userTest_3()
+{
+    select -cl;
+    joint -p 7 0 0 ;
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    
+    na_parent({"pCube1"}, {"joint1"});
+    
+}
+/**
+@pre empty scene
+*/
+global proc 
+na_parent_userTest_2()
+{
+    select -cl;
+    joint -p 0 0 0 ;
+    select -cl;
+    joint -p 7 0 0 ;
+    select -cl;
+    joint -p 3 -3 0 ;
+    select -cl;
+    joint -p 5 -3 0 ;
+    na_parent({"joint3","joint4"}, {"joint1","joint2"});
+    
+}
+
+
+
+/**
+@pre assumes empty scene
+*/
+global proc
+na_isParentOfThis_unitTest()
+{
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    select -cl  ;
+    select -r pCube1 ;
+    group; xform -os -piv 0 0 0;
+    
+    print( na_isParentOfThis({"group1"},{"pCube1"}) );
+    print("\n");
+    print( na_isParentOfThis({"group1"},{"pCube2"}) );
+}
+/**does the parent child relationship hold for all input
+@param string $parent[] list what to check for parent
+@param string $child[] what to check for child
+@note requires $parent and $child same length
+@see na_isParentOfThis_single
+*/
+global proc int[]
+na_isParentOfThis(string $parent[], string $child[])
+{
+    na_isParentOfThis_assert($parent,$child);
+    
+    int $result[] = {};
+    
+    for( $i = 0; $i < size($parent); $i++)
+    {
+        $result[size($result)] = na_isParentOfThis_single($parent[$i], $child[$i]);
+    }
+    
+    return $result;
+}
+/**
+@note not tested
+*/
+global proc
+na_isParentOfThis_assert(string $parent[], string $child[])
+{
+    //length check, same size
+    if(size($parent) != size($child)){error("expecting same sizes for input");}
+}
+/**get a one if any of scene parents of arg matches input 
+@note not tested
+*/
+global proc int
+na_isParentOfThis_single(string $parent, string $child)
+{
+    na_isParentOfThis_single_assert($parent, $child);
+    int $result = 0;
+    string $sceneParent[] = {};
+    
+    //things like shapes could have multiple parents
+    $sceneParent = `listRelatives -parent $child`;
+    //if candidate matches any of the sceneParent result is 1
+    if(size($sceneParent) > 0 ){
+        if( na_isOption( {$parent} ,$sceneParent,0) == 1 ){$result = 1;}
+    }
+    
+    return $result;
+}
+/**
+*/
+global proc
+na_isParentOfThis_single_assert(string $parent, string $child)
+{
+    if(`objExists  $parent` == 0){ error("Sorry, Cannot find--"+$parent); }
+    if(`objExists  $child` == 0){ error("Sorry, Cannot find--"+$child); }       
+}
+/**
+@pre assumes empty scene
+*/
+global proc
+na_isParentOfThis_single_unitTest()
+{
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    select -cl  ;
+    select -r pCube1 ;
+    group; xform -os -piv 0 0 0;
+    
+    print( na_isParentOfThis_single("group1","pCube1") );
+    print("\n");
+    print( na_isParentOfThis_single("group1","pCube2") );
+}
+
+
+
+
+/**parents unparented joints using an input hierarchy
+@note useful for saving rig joint hierarchy to text file other than .ma 
+@param string array    hiererachy {child parent, child parent ... child parent} 
+@pre assumes all names exist
+*/
+global proc 
+makeHierarchy(string $defaultHierarchy[])
+{
+    //we need the default parenting even
+    //after user may have different choice for final skeleton
+    
+    
+    //save selection
+    string $curSel[] = `ls -sl`;
+    select -cl;
+    
+    //expecting pair child then parent
+    int $numberOfParentChildPairs = (size($defaultHierarchy)/2);
+    if( ceil($numberOfParentChildPairs) != floor($numberOfParentChildPairs) ){
+        error("expecting pair child then parent");
+    }
+    
+    
+    for($i=0; $i < $numberOfParentChildPairs; $i++)
+    {
+        //if this is an optional joint that user does not want, determine the correct parenting
+        
+        //otherwise
+        //make sure they exist and
+        //select the child first, then select the parent, then do the hierarchy
+        string $child = $defaultHierarchy[$i*2+0];
+        string $parent = $defaultHierarchy[$i*2+1];
+        if( `objExists $child` && `objExists $parent` )
+        {  
+            //only parent to a joint parent
+            //only parent a joint child
+            na_parent({$child},{$parent});
+            
+            
+        }
+        
+    }
+    
+    select -r $curSel;
+}
+
+

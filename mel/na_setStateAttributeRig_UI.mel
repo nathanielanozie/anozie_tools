@@ -1,0 +1,183 @@
+/**@file na_setStateAttributeRig_UI.mel v1.0.0
+@author Nathaniel Anozie
+@brief clean user attribute from rig ex: locking and making non key (backend snap,space) attributes on animator controls 
+*/
+
+global string $gl_selectedObject = "gl_selectedObject";
+global string $gl_attrSuffix = "gl_attrSuffix";
+global string $gl_attrFullName = "gl_attrFullName";
+global string $gl_keyableState = "gl_keyableState";
+global string $gl_lockState = "gl_lockState";
+global string $gl_lockAnimCurve = "gl_lockAnimCurve";
+global string $gl_readOnlyState = "gl_readOnlyState";
+
+/**ui
+*/
+global proc na_setStateAttributeRig_UI()
+{
+    global string $gl_selectedObjectBtn;
+    global string $gl_attrSuffix;
+    global string $gl_attrFullName;
+    global string $gl_keyableState;
+    global string $gl_lockState;
+    global string $gl_lockAnimCurve;
+    global string $gl_readOnlyState;
+    
+    //setup up title for gui
+    string $titleWindow = "na_setStateAttributeRig.mel  Clean Rig";
+    string $mainWindowName = "mainWindow";
+    na_window($mainWindowName,$titleWindow, 410, 380);
+    
+    //set up format for gui
+    string $form = `formLayout -numberOfDivisions 50 "form layout"`;
+    
+    
+    na_button($form, $mainWindowName,"LOAD SELECTED", 20, 150,"selButton","na_setStateAttributeRig_loadSelected_cmd");
+    int $top = 30;
+    
+    na_textFieldGrp($form, $mainWindowName,"by attr suffix(s)\n space separated", 20+$top, -10, $gl_attrSuffix);
+    na_textFieldGrp($form, $mainWindowName,"by attr(s)\n space separated", 55+$top, -10, $gl_attrFullName);
+      
+    //keyable
+    na_text($form, $mainWindowName,"keyable state", 98+$top, 20);
+    string $col_keyableState = `radioCollection`;
+    na_radioButton($form, $mainWindowName,"key", 95+$top, 140,"keyableState_pickType_cmd(0)",$col_keyableState);
+    na_radioButton($form, $mainWindowName,"unkey", 95+$top, 220,"keyableState_pickType_cmd(1)",$col_keyableState);
+
+    
+     //lock
+    na_text($form, $mainWindowName,"lock state", 128+$top, 22);
+    string $col_lockState = `radioCollection`;
+    na_radioButton($form, $mainWindowName,"lock", 125+$top, 140,"lockState_pickType_cmd(0)",$col_lockState);
+    na_radioButton($form, $mainWindowName,"unlock", 125+$top, 220,"lockState_pickType_cmd(1)",$col_lockState);
+  
+    
+    //animCurve
+    na_text($form, $mainWindowName,"lock all animCurve", 158+$top, 20);
+    string $col_lockAnimCurve = `radioCollection`;
+    na_radioButton($form, $mainWindowName,"yes", 155+$top, 140,"lockAnimCurve_pickType_cmd(0)",$col_lockAnimCurve);
+    na_radioButton($form, $mainWindowName,"no", 155+$top, 220,"lockAnimCurve_pickType_cmd(1)",$col_lockAnimCurve);
+    
+    //readOnly
+    na_text($form, $mainWindowName,"readOnly", 188+$top, 20);
+    string $col_readOnlyState = `radioCollection`;
+    na_radioButton($form, $mainWindowName,"readOnly", 185+$top, 140,"readOnlyState_pickType_cmd(0)",$col_readOnlyState);
+    na_radioButton($form, $mainWindowName,"unReadOnly", 185+$top, 220,"readOnlyState_pickType_cmd(1)",$col_readOnlyState);
+
+    na_button($form, $mainWindowName,"ok", 285+$top, 180,"button","na_setStateAttributeRig_cmd");
+    
+    showWindow $mainWindowName;
+}
+
+/**widget commands
+*/
+global proc keyableState_pickType_cmd(int $type)
+{
+    global string $gl_keyableState;
+    if($type == 0){ $gl_keyableState = "0"; }
+    else{ $gl_keyableState = "1"; }
+}
+/**widget commands
+*/
+global proc lockState_pickType_cmd(int $type)
+{
+    global string $gl_lockState;
+    if($type == 0){ $gl_lockState = "0"; }
+    else{ $gl_lockState = "1"; }
+
+}
+/**widget commands
+*/
+global proc lockAnimCurve_pickType_cmd(int $type)
+{
+    global string $gl_lockAnimCurve;
+    if($type == 0){ $gl_lockAnimCurve = "yes"; }
+    else{ $gl_lockAnimCurve = "no"; }
+}
+/**widget commands
+*/
+global proc readOnlyState_pickType_cmd(int $type)
+{
+    global string $gl_readOnlyState;
+    if($type == 0){ $gl_readOnlyState = "0"; }
+    else{ $gl_readOnlyState = "1"; }
+}
+
+/**useful for a ui loading user selection
+*/
+global proc na_setStateAttributeRig_loadSelected_cmd()
+{
+    global string $gl_selectedObject;
+    global string $gl_selectedObjectBtn;
+    
+    //return empty string if nothing selected otherwise convert selection to a string space separated
+    //
+    string $arg = "";
+    string $sel[] = `ls -sl`;
+    if( size($sel) > 0 )
+    {
+        $arg = stringArrayToString($sel," ");
+    }
+    
+    $gl_selectedObject = $arg;
+    
+
+}
+
+
+/**ui command
+*/
+
+global proc na_setStateAttributeRig_cmd()
+{
+
+    global string $gl_selectedObject;
+    global string $gl_attrSuffix;
+    global string $gl_attrFullName;
+    global string $gl_keyableState;
+    global string $gl_lockState;
+    global string $gl_lockAnimCurve;
+    global string $gl_readOnlyState;
+    
+    string $attrSuffix = "";
+    string $attr = "";
+    string $object = "";
+    
+    //main variables used by script
+    string $objectArray[] = {};
+    int $keyableState = 0;
+    int $lockState = 0;
+    string $attrSuffixArray[] = {}; 
+    string $attrArray[] = {}; 
+    int $isLockCurve = 0;
+    int $isReadOnly = 0;
+    ///
+    
+    //
+    $object = $gl_selectedObject;
+    if(size($object)>0){
+        $objectArray = stringToStringArray( $object, " " );
+    }
+    if( `strcmp $gl_lockAnimCurve "yes"` == 0){$isLockCurve = 1;}
+    if( `strcmp $gl_keyableState "0"` == 0){$keyableState = 1;}
+    if( `strcmp $gl_lockState "0"` == 0){$lockState = 1;}
+    if( `strcmp $gl_readOnlyState "0"` == 0){$isReadOnly = 1;}
+    
+    $attrSuffix = `textFieldGrp -query -text $gl_attrSuffix`;
+    if(size($attrSuffix)>0){
+        $attrSuffixArray = stringToStringArray( $attrSuffix, " " );
+    }
+    $attr = `textFieldGrp -query -text $gl_attrFullName`;
+    if(size($attr)>0){
+        $attrArray = stringToStringArray( $attr, " " );
+    }
+    //
+    
+    
+    na_setAttributeStateBySuffixOrName($attrArray,$attrSuffixArray,$objectArray,$keyableState,$lockState,$isLockCurve,$isReadOnly);
+
+    //on ok click reset to nothing selected
+    $gl_selectedObject = "";
+}
+
+

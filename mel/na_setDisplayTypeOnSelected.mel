@@ -1,0 +1,78 @@
+//Author: Nathaniel Anozie
+//ogbonnawork at gmail dot com
+//Inspired by:
+//Kiryha Krysko (kiryha dot blogspot dot com) learning about lockNode form online tutorials
+
+//make display type normal on selected mesh shapes, could be changed to set to referenced by passing 0
+//should work with parent selections or group selection with child shapes too, it just searches for the shapes
+/*usage
+source "na_setDisplayTypeOnSelected.mel";
+na_setDisplayTypeOnSelected(1);//option is isNormal
+na_setDisplayTypeOnSelectedJoint(1);
+*/
+global proc na_setDisplayTypeOnSelected( int $isNormal ){
+    string $sel[] = `ls -sl -dag`;
+    
+    //get shapes from selection
+    string $shape[] = {};
+    for($arg in $sel){ 
+        if( `objectType $arg` == "mesh"  ||  `objectType $arg` == "nurbsSurface" ){
+            $shape = stringArrayCatenate($shape,{$arg});
+        }
+        else{
+            //do extra if non shape selected
+            string $shapeArg[] = {};
+            $shapeArg = `listRelatives -path -type mesh -type nurbsSurface $arg`;//need path so no duplicate selected bugs
+            $shape = stringArrayCatenate($shape,$shapeArg);
+        }
+    }
+    
+    //change display type on shapes
+    $shape = stringArrayRemoveDuplicates($shape);   
+    //so do on only shapes once
+    for($arg in $shape){ 
+        //print($arg+"\n");
+        //normal 	-- 	0
+        //reference 	-- 	2
+        if($isNormal == 1){
+            setAttr ($arg+".overrideDisplayType") 0;
+        }else{
+            setAttr ($arg+".overrideDisplayType") 2;//make it referenced
+        }
+    }
+}
+
+
+global proc na_setDisplayTypeOnSelectedJoint( int $isNormal ){
+    string $sel[] = `ls -sl -dag`;
+    select -hierarchy; //so can work with hierarchy or selected joints
+    string $joints[] = `ls -sl -dag -type joint`;
+    //change display type
+    for($arg in $joints){ 
+        //print($arg+"\n");
+        //visible (full level of detail)        	    -- 	0
+        //not visible (bounding box level of detail)	-- 	1
+        if($isNormal == 1){
+            setAttr ($arg+".overrideLevelOfDetail") 0;
+            
+            //this bit does visibility, unlocks it then set it, quietly do it because possible incoming visiblity connections
+            lockNode -lock off ($arg+".v"); //this is needed in case this channel is locked 
+            
+            setAttr -lock false ($arg+".v");
+            //this is in case visibility is connected we break vis connection here
+            string $source[] = {};
+            $source = `listConnections -plugs true ($arg+".v")`;
+            if(size($source)==1){
+                 disconnectAttr $source ($arg+".v");  
+            }
+            
+            
+            setAttr ($arg+".v") 1;
+        }else{
+            setAttr ($arg+".overrideLevelOfDetail") 1;
+            //not locking and hiding visibility here because geo may be parented that we want to see
+        }
+    }
+    //restore selection
+    select -r $sel;
+}

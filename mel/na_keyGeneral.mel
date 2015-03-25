@@ -1,0 +1,603 @@
+/**@file na_keyGeneral.mel Tools to Duplicate animator control keys onto a different animator control
+@author Nathaniel O. Anozie (ogbonnawork at gmail dot com)
+@note date created: Mar 2 2012
+*/
+
+
+// 11-15-2014		 -- added blendshape node support
+// 08-28-2014		 -- added so doesnt care what type of thing to pick its curves
+// 02-19-2013-02-19-2013 -- added more robust plugin check, better explained a function name
+// 03-02-2012 -- initial release
+
+
+
+//given some animator curves selected this will paste that same animation but put it onto its non referenced version
+/**given selected animation curves it pastes them onto current.
+@param string $animatorAttributeSeparator animator and attribute separator example "_anim_"
+@pre selected anim curves example postyD_animRigAndSkin_master:postyD_rig_master:l_foot_anim_translateX,
+@pre animator control names are unchanged in new scene
+@note it doesn't paste radius or visibility type of curves
+*/
+global proc
+na_importRefAnimationOntoNonRefAnim(string $animatorAttributeSeparator)
+{
+    string $sel[] = `ls -sl`;
+    na_assertAnimatableAnimCurve($sel);
+    
+    string $anim[] = {};
+    string $attr[] = {};
+    
+    //this part depends on how to interpret incoming data
+    //
+    string $animAndAttr[] = na_parseAnimationCurvesByObjectSeparatorAttribute($sel,$animatorAttributeSeparator);          
+    na_assertSizeEqualArg($animAndAttr,2);
+    $anim = stringToStringArray($animAndAttr[0]," ");
+    $attr = stringToStringArray($animAndAttr[1]," ");
+    
+    na_assertSizeEqualArg($anim,size($sel));
+    na_assertSizeEqualArg($attr,size($sel));
+    
+
+    for($m = 0; $m < size($sel); $m++)
+    {
+        na_assertObjectExist(  { ($anim[$m]+"."+$attr[$m]), ($sel[$m]+"."+"output")}  );
+    }
+    
+    
+
+    //make sure no keys where were pasting
+    na_assertNoSourceConnectionsOnObjectAndPlug($anim,$attr);
+    print("GREAT GOT THIS FAR!!!\n");
+    //paste animation onto scene
+    //we use connection because it autmatically takes care of tangent stuff  
+    for($m = 0; $m < size($sel); $m++)
+    {
+        $curve = $sel[$m];
+        connectAttr -f ($curve+"."+"output") ($anim[$m]+"."+$attr[$m]);
+    }
+    
+}
+
+/**select the anim curves for all keyable attributes on these animator controls, its useful
+for saving animation, if we just want to save animation for selected controls only
+@pre some transforms or joints selected
+@bug if shapes have attribute keys this won't work on them
+@bug doesn't know to not select visibility or radius anim curves
+*/
+global proc string[] 
+na_selectAnimCurveFromSelectedAnimatorControls()
+{
+    string $result[] = {};
+        
+    string $sel[] = `ls -sl`;
+   
+if(size($sel) > 0){select -cl;for($arg in $sel){ select -add `listConnections -type animCurve -source 1 $arg`; }}else{print("Select one or more objects");}
+
+	$result = `ls -sl`;
+	
+    /*
+    na_assertObjectExist($sel);
+    na_assertTypeInList($sel,{"transform","joint","blendShape"});
+    string $supportedAnimCurve[] = {"animCurveTL","animCurveTA","animCurveTU","animCurveUA","animCurveUL","animCurveUU"};
+    
+    string $attributes[] = {};
+    string $curve[] = {};
+    for($obj in $sel)
+    {
+        string $attr[] = {};
+        $attr = `listAttr -k -u $obj`;
+        
+        //ommits expressions
+        $curve = {};
+        $curve = na_getAttributeAnimCurvesMultipleNode( {$obj}, $attr );
+        for($crv in $curve)
+        {
+            //ommit unitconversions anim curves
+            if(na_isTypeSupported($crv,$supportedAnimCurve) == 1  && 
+                na_isLastTokenEqualNameAfterSeperator($crv,"visibility","_") == 0 &&
+            na_isLastTokenEqualNameAfterSeperator($crv,"radius","_") == 0)
+            {
+                $result = stringArrayCatenate($result,{$crv});
+            }
+        }
+        $result = stringArrayRemoveDuplicates($result);
+    }
+    */
+
+
+    select -r $result;
+    
+    return $result;
+}
+global proc
+na_selectAnimCurveFromSelectedAnimatorControls_unitTest()
+{ 
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    setKeyframe -breakdown 0 -hierarchy none -controlPoints 0 -shape 0 {"pCube1"};
+    currentTime 12 ;
+    select -r pCube1 ;
+    move -r 0 4.136073 0 ;
+    setKeyframe -breakdown 0 |pCube1.translate;
+    setKeyframe -breakdown 0 -hierarchy none -controlPoints 0 -shape 0 {"pCube1"};
+    move -r 0 -2.464878 0 ;
+    setKeyframe -breakdown 0 |pCube1.translate;
+    setKeyframe -breakdown 0 -hierarchy none -controlPoints 0 -shape 0 {"pCube1"};
+    
+    select -r pCube1;
+    na_selectAnimCurveFromSelectedAnimatorControls();
+}
+
+
+
+
+
+
+
+/**make selected animator controls be in blocking stage
+@pre assumes no components selected or things don't want to animate with just thing we want to animate selected
+@bug no assert checks
+@note Maya Plugin Required naTangentType
+*/
+global proc 
+na_blockingSelectedAnimatorControls()
+{
+    string $cmd = "naTangentTypeCmd";
+    string $sel[] = `ls -sl`;
+    na_selectAnimCurveFromSelectedAnimatorControls();
+    
+    //make sure we have the plugin loaded
+    string $plugin = $cmd+".bundle";
+    if( `pluginInfo -query -loaded $plugin` == 0 ){loadPlugin $plugin;}
+    
+    eval($cmd+" -step");
+    select -r $sel;
+}
+global proc na_blockingSelectedAnimatorControls_unitTest()
+{
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    setKeyframe -breakdown 0 -hierarchy none -controlPoints 0 -shape 0 {"pCube1"};
+    currentTime 12 ;
+    select -r pCube1 ;
+    move -r 0 4.136073 0 ;
+    setKeyframe -breakdown 0 |pCube1.translate;
+    setKeyframe -breakdown 0 -hierarchy none -controlPoints 0 -shape 0 {"pCube1"};
+    move -r 0 -2.464878 0 ;
+    setKeyframe -breakdown 0 |pCube1.translate;
+    setKeyframe -breakdown 0 -hierarchy none -controlPoints 0 -shape 0 {"pCube1"};
+    
+    select -r pCube1;
+    na_blockingSelectedAnimatorControls();
+}
+
+/**make selected animator controls be in smoothing stage
+@pre assumes no components selected or things don't want to animate with just thing we want to animate selected
+@bug no assert checks
+@note Maya Plugin Required naTangentType
+*/
+global proc 
+na_smoothSelectedAnimatorControls()
+{
+    string $cmd = "naTangentTypeCmd";
+    string $sel[] = `ls -sl`;
+    na_selectAnimCurveFromSelectedAnimatorControls();
+    
+    //make sure we have the plugin loaded
+    string $plugin = $cmd+".bundle";
+    if( `pluginInfo -query -loaded $plugin` == 0 ){loadPlugin $plugin;}
+    
+    eval($cmd+" -smooth");
+    select -r $sel;
+}
+global proc na_smoothSelectedAnimatorControls_unitTest()
+{
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    setKeyframe -breakdown 0 -hierarchy none -controlPoints 0 -shape 0 {"pCube1"};
+    currentTime 12 ;
+    select -r pCube1 ;
+    move -r 0 4.136073 0 ;
+    setKeyframe -breakdown 0 |pCube1.translate;
+    setKeyframe -breakdown 0 -hierarchy none -controlPoints 0 -shape 0 {"pCube1"};
+    move -r 0 -2.464878 0 ;
+    setKeyframe -breakdown 0 |pCube1.translate;
+    setKeyframe -breakdown 0 -hierarchy none -controlPoints 0 -shape 0 {"pCube1"};
+    
+    select -r pCube1;
+    na_smoothSelectedAnimatorControls();
+}
+
+
+/**make step tangent animator control and frame
+@param float $frame frame number
+@param string $attr attribute name
+@param string $anim animator control
+@bug if anim curve renamed 
+*/
+proc 
+na_blockByFrameAndAnimatorControl(float $frame, string $attr, string $anim)
+{
+    if($frame <= 0){error("Require frame start at 1");}
+    string $animCurve = `connectionInfo -sourceFromDestination ($anim+"."+$attr)`;
+    na_assertObjectExist({$animCurve});
+    na_assertTypeInList({$animCurve},{"animCurveTL","animCurveTA","animCurveTU"});
+ 
+    //select all keys at keyframe time for animator control
+    na_selectKeysAtKeyframeTimePerAnimatorCurve($frame,$animCurve);
+                
+    keyTangent -ott step;
+}
+
+/**make smooth,weighted,flat tangent animator control and frame
+@param float $frame frame number
+@param string $attr attribute name
+@param string $anim animator control
+@bug if anim curve renamed 
+*/
+proc 
+na_smoothByFrameAndAnimatorControl(float $frame, string $attr, string $anim)
+{
+    if($frame <= 0){error("Require frame start at 1");}
+    string $animCurve = `connectionInfo -sourceFromDestination ($anim+"."+$attr)`;
+    na_assertAnimatableAnimCurve({$animCurve});
+ 
+    //select all keys at keyframe time for animator control
+    na_selectKeysAtKeyframeTimePerAnimatorCurve($frame,$animCurve);
+                
+    //a sort of smooth with flat tangents that can be moved
+    keyTangent -itt flat -ott flat;
+    keyTangent -edit -weightedTangents true;
+    keyTangent -lock off;
+    keyTangent -weightLock off;
+}
+
+
+/**select keys at keyframe time for animatorCurve
+*/
+global proc 
+na_selectKeysAtKeyframeTimePerAnimatorCurve(float $frame, string $animCurve)
+{
+    na_assertAnimatableAnimCurve({$animCurve});
+    selectKey -clear;
+    selectKey -add -k -t $frame $animCurve;    
+}
+
+/**make selected animator controls be in either blocking or smoothing stage
+@param int $tangentType 1 -- step, 2 --  smooth
+@param string $animatorControls[] animator controls
+@pre assumes no components selected or things don't want to animate with just thing we want to animate selected
+@bug no assert checks
+*/
+global proc 
+na_editKeyAnimatorControlsByTangentType(int $tangentType, string $animatorControls[])
+{
+    //make selected animator controls have blocking keys
+    //
+    na_assertObjectExist($animatorControls);
+    string $tangentTypeMeaning = "1--blocking, 2-- smoothing ";
+    if( ($tangentType != 1) && ($tangentType != 2) ){error("Require Tangent Type "+$tangentTypeMeaning);}
+    
+    
+    //for each animator control
+    for( $anim in $animatorControls )
+    {
+        //get attributes we can key
+        string $all_attributes[] = `listAttr -k -u $anim`;
+        string $attributes[] = stringArrayRemoveExact( {"visibility","radius"}, $all_attributes );
+        
+        
+        //get keyframe times per attribute per animator control
+        for( $attr in $attributes )
+        {
+            float $frames[] = `keyframe -at $attr -q -tc $anim`;
+            
+            //change key type to blocking
+            for($frame in $frames)
+            { 
+                
+                //change key's type
+                if($tangentType == 1){
+                    na_blockByFrameAndAnimatorControl($frame,$attr,$anim);
+                }
+                else if($tangentType == 2){
+                    na_smoothByFrameAndAnimatorControl($frame,$attr,$anim);
+                }
+                else{error("Require Tangent Type "+$tangentTypeMeaning);}
+                
+                
+            }//end keyframe times
+            
+            
+        }//end attribute per animator control
+        
+        
+        
+    }//end animator controls
+    
+}
+
+
+/** unlock visibility of anim controls only
+@note useful so visibility expressions can be edited
+@pre all anims have suffix _anim
+@bug could be more useful if went by selection or input list
+*/
+global proc na_unLockVisibilityAnim()
+{
+    select "*_anim";
+    string $object[] = `ls -sl`;
+    for($obj in $object)
+    {
+        setAttr -lock 0 ($obj+"."+"visibility");
+    }
+}
+
+/**set visibility and keybable off for non connected transforms or joints
+@note useful when finishing up rig and we want to prevent seeing unwanted objects
+@param objects
+@param single attribute ex: visibility
+@bug this probably should go in different module
+*/
+global proc
+na_lockUnConnectedAttribute(string $object[], string $attr)
+{
+    na_assertTypeInList( $object, {"transform"} );
+    
+    //verify attribute exists
+    string $fromAndPlug[] = {};
+    $fromAndPlug = na_getPlug($object,$attr);
+    na_assertObjectExist($fromAndPlug);
+    
+    
+    string $obj = "";
+    int $isConnected = 0;
+    for( $i = 0; $i < size($object); $i++ )
+    {
+        $obj = $object[$i];
+        $isConnected =  na_isPlugConnectedAll($obj,$attr);
+        //if visibility has no incoming or outcoming connections
+        if($isConnected == 0)
+        {
+            //set locked, not keyable
+            //
+            setAttr -lock 1 ($obj+"."+$attr);
+            //setAttr -keyable 0 -channelBox 0 ($obj+"."+$attr);
+            
+        }
+        else{
+            //set locked 
+            setAttr -lock 1 ($obj+"."+$attr);
+        }
+    }   
+}
+
+
+/**also set keys on attr specified on a different animator control
+@note needs a ui
+@bug no error checking
+*/
+global proc
+na_setKeyBetweenAnim(string $fromAnim, string $toAnim, string $attr[])
+{
+    na_assertObjectExist({$fromAnim,$toAnim});
+    
+    string $fromAndPlug[] = {};
+    $fromAndPlug = na_getPlugByAttributeArray($fromAnim,$attr);
+    na_assertObjectExist($fromAndPlug);
+    
+    string $toAndPlug[] = {};
+    $toAndPlug = na_getPlugByAttributeArray($toAnim,$attr);
+    na_assertObjectExist($toAndPlug);
+    
+    
+    for($item in $attr)
+    {
+        na_setKeyBetweenAnimSingleAttribute($fromAnim, $toAnim, $item);
+    }
+}
+
+
+global proc
+na_setKeyBetweenAnimSingleAttribute_unitTest_1()
+{
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    polySphere -r 0 -sx 8 -sy 8 -ax 0 0 1 -cuv 2 -ch 1;
+    move -r -2.263059 0 0 ;
+    select -r pCube1 ;
+    setKeyframe -breakdown 0 |pCube1.translate;
+    setKeyframe -breakdown 0 -hierarchy none -controlPoints 0 -shape 0 {"pCube1"};
+    select -r pCube1 ;
+    currentTime 7 ;
+    move -r 0 0.852457 0 ;
+    setKeyframe -breakdown 0 |pCube1.translate;
+    setKeyframe -breakdown 0 -hierarchy none -controlPoints 0 -shape 0 {"pCube1"};
+    currentTime 12 ;
+    setAttr "pCube1.rotateX" 5;
+    setKeyframe -breakdown 0 |pCube1.translate;
+    setKeyframe -breakdown 0 -hierarchy none -controlPoints 0 -shape 0 {"pCube1"};
+    currentTime 19 ;
+    setAttr "pCube1.rotateX" 0;
+    setKeyframe -breakdown 0 |pCube1.translate;
+    setKeyframe -breakdown 0 -hierarchy none -controlPoints 0 -shape 0 {"pCube1"};
+    setAttr "pCube1.translateY" 0;
+    setKeyframe -breakdown 0 |pCube1.translate;
+    setKeyframe -breakdown 0 -hierarchy none -controlPoints 0 -shape 0 {"pCube1"};
+
+    
+    na_setKeyBetweenAnimSingleAttribute("pCube1", "pSphere1", "translateY");
+    
+}
+
+global proc
+na_setKeyBetweenAnimSingleAttribute_unitTest_2()
+{
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    polySphere -r 0 -sx 8 -sy 8 -ax 0 0 1 -cuv 2 -ch 1;
+    move -r -2.263059 0 0 ;
+    select -r pCube1 ;
+    setKeyframe -breakdown 0 |pCube1.translate;
+    setKeyframe -breakdown 0 -hierarchy none -controlPoints 0 -shape 0 {"pCube1"};
+    select -r pCube1 ;
+    currentTime 7 ;
+    move -r 0 0.852457 0 ;
+    setKeyframe -breakdown 0 |pCube1.translate;
+    setKeyframe -breakdown 0 -hierarchy none -controlPoints 0 -shape 0 {"pCube1"};
+    currentTime 12 ;
+    setAttr "pCube1.rotateX" 5;
+    setKeyframe -breakdown 0 |pCube1.translate;
+    setKeyframe -breakdown 0 -hierarchy none -controlPoints 0 -shape 0 {"pCube1"};
+    currentTime 19 ;
+    setAttr "pCube1.rotateX" 0;
+    setKeyframe -breakdown 0 |pCube1.translate;
+    setKeyframe -breakdown 0 -hierarchy none -controlPoints 0 -shape 0 {"pCube1"};
+    setAttr "pCube1.translateY" 0;
+    setKeyframe -breakdown 0 |pCube1.translate;
+    setKeyframe -breakdown 0 -hierarchy none -controlPoints 0 -shape 0 {"pCube1"};
+
+    
+    na_setKeyBetweenAnimSingleAttribute("pCube1", "pSphere1", "translateY");
+    na_setKeyBetweenAnimSingleAttribute("pCube1", "pSphere1", "rotateX");
+}
+
+
+global proc
+na_setKeyBetweenAnimSingleAttribute(string $fromAnim, string $toAnim, string $attr)
+{
+    na_assertObjectExist( {($fromAnim+"."+$attr),($toAnim+"."+$attr)});
+    
+    //assert to and from are not the same
+    na_assertNoneInList( {$fromAnim},{$toAnim} );
+    
+    //assert key ready, keyable(visible),unlocked,
+    //
+    na_assertKeyable( $fromAnim, {$attr} );
+    na_assertKeyable( $toAnim, {$attr} );
+    na_assertUnlocked( $fromAnim, {$attr} );
+    na_assertUnlocked( $toAnim, {$attr} );    
+    
+    //so we can restore
+    int $current = `currentTime -query`;
+    string $sel[] = `ls -sl`;
+ 
+    float $frameArray[] = {};
+    $frameArray = `keyframe -at $attr -q -tc $fromAnim`;
+    na_assertFloatSizeGreaterEqualTo($frameArray,1);
+    
+    //get the values to set
+    //
+    float $valueArray[] = {};
+    float $value[] = {};
+    for($i = 0; $i < size($frameArray); $i++)
+    {
+        $frame = $frameArray[$i];
+        $value = `keyframe -at $attr -t $frame -q -eval $fromAnim`;
+        //assert size 1
+        $valueArray[size($valueArray)] = $value[0];
+    }
+    
+    //assert value and frame same sizes
+    na_assertFloatSizeGreaterEqualTo($valueArray,1);
+    na_assertFloatSizeEqualArg( $valueArray, size($frameArray) );
+    
+    
+    //set key on other animator control
+    //
+    
+    float $keyValue = 0.0; //this should work even for holding boolean or enum
+    for($j = 0; $j < size($frameArray); $j++)
+    {
+        currentTime $frameArray[$j];
+        $keyValue = $valueArray[$j];
+        setAttr ($toAnim+"."+$attr) $keyValue;
+        setKeyframe -v $keyValue -at $attr $toAnim;
+    }
+    
+    currentTime $current;
+    select -r $sel;
+}
+
+
+
+/**key the following attributes on these transforms
+@bug no error checking
+@param string list $transform
+@param string list $attr    
+@note no checks added yet on input
+*/
+global proc
+naSetKey(string $transform[], string $attr[] )
+{
+    //make sure all transforms exist if one doesn't exit
+    //make sure all attribute exist even if one doesn't exit
+    //make sure all attributes are keyable for every transform if one doesn't exit
+    
+    //make the command
+    string $cmd = "";
+    for($i=0; $i < size($attr); $i++){ $cmd += "-at "+$attr[$i];}
+    
+    //run command
+    for($j=0; $j < size($transform); $j++ ){
+        string $transformName = $transform[$j];
+        
+        //does transform exist
+        int $isTransformExist = `objExists $transformName`;
+        
+        //does attribute exist on this transform 
+        //int $isAttrExist = `attributeExists $attr`
+        
+        
+        //is attribute keybale
+        eval( "setKeyframe "+$cmd+" "+$transformName );
+        
+    }
+    
+}
+
+
+
+/**given selected animation curves it parse out what animator control
+and which of its attributes is needed via naming and returns two elements, 
+@param string $animCurve[]  list of animation curve names
+@param string $animatorAttributeSeparator animator and attribute separator example "_anim_"
+@result animator controls space separated and attributes space separated
+@pre anim curves example postyD_animRigAndSkin_master:postyD_rig_master:l_foot_anim_translateX, and are on
+the scene.
+*/
+global proc string[]
+na_parseAnimationCurvesByObjectSeparatorAttribute(string $animCurve[], string $animatorAttributeSeparator)
+{
+    string $result[] = {};
+        
+    string $sel[] = $animCurve;
+    //string $sep = "_";
+    string $sep = $animatorAttributeSeparator;
+    
+    na_assertAnimatableAnimCurve($sel);
+    
+    //get the attribute and animator control per anim curve
+    string $attributes[] = {};
+    string $objects[] = {};
+    string $tokens[] = {};
+    for($i = 0; $i < size($sel); $i++ )
+    {
+        //this bit does the parsing of curve name
+        $tokens = na_getTokensByMultipleCharSeparator($sel[$i], $sep);
+        na_assertSizeEqualArg($tokens,2);
+        $objects[size($objects)] = $tokens[0];
+        $attributes[size($attributes)] = $tokens[1];       
+    }
+    
+
+    na_assertSizeEqualArg( $objects,size($sel) );
+    na_assertSizeEqualArg( $attributes,size($sel) );
+    
+    //this may be over restricted because saying that cannot
+    //paste keys if there are any keys already there
+    //so may want to remove this
+    na_assertNoSourceConnectionsOnObjectAndPlug($objects,$attributes);
+    
+    //return animator control and attributes
+    $result[0] = stringArrayToString($objects," ");
+    $result[1] = stringArrayToString($attributes," ");
+    
+    return $result;
+}
+

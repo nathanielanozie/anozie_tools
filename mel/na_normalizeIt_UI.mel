@@ -1,0 +1,81 @@
+/**@file na_normalizeIt_UI.mel
+*/
+
+global string $gl_object = "gl_object";
+global string $gl_plug = "gl_plug";
+global string $gl_toObject = "gl_toObject";
+global string $gl_toPlug = "gl_toPlug";
+global string $gl_denomObject = "gl_denomObject";
+global string $gl_denomPlug = "gl_denomPlug";
+global string $gl_backEndName= "gl_backEndName";
+
+/**ui
+*/
+global proc
+na_normalizeIt_UI()
+{
+    
+    global string $gl_object;
+    global string $gl_plug;
+    global string $gl_denomObject;
+    global string $gl_denomPlug;
+    global string $gl_toObject;
+    global string $gl_toPlug;
+    global string $gl_backEndName;
+    
+    //setup up title for gui
+    string $titleWindow = "na_connect.mel  make Normalized";
+    string $mainWindowName = "mainWindow";
+    na_window($mainWindowName,$titleWindow, 420, 310);
+    
+    //set up format for gui
+    string $form = `formLayout -numberOfDivisions 50 "form layout"`;
+    
+    //set up ui widgets
+    na_textFieldGrp($form, $mainWindowName,"numerator object", 25, 5, $gl_object);
+    na_textFieldGrp($form, $mainWindowName,"numerator attribute", 55, 5, $gl_plug);
+    na_textFieldGrp($form, $mainWindowName,"divisor object", 85, 5, $gl_denomObject);
+    na_textFieldGrp($form, $mainWindowName,"divisor attribute", 115, 5, $gl_denomPlug);
+    na_textFieldGrp($form, $mainWindowName,"to object", 145, 5, $gl_toObject);
+    na_textFieldGrp($form, $mainWindowName,"to attribute", 175, 5, $gl_toPlug);
+    na_textFieldGrp($form, $mainWindowName,"backend name", 205, 5, $gl_backEndName);
+    
+    na_button($form, $mainWindowName,"ok", 255, 210,"button","na_normalizeIt_cmd");
+    
+    showWindow $mainWindowName;
+    
+    
+}
+
+/**ui command
+*/
+global proc
+na_normalizeIt_cmd()
+{
+    global string $gl_object;
+    global string $gl_plug;
+    global string $gl_denomObject;
+    global string $gl_denomPlug;
+    global string $gl_toObject;
+    global string $gl_toPlug;
+    global string $gl_backEndName;
+ 
+    //used
+    string $object="";
+    string $plug = "";
+    string $denomObject="";
+    string $denomPlug = "";
+    string $toObject="";
+    string $toPlug = "";
+    string $name = "";
+
+    $object = `textFieldGrp -query -text $gl_object`;
+    $plug= `textFieldGrp -query -text $gl_plug`; 
+    $denomObject = `textFieldGrp -query -text $gl_denomObject`;
+    $denomPlug= `textFieldGrp -query -text $gl_denomPlug`; 
+    $toObject = `textFieldGrp -query -text $gl_toObject`;
+    $toPlug= `textFieldGrp -query -text $gl_toPlug`; 
+    $name= `textFieldGrp -query -text $gl_backEndName`; 
+
+    na_normalizeIt($object, $plug, $toObject, $toPlug,$denomObject,$denomPlug,$name);
+}

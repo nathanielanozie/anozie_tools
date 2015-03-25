@@ -1,0 +1,1008 @@
+/**@file naSkinWeightGeneral.mel
+@brief Duplicate Skin. 
+@author Nathaniel O. Anozie (ogbonnawork at gmail dot com)
+@note date created: June 02, 2012
+@note added tool to quick skin anim rig
+@note addedtool to mirror skin across same poly
+@note added tool to transfer skin between two polys
+@note Modify at your own risk
+*@defgroup deformation Surface Weighting
+*@{
+*Techniques to copy skin weights while not affecting other parts of the character.
+*
+*Example Applications: Duplicate a skinned hand with identical vertex order to goal by vertex position.
+*Mirror influence weights across character.
+*/                        
+                             
+//updated 06-19-2013 nate --- fixed unknown object bug in mirror skin weight tool
+                                       
+
+/**This helps to get painted weights from one mesh onto another mesh given, skinned vertices, skinned influences,
+and given unskinned vertices and unskinned influences. A method is available to compute unskinned vertices by nearest worldposition method of skinned vertex. Its alot like Maya's copyWeight but this can work and not copy all the weights to geo,
+it will only work on a range of to vertices.
+@param string $toVtxRange[]  quick putting weights by only putting weight on vertices in this list, error if doesn't exist
+@param string $toGeo    geometry putting weights onto, it should be bound already with all nece inf, likely one ofthem all weight
+@param string $toInf[]  to influences
+@param string $fromGeo  use to get weight, it should be skinned and have weight we need and be on scene
+@param string $fromInf[]    from influences
+@param string $fromCluster[]    from influences skin cluster
+@param float $maxDistanceFromAndToVtx   max distance allowed between both geometries per vertex
+@bug not checking types of input, it needs a UI
+*/
+global proc 
+na_copyWeight(string $toVtxRange[], string $toGeo, string $toInf[], string $fromGeo, string $fromInf[], string $fromCluster, float $maxDistanceFromAndToVtx )
+{
+    
+    na_assertObjectExist({$fromGeo});
+    na_assertObjectExist({$toGeo});
+    na_assertObjectExist($toInf);
+    na_assertObjectExist($fromInf);
+    na_assertObjectExist($toVtxRange);
+    
+    
+    string $fromInfluence[] = {};
+    $fromInfluence = $fromInf;
+    
+    string $toInfluence[] = {};
+    $toInfluence = $toInf;
+    
+    string $fromVtx[] = {};
+    $fromVtx = getVtxFromPoly($fromGeo);
+    
+    //This shows it finds the place we want to put weights
+    //faster because only subset of all its vertices are checked
+    //
+    string $toVtx[] = {};
+    $toVtx = na_getNearestVertexInPolygon($fromVtx,$toGeo,$maxDistanceFromAndToVtx,$toVtxRange);
+
+    if( size($toVtxRange) != size($fromVtx) ){error("Requires both geometries at exact same world locations at specified range");}
+    na_assertSizeGreaterEqualTo($toVtx,1);
+    
+    na_copyDeformationOnSkinnedPolygon( $fromInfluence, $fromCluster, $fromVtx, $toInfluence, $toVtx );
+    
+}
+
+
+/**set the skin on one polygon to be the same as another polygon, it needs the from skin cluster name to distinguish influences
+@pre all from on same skin, all to on same but different skin
+@pre all sizes are identical and are ordered
+@pre all influences the skincluster with to influences are unlocked
+*/
+//
+global proc
+na_copyDeformationOnSkinnedPolygon(  string $fromInfluence[], string $fromCluster, string $fromVtxArray[], string $toInfluence[], string $toVtxArray[] )
+{
+    string $toVtx[] = {};
+    $toVtx = na_getExpanded($toVtxArray);
+    
+    string $fromVtx[] = {};
+    $fromVtx = na_getExpanded($fromVtxArray);
+    
+    na_assertTypeInList( $fromVtx, {"mesh"} );
+    na_assertTypeInList( $toVtx, {"mesh"} );
+    
+    na_assertTypeInList( $fromInfluence, {"joint","transform"} );
+    //na_assertVerticesAndInfluenceSameSingleCluster($fromVtx,$fromInfluence,$fromCluster);
+    
+    
+    na_assertTypeInList( $toInfluence, {"joint","transform"} );
+    string $toCluster[] = na_getSkinClusterGivenComponent($toVtx[0]); 
+    na_assertSizeEqualArg( $toCluster, 1);
+        
+    na_assertVerticesAndInfluenceSameSingleCluster($toVtx,$toInfluence,$toCluster[0]);
+    //so that the same mesh cant be used to transfer weights to itself
+    na_assertVerticesFromDifferentSingleCluster($fromVtx, $toVtx );
+    
+    na_assertSizeEqualArg( $fromInfluence, size($toInfluence) );
+    na_assertSizeEqualArg( $fromVtx, size($toVtx) );
+    
+    
+    
+    //only need to get weights on the smaller cluster
+    float $weightArray[] = {};
+    $weightArray = na_getWeight( $fromInfluence, $fromVtx, $fromCluster,4 );
+    na_assertFloatNonNegative($weightArray);
+    
+    
+    //set the weights
+    //
+    int $indexInToInfluenceToFlood = 0;
+    na_setOverwriteWeight( $weightArray, $toInfluence, $toVtx, $indexInToInfluenceToFlood);
+    
+}
+
+
+global proc
+na_copyDeformationOnSkinnedPolygon_unitTest_2()
+{
+    polyCone -r 1 -h 2 -sx 8 -sy 1 -sz 0 -ax 0 1 0 -rcp 0 -cuv 3 -ch 1;
+    polyCone -r 1 -h 2 -sx 8 -sy 1 -sz 0 -ax 0 1 0 -rcp 0 -cuv 3 -ch 1;
+    move -r 2.351314 0 0 ;
+    select -d pCone2 ;
+    select -d;
+    joint -p 0 0 0 ;
+    select -d joint1 ;
+    select -d;
+    joint -p 3 0 0 ;
+    select -r pCone2 ;
+    move -rpr -x 3 ;
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    move -r 0 -1.052618 0 ;
+    select -d pCube1 ;
+    select -d;
+    joint -p 4 0 0 ;
+    move -rpr -x 3 ;
+    move -rpr -y -1 ;
+    select -cl  ;
+    select -d;
+    joint -p 3 -2 0 ;
+    
+    //make and add to skin cluster 
+    select -r joint1;
+    select -tgl pCone1 ;
+    newSkinCluster "-mi 4 -omi true -dr 4 -rui true"; 
+   
+    skinCluster -e  -dr 4 -lw true -wt 0 -ai pCube1 skinCluster1;
+    
+    select -r joint2;
+    select -tgl pCone2;
+    newSkinCluster "-mi 4 -omi true -dr 4 -rui true"; 
+    
+    skinCluster -e  -dr 4 -lw true -wt 0 -ai joint3 skinCluster2;
+    
+    skinCluster -e  -dr 4 -lw true -wt 0 -ai joint4 skinCluster2;
+       
+    skinPercent -tv joint3 1 skinCluster2 pCone2.vtx[0:8];
+    
+    setAttr pCube1.liw 0;
+    skinPercent -tv pCube1 0.5 skinCluster1 pCone1.vtx[0:7];
+    
+    setAttr joint3.liw 0;
+    setAttr joint4.liw 0;
+    
+    select -cl;
+    
+    
+    string $fromVtx[] = {};
+    $fromVtx = getVtxFromPoly("pCone1");
+    
+    string $toVtx[] = {};
+    $toVtx = na_getSelectedVtxFromPolySameIndex($fromVtx, "pCone1", "pCone2");
+    
+    
+    string $fromInfluence[] = {};
+    $fromInfluence = {"joint1","pCube1"};
+    
+    string $toInfluence[] = {};
+    $toInfluence = {"joint2","joint3"};
+
+    na_copyDeformationOnSkinnedPolygon( $fromInfluence, "skinCluster1", $fromVtx, $toInfluence, $toVtx );
+}
+
+
+
+
+global proc
+na_copyDeformationOnSkinnedPolygon_unitTest_1()
+{
+    polyCone -r 1 -h 2 -sx 8 -sy 1 -sz 0 -ax 0 1 0 -rcp 0 -cuv 3 -ch 1;
+    polyCone -r 1 -h 2 -sx 8 -sy 1 -sz 0 -ax 0 1 0 -rcp 0 -cuv 3 -ch 1;
+    move -r 2.351314 0 0 ;
+    select -d pCone2 ;
+    select -d;
+    joint -p 0 0 0 ;
+    select -d joint1 ;
+    select -d;
+    joint -p 3 0 0 ;
+    select -r pCone2 ;
+    move -rpr -x 3 ;
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    move -r 0 -1.052618 0 ;
+    select -d pCube1 ;
+    select -d;
+    joint -p 4 0 0 ;
+    move -rpr -x 3 ;
+    move -rpr -y -1 ;
+    select -cl  ;
+    
+    //make and add to skin cluster 
+    select -r joint1;
+    select -tgl pCone1 ;
+    newSkinCluster "-mi 4 -omi true -dr 4 -rui true"; 
+   
+    skinCluster -e  -dr 4 -lw true -wt 0 -ai pCube1 skinCluster1;
+    
+    select -r joint2;
+    select -tgl pCone2;
+    newSkinCluster "-mi 4 -omi true -dr 4 -rui true"; 
+    
+    skinCluster -e  -dr 4 -lw true -wt 0 -ai joint3 skinCluster2;
+    
+    skinPercent -tv joint3 1 skinCluster2 pCone2.vtx[0:8];
+    
+    setAttr pCube1.liw 0;
+    skinPercent -tv pCube1 0.5 skinCluster1 pCone1.vtx[0:7];
+    
+    setAttr joint3.liw 0;
+    
+    select -cl;
+    
+    
+    string $fromVtx[] = {};
+    $fromVtx = getVtxFromPoly("pCone1");
+    
+    string $toVtx[] = {};
+    $toVtx = na_getSelectedVtxFromPolySameIndex($fromVtx, "pCone1", "pCone2");
+    
+    
+    string $fromInfluence[] = {};
+    $fromInfluence = {"joint1","pCube1"};
+    
+    string $toInfluence[] = {};
+    $toInfluence = {"joint2","joint3"};
+
+    na_copyDeformationOnSkinnedPolygon( $fromInfluence, "skinCluster1", $fromVtx, $toInfluence, $toVtx );
+}
+
+
+
+global proc
+na_copyDeformationOnSkinnedPolygon_unitTest()
+{
+    
+    select -d;
+    joint -p 0 0 0 ;
+    joint -p 0 1 0 ;
+    joint -e -zso -oj xyz -sao yup joint1;
+    select -r -ne defaultLightSet ;
+    select -r joint1 ;
+    select -d;
+    joint -p 0 0 0 ;
+    joint -p 0 1 0 ;
+    joint -e -zso -oj xyz -sao yup joint3;
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    
+    
+    select -r joint1 ;
+    select -tgl pCube1 ;
+    newSkinCluster "-mi 4 -omi true -dr 4 -rui true"; 
+    
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    
+    select -r joint3 ;
+    select -tgl pCube2 ;
+    newSkinCluster "-mi 4 -omi true -dr 4 -rui true"; 
+    
+    select -r pCube2.vtx[0:7] ;
+    skinPercent -tv joint4 1 skinCluster2 pCube2.vtx[0:7];
+
+    
+    string $fromVtx[] = {};
+    $fromVtx = getVtxFromPoly("pCube1");
+    
+    string $fromInfluence[] = {};
+    //$fromInfluence = na_getInfluenceToPolygon("pCube1");
+    $fromInfluence = {"joint1","joint2"};
+    
+    string $toVtx[] = {};
+    $toVtx = na_getNearestVertexInPolygon($fromVtx,"pCube2",0.001,{});
+    
+    string $toInfluence[] = {};
+    //$fromInfluence = na_getInfluenceToPolygon("pCube1");
+    $toInfluence = {"joint3","joint4"};                
+    
+    na_copyDeformationOnSkinnedPolygon( $fromInfluence, "skinCluster1", $fromVtx, $toInfluence, $toVtx );
+
+}
+
+
+
+
+
+
+
+global proc
+na_mirrorSkinByVertex_unitTest_1()
+{
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    select -cl  ;
+    select -r pCube1 ;
+    select -addFirst polyCube1 ;
+    setAttr "polyCube1.subdivisionsHeight" 5;
+    select -cl  ;
+    select -r pCube1 ;
+    select -addFirst polyCube1 ;
+    setAttr "polyCube1.subdivisionsWidth" 6;
+    select -cl  ;
+
+    select -d;
+    joint -p 0 0 0 ;
+    select -cl  ;
+    
+    select -d;
+    joint -p 0.5 -0.5 0.5 ;
+    select -d;
+    joint -p -0.5 -0.5 0.5 ;
+    select -r joint2 ;
+    rename "joint2" "l_joint2";
+    select -r joint3 ;
+    rename "joint3" "r_joint2"; 
+    select -cl  ;
+    
+    
+    select -r joint1;
+    select -tgl pCube1 ;
+    newSkinCluster "-mi 4 -omi true -dr 4 -rui true"; 
+    
+    select -r l_joint2 ;
+    select -tgl pCube1 ;
+    skinCluster -e  -dr 4 -lw true -wt 0 -ai l_joint2 skinCluster1;
+    ;
+    
+    select -r r_joint2 ;
+    select -tgl pCube1 ;
+    skinCluster -e  -dr 4 -lw true -wt 0 -ai r_joint2 skinCluster1;
+    ;
+
+    
+    setAttr l_joint2.liw 0;
+    skinPercent -tv l_joint2 1 skinCluster1 pCube1.vtx[4:6] pCube1.vtx[11:13] pCube1.vtx[18:20] pCube1.vtx[67:69] pCube1.vtx[74:76] pCube1.vtx[81:83];
+    
+    
+    
+    select -r pCube1.vtx[26:27] pCube1.vtx[60:62];
+    ArtPaintSkinWeightsToolOptions;
+    artAttrSkinValues artAttrSkinContext;
+    artAttrSkinPaintCtx -e -clear `currentCtx`;
+    artAttrSkinPaintCtx -e -clear `currentCtx`;
+    artAttrSkinPaintCtx -e -clear `currentCtx`;
+    
+    
+    select -r pCube1.vtx[4:6] pCube1.vtx[11:13] pCube1.vtx[18:20] pCube1.vtx[25:27] pCube1.vtx[32:34] pCube1.vtx[39:41] pCube1.vtx[46:48] pCube1.vtx[53:55] pCube1.vtx[60:62] pCube1.vtx[67:69] pCube1.vtx[74:76] pCube1.vtx[81:83] ;
+
+    
+    string $fromVtx[] = {};
+    $fromVtx = `filterExpand -sm 31 -expand true`;
+    
+    setAttr r_joint2.liw 0;
+    string $fromInfluence[] = {};
+    $fromInfluence = {"l_joint2","joint1"};
+    
+
+    int $mirrorAxis = 1;
+
+    
+    na_mirrorSkinByVertex($fromVtx, $fromInfluence, $mirrorAxis, 1);
+    
+
+}
+
+
+/**
+*/
+global proc
+na_mirrorSkinByVertex_unitTest()
+{
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    select -cl  ;
+    select -r pCube1 ;
+    select -addFirst polyCube1 ;
+    setAttr "polyCube1.subdivisionsHeight" 5;
+    select -cl  ;
+    select -r pCube1 ;
+    select -addFirst polyCube1 ;
+    setAttr "polyCube1.subdivisionsWidth" 6;
+    select -cl  ;
+
+    
+    
+    polyCylinder -r 0 -h 1 -sx 4 -sy 3 -sz 2 -ax 0 1 0 -rcp 0 -cuv 3 -ch 1;
+    // Result: pCylinder1 polyCylinder1 // 
+    setAttr "pCylinder1.scaleX" .5;
+    setAttr "pCylinder1.scaleY" .5;
+    setAttr "pCylinder1.scaleZ" .5;
+    move -r 0.233833 0 0 ;
+    rename "pCylinder1" "l_pCylinder1";
+    select -r l_pCylinder1 ;
+    group; xform -os -piv 0 0 0;
+    duplicate -rr; scale -r -1 1 1;
+    select -r group2|l_pCylinder1 ;
+    rename "group2|l_pCylinder1" "r_pCylinder1";
+    select -add l_pCylinder1 ;
+    parent -w;
+    delete group1 group2 ;
+    
+    
+    select -d;
+    joint -p 0.5 0.5 0.5 ;
+    joint -p 0.5 0.3 0.5 ;
+    joint -e -zso -oj xyz -sao yup joint1;
+    joint -p 0.5 0.1 0.5 ;
+    joint -e -zso -oj xyz -sao yup joint2;
+    joint -p 0.5 -0.1 0.5 ;
+    joint -e -zso -oj xyz -sao yup joint3;
+    joint -p 0.5 -0.3 0.5 ;
+    joint -e -zso -oj xyz -sao yup joint4;
+    joint -p 0.5 -0.5 0.5 ;
+    joint -e -zso -oj xyz -sao yup joint5;
+    select -r joint1 ;
+    rename "joint1" "l_joint1";
+    // Result: l_joint1 // 
+    select -r joint2 ;
+    rename "joint2" "l_joint2";
+    // Result: l_joint2 // 
+    select -r joint3 ;
+    rename "joint3" "l_joint3";
+    // Result: l_joint3 // 
+    select -r joint4 ;
+    rename "joint4" "l_joint4";
+    // Result: l_joint4 // 
+    select -r joint5 ;
+    rename "joint5" "l_joint5";
+    // Result: l_joint5 // 
+    select -r joint6 ;
+    rename "joint6" "l_joint6";
+    // Result: l_joint6 // 
+    select -cl;
+    
+    
+    
+    
+
+    select -r l_joint1 ;
+    mirrorJoint -mirrorYZ -mirrorBehavior -searchReplace "l_" "r_";
+
+    
+    select -r l_joint1;
+    select -tgl pCube1 ;
+    newSkinCluster "-mi 4 -omi true -dr 4 -rui true"; 
+    
+    
+    select -r r_joint1 ;
+    select -tgl pCube1 ;
+    skinCluster -e  -dr 4 -lw true -wt 0 -ai r_joint1 skinCluster1;
+    ;
+    select -cl  ;
+    select -r r_joint2 ;
+    select -tgl pCube1 ;
+    skinCluster -e  -dr 4 -lw true -wt 0 -ai r_joint2 skinCluster1;
+    ;
+    select -cl  ;
+    select -r r_joint3 ;
+    select -tgl pCube1 ;
+    skinCluster -e  -dr 4 -lw true -wt 0 -ai r_joint3 skinCluster1;
+    ;
+    select -r r_joint4 ;
+    select -tgl pCube1 ;
+    skinCluster -e  -dr 4 -lw true -wt 0 -ai r_joint4 skinCluster1;
+    ;
+    select -r r_joint5 ;
+    select -tgl pCube1 ;
+    skinCluster -e  -dr 4 -lw true -wt 0 -ai r_joint5 skinCluster1;
+    ;
+    
+    select -r r_joint6 ;
+    select -tgl pCube1 ;
+    skinCluster -e  -dr 4 -lw true -wt 0 -ai r_joint6 skinCluster1;
+    ;
+    
+    
+    select -r l_joint1 l_joint2 l_joint3 l_joint4 l_joint5 l_joint6 r_joint1 r_joint2 r_joint3 r_joint4 r_joint5 r_joint6;
+    na_holdBySelectedInfluence(0);   
+    
+    select -cl  ;
+    select -r l_pCylinder1 ;
+    select -tgl pCube1 ;
+    skinCluster -e -dr 4 -ps 0 -ns 10 -ai l_pCylinder1 skinCluster1;
+
+    select -r r_pCylinder1 ;
+    select -tgl pCube1 ;
+    skinCluster -e  -dr 4 -lw true -wt 0 -ai r_pCylinder1 skinCluster1;
+
+    select -r l_pCylinder1 r_pCylinder1;
+    //select influence(s) first
+    na_holdBySelectedInfluence(0);
+    
+    skinPercent -tv r_joint1 1 skinCluster1 pCube1.vtx[0:2] pCube1.vtx[7:9] pCube1.vtx[14:16] pCube1.vtx[21:23] pCube1.vtx[28:30] pCube1.vtx[35:37] pCube1.vtx[42:44] pCube1.vtx[49:51] pCube1.vtx[56:58] pCube1.vtx[63:65] pCube1.vtx[70:72] pCube1.vtx[77:79];
+    select -cl  ;
+    
+    select -r pCube1.vtx[4:6] pCube1.vtx[11:13] pCube1.vtx[18:20] pCube1.vtx[25:27] pCube1.vtx[32:34] pCube1.vtx[39:41] pCube1.vtx[46:48] pCube1.vtx[53:55] pCube1.vtx[60:62] pCube1.vtx[67:69] pCube1.vtx[74:76] pCube1.vtx[81:83] ;
+    
+    string $fromVtx[] = {};
+    $fromVtx = `filterExpand -sm 31 -expand true`;
+    
+    
+    string $fromInfluence[] = {};
+    $fromInfluence = {"l_joint1","l_joint2","l_joint3","l_joint4","l_joint5","l_joint6","l_pCylinder1"};
+    
+
+    int $mirrorAxis = 1;
+
+    
+    na_mirrorSkinByVertex($fromVtx, $fromInfluence, $mirrorAxis, 0);
+    
+}
+
+
+
+/**overwrite mirror weights on skin
+@bug figuring out to influence if its in center of character
+@param vertices getting weights from
+@param influences getting weights from
+@param 1 if allow from influences to directly control new weights if no mirrored influence was found
+@pre influences unlocked
+@pre zero weights on original side for mirror influences of from, ignore for center influences
+*/
+global proc
+na_mirrorSkinByVertex(string $fromVtxArray[], string $fromInfluence[], int $mirrorAxis, int $isDefaultFromInfluence)
+{
+    print("[na_mirrorSkinByVertex] Begining Mirroring of Vertex Weights\n");
+    
+    string $sel[] = `ls -sl`;
+    select -r $fromVtxArray;
+    $fromVtx = `filterExpand -sm 31 -expand true`;
+
+    na_assertTypeInList( $fromVtx, {"mesh"} );
+    na_assertTypeInList( $fromInfluence, {"joint","transform"} );
+    
+    
+    //this would need an actual skin cluster name so temporarily skipping
+    string $poly[] = getPolyFromComponent($fromVtx[0]);//assumption all vtx same skin cluster
+    string $skinArg = `findRelatedSkinCluster $poly[0]`;
+    if( size($skinArg) == 0 ){error("Requires Skin Cluster To Mirror Weights\n");}
+    na_assertVerticesAndInfluenceSameSingleCluster($fromVtx,$fromInfluence,$skinArg);
+    
+    string $toVtx[] = {};
+    $toVtx = naMirrorSelectedVerts($mirrorAxis, 0.005);//may need to make mirror okay distance larger
+    na_assertObjectExist($toVtx);
+   
+    na_assertBinaryInteger({$isDefaultFromInfluence});
+    int $isFromInfluence = $isDefaultFromInfluence; //default  cannot be from influence
+    string $toInfluence[] = {};
+    $toInfluence = na_mirrorSkinGetToInfluence($fromInfluence,$isDefaultFromInfluence);
+    na_assertObjectExist($toInfluence);
+    
+    
+    float $weightArray[] = {};
+    string $toCluster[] = na_getSkinClusterGivenComponent($toVtx[0]); 
+    na_assertSizeEqualArg( $toCluster, 1);
+    $weightArray = na_getWeight( $fromInfluence, $fromVtx, $toCluster[0], 4 );
+    na_assertFloatNonNegative($weightArray);
+    
+    //mirror skin
+    //
+    int $indexInToInfluenceToFlood = 0;
+    na_setOverwriteWeight( $weightArray, $toInfluence, $toVtx, $indexInToInfluenceToFlood);
+    
+    print("[na_mirrorSkinByVertex] Completed Mirroring of Vertex Weights !!!\n");
+    
+    select -r $sel;
+}
+
+
+
+global proc
+na_mirrorSkinGetToInfluence_unitTest()
+{
+
+    print( na_mirrorSkinGetToInfluence( {"l_joint"}, 0 ) );
+    print("\n");
+    print( na_mirrorSkinGetToInfluence( {"r_joint"}, 0 ) );
+    print("\n");
+    print( na_mirrorSkinGetToInfluence( {"char:l_joint"}, 0 ) );
+    print("\n");
+    
+    print( na_mirrorSkinGetToInfluence( {"l_joint"}, 1 ) );
+    print("\n");
+    print( na_mirrorSkinGetToInfluence( {"r_joint"}, 1 ) );
+    print("\n");
+    print( na_mirrorSkinGetToInfluence( {"char:l_joint"}, 1 ) );
+    print("\n");
+    
+    print( na_mirrorSkinGetToInfluence( {"joint"}, 1 ) );
+    print("\n");
+    print( na_mirrorSkinGetToInfluence( {"joint"}, 0 ) );
+    print("\n");
+    
+}
+
+
+
+
+
+/**get to influences by allowing from influence to possibly be used, it uses 
+@note supported from influence prefixes are--  char:l_, char:r_ , l_, or r_ name 
+@pre no double underscores allowed
+*/
+global proc string[]
+na_mirrorSkinGetToInfluence(string $fromInfluence[], int $isDefaultFromInfluence)
+{  
+    na_assertBinaryInteger({$isDefaultFromInfluence});
+    
+    string $result[] = {};
+    
+    string $toInfluence[] = {};
+    if( $isDefaultFromInfluence == 0 )
+    {
+        for($j = 0; $j < size($fromInfluence); $j++ )
+        {
+            
+            $mirrorInf = na_mirrorPrefix( {$fromInfluence[$j]} );
+            
+            if( size($mirrorInf) == 1 ){
+                $toInfluence[size($toInfluence)] = $mirrorInf[0];
+            }
+            else{
+                error("Requires influences to transfer weight too could not use--"+$fromInfluence[$j]);
+            }
+        }
+    }
+    else if( $isDefaultFromInfluence == 1 )
+    {
+        for($j = 0; $j < size($fromInfluence); $j++ )
+        {
+            
+            $mirrorInf = na_mirrorPrefix( {$fromInfluence[$j]} );
+            
+            if( size($mirrorInf) == 1 ){
+                $toInfluence[size($toInfluence)] = $mirrorInf[0];
+            }
+            else{
+                //its okay to use an influence in from list
+                $toInfluence[size($toInfluence)] = $fromInfluence[$j];
+            }
+        }
+    }
+    
+    $result = $toInfluence;
+    
+    return $result;
+}
+
+
+
+
+
+/**get weights per influence per vertex, per influence cluster
+needs arguments
+
+string list     influences
+string list     vertices
+string skin cluster name (so can distinguish which skinCluster associated with influence to use)
+round weights to 3 decimal places
+*/
+
+//
+/*note
+To get all the influences weights on the ith vertex type
+result[ $i * (number influences) + 0 ]  which gives a float for the weight by influence 1 on ith vertex
+result[ $i * (number influences) + 1 ]  which gives a float for the weight by influence 2 on ith vertex ...
+the last one should look like result[ $i * (number influences) + (number influences - 1) ] 
+note the first vertex is i equals 0
+*/
+/*note preconditions
+valid skincluster -- it expects 1 skin cluster
+existence joint,vertices -- it expects all vertices, joints to exist on current scene
+valid weights -- it expects weight array to correspond exactly to the vertices and joints in their exact order
+valid influences on joints -- it expects correct joints specified, no geo influences etc. and expects a 
+*/
+
+global proc float[] na_getWeight( string $influenceArray[], string $vtxArray[], string $skinCluster, int $numberRoundPlacesPerWeight )
+{
+    na_assertIntNonNegative({$numberRoundPlacesPerWeight});
+
+    string $sel[] = `ls -sl`;
+    
+    float $result[];
+
+
+    string $vertexArray[] = na_getExpanded($vtxArray);
+        
+    na_assertTypeInList($vertexArray,{"mesh"});  
+    na_assertTypeInList($influenceArray,{"joint","transform"}); 
+    
+    //exit if no vertices on scene
+    if(size($vertexArray) > 0)
+    {
+           
+        string $skinClusterNameArray[] = {$skinCluster};
+        na_assertSizeEqualArg($skinClusterNameArray,1);
+        string $skinClusterName = $skinClusterNameArray[0];
+        
+        ///
+        //we will be saving
+        //joints, weights
+        ///
+        int $numVertex = size($vertexArray); //store number of vertices
+        //they should match `skinCluster -q -inf $skinClusterName`;
+        
+        int $numJoints = size($influenceArray); //get number influences
+        
+        //store all weights
+        float $weightArray[]; 
+        //h0,j0,n0,h1,j1,n1,h2,j2,n2 ...
+        
+        
+        int $i = 0; //VERTEX counter
+        int $j=0;  //JOINT COUNTER
+        float $unRoundedWeight=0.0;
+        float $roundedWeight=0.0;
+        
+        
+        for($i=0; $i< $numVertex; $i++){
+           
+            for($j=0; $j< $numJoints; $j++)
+            {
+                //since going to store float round it to 5 decimal places
+                $unRoundedWeight= `skinPercent -t $influenceArray[$j] -q $skinClusterName $vertexArray[$i]`;//reduce calls 
+                $roundedWeight = roundToNearestDecimal($unRoundedWeight,$numberRoundPlacesPerWeight);
+                //can give zero skin weights if error occured above (check this)
+                $weightArray[($i * $numJoints ) + $j]  = $roundedWeight;
+            }
+        }
+        
+        $result = $weightArray;
+        
+        
+    }//end if found selection
+    else{error("Requires Vertices To Store Weights");}
+    
+    select -r $sel;
+    
+    return $result;
+}
+
+
+global proc na_getWeight_unitTest()
+{
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    // Result: pCube1 polyCube1 // 
+    select -r pCube1.f[4] ;
+    polyExtrudeFacet -constructionHistory 1 -keepFacesTogether 0 -pvx 0.5 -pvy 0 -pvz 0 -divisions 1 -twist 0 -taper 1 -off 0 -smoothingAngle 30 pCube1.f[4];
+    // Result: polyExtrudeFace1 // 
+    move -r 0.894115 0 0 ;
+    select -r pCube1.f[4] ;
+    polyExtrudeFacet -constructionHistory 1 -keepFacesTogether 0 -pvx 1.394114494 -pvy 0 -pvz 0 -divisions 1 -twist 0 -taper 1 -off 0 -smoothingAngle 30 pCube1.f[4];
+    // Result: polyExtrudeFace2 // 
+    move -r 0.950224 0 0 ;
+    select -r pCube1.f[4] ;
+    polyExtrudeFacet -constructionHistory 1 -keepFacesTogether 0 -pvx 2.344338655 -pvy 0 -pvz 0 -divisions 1 -twist 0 -taper 1 -off 0 -smoothingAngle 30 pCube1.f[4];
+    // Result: polyExtrudeFace3 // 
+    move -r 0.921527 0 0 ;
+    select -cl  ;
+    select -d;
+    joint -p 0 0 0 ;
+    joint -p 1 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint1;
+    joint -p 2 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint2;
+    joint -p 3 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint3;
+    
+    select -r joint1 ;
+    select -tgl pCube1 ;
+    newSkinCluster "-mi 4 -omi true -dr 4 -rui true"; 
+    
+    float $arg1[] = na_getWeight( {"joint1"}, {"pCube1.vtx[8:19]"},"skinCluster1",5 );
+    print "result >>";
+    print $arg1;
+    // Result: 0.29991 0.29991 0.29991 0.29991 0.02361 0.02361 0.02361 0.02361 0.00492 0.00492 0.00492 0.00492 // 
+    $arg1={};
+    print "another result>>";
+    $arg1 = na_getWeight( {"joint3"}, {"pCube1.vtx[8:19]"},"skinCluster1",5 );
+    print $arg1;
+    // Result: 0.17131 0.17131 0.17131 0.17131 0.50265 0.50265 0.50265 0.50265 0.47986 0.47986 0.47986 0.47986 // 
+
+
+}
+
+
+
+
+
+/*over write skin given joint or geo influences and polygon vertices
+@pre expects current influences on input vertices unlocked, it needs that so it can change the vertex weights
+@pre expects one of input joint to have full weight on all vertices it edits.
+float list  weight per inflence per vertex
+string list  influences we are setting weights
+string list  vertices we are setting weights
+
+@note for example of weight list
+@see na_getWeight
+*/
+
+global proc 
+na_setOverwriteWeight(  float $weightsInfuencesPerVertex[],
+string $jointArray[], 
+string $vtxArray[],
+int $indexToFlood)
+{
+    
+
+    na_assertObjectExist($jointArray);
+    na_assertObjectExist($vtxArray);
+    na_assertTypeInList($vtxArray,{"mesh"});  
+    na_assertTypeInList($jointArray,{"joint","transform"}); 
+    na_assertFloatNonNegative($weightsInfuencesPerVertex);
+    
+    
+    string $vertexArray[] = na_getExpanded($vtxArray);
+    int $numVertex = size($vertexArray);
+    if($numVertex == 0){error("Require Vertices to set weights");}
+    
+    int $numJoints = size($jointArray);
+    na_assertIntSizeGreaterEqualTo({$numJoints},1);
+
+    na_assertFloatSizeEqualArg( $weightsInfuencesPerVertex, $numVertex*$numJoints );
+
+   
+    
+    //do vertices and joint share same skin cluster
+    //save skin cluster
+    string $skinClusterNameArrayVtx[] = na_getSkinClusterGivenVertex($vertexArray[0]);  
+    na_assertSizeEqualArg($skinClusterNameArrayVtx,1);
+    string $skinClusterName = $skinClusterNameArrayVtx[0];
+    na_assertVerticesAndInfluenceSameSingleCluster($vertexArray,$jointArray,$skinClusterName);
+
+ 
+    float $loadedWeightsArray[] = $weightsInfuencesPerVertex;
+
+    
+    //begin by putting all weight on all input vertices to flood influence
+    string $sel[] = `ls -sl`;
+    select -r $vertexArray;
+    select -tgl $jointArray[0]; //probably want this to be an influence not really going to be modified
+    na_setWeightOneBySelectedComponentAndInfluence();
+    
+    
+    
+    //loop over number of vertices and over how many joints we have
+    //and set all the transforms for that vertex at once
+    for( $i=0; $i<$numVertex; $i++){
+
+        string $command = "";
+        $j=0;
+        string $jointAndValue = "";
+        
+        //allow last weight to be computed from all previous so they sum to one
+        //
+        float $sumWeightAllButOneInfluence = 0.0;
+        for( $j=0; $j< ($numJoints-1); $j++){
+            //we wait until all weights are set before we set weights on the remainder influence
+            //if($j != $indexToFlood){
+                $jointAndValue = $jointAndValue+"-transformValue"+" "+$jointArray[$j]+" "
+                +$loadedWeightsArray[($i * $numJoints ) + $j]+" ";             //i+j says the vertex i with the jth joint
+            //}
+            $sumWeightAllButOneInfluence += $loadedWeightsArray[($i * $numJoints ) + $j];
+        }
+        
+        //give error if remaining weight very far from last weight larger than
+        float $distIsCloseEnoughToLastWeight = 0.09;
+        float $lastWeight = 1.0;
+        
+        $lastWeight = 1.0 - $sumWeightAllButOneInfluence;
+        if(  $lastWeight - $loadedWeightsArray[($i * $numJoints ) + ($numJoints-1)] > $distIsCloseEnoughToLastWeight ){ 
+            error("Could Not Compute Weights For To Vertex--"+$vertexArray[$i]+"-- last weight would be--"+$lastWeight+"\n"+
+            "but other weight should be close is--"+$loadedWeightsArray[($i * $numJoints ) + ($numJoints-1)]);
+        }
+        $j = ($numJoints-1);
+        $jointAndValue = $jointAndValue+"-transformValue"+" "+$jointArray[$j]+" "
+                +$lastWeight+" "; 
+        
+        
+        //to load skin weights we want to set the weights with something like
+        // for vertex i, and joint j, set the skinweight to the files number in that weird formula's row
+        // skinPercent -tv $jointArray[$j] loadedWeight[($i * $numJoints ) + j] skinCluster1 $shape.vtx[$i]
+        $command = "skinPercent"+" "+$jointAndValue+$skinClusterName+" "+$vertexArray[$i];
+        //change weights
+        eval($command); 
+    }//end looping over skipercent command on vertices
+    
+    
+    
+    //repeat above on the influence to have all remaining weight
+    /*
+    $j=$indexToFlood;
+    for( $i=0; $i<$numVertex; $i++){
+        $command = "";
+        $jointAndValue = "";
+        
+        $jointAndValue = $jointAndValue+"-transformValue"+" "+$jointArray[$j]+" "+$loadedWeightsArray[($i * $numJoints ) + $j]+" ";             //i+j says the vertex i with the jth joint
+        
+        $command = "skinPercent"+" "+$jointAndValue+$skinClusterName+" "+$vertexArray[$i];
+        //change weights
+        eval($command); 
+    }//end looping over skipercent command on vertices
+    */
+    
+    
+    
+}
+
+
+
+
+global proc 
+na_setOverwriteWeight_unitTest()
+{
+    select -d;
+    joint -p 1 0 -2 ;
+    joint -p 2 0 -2 ;
+    joint -e -zso -oj xyz -sao yup joint1;
+    joint -p 3 0 -2 ;
+    joint -e -zso -oj xyz -sao yup joint2;
+    joint -p 4 0 -2 ;
+    joint -e -zso -oj xyz -sao yup joint3;
+    select -cl  ;
+    select -d;
+    joint -p 1 0 0 ;
+    joint -p 2 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint5;
+    joint -p 3 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint6;
+    joint -p 4 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint7;
+    select -cl  ;
+    
+    
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    // Result: pCube1 polyCube1 // 
+    move -rpr 1 0 -2 ;
+    select -r pCube1.f[4] ;
+    move -r 0.451968 0 0 ;
+    select -r pCube1.f[4] ;
+    polyExtrudeFacet -constructionHistory 1 -keepFacesTogether 0 -pvx 1.951967835 -pvy 0 -pvz -2 -divisions 1 -twist 0 -taper 1 -off 0 -smoothingAngle 30 pCube1.f[4];
+    // Result: polyExtrudeFace1 // 
+    move -r 1.021422 0 0 ;
+    select -r pCube1.f[4] ;
+    polyExtrudeFacet -constructionHistory 1 -keepFacesTogether 0 -pvx 2.97339046 -pvy 0 -pvz -2 -divisions 1 -twist 0 -taper 1 -off 0 -smoothingAngle 30 pCube1.f[4];
+    // Result: polyExtrudeFace2 // 
+    move -r 1.076477 0 0 ;
+    select -d pCube1.f[4] ;
+    select -cl  ;
+    select -cl  ;
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    // Result: pCube2 polyCube2 // 
+    move -rpr 1 0 0 ;
+    select -r pCube2.f[4] ;
+    move -r 0.471314 0 0 ;
+    select -r pCube2.f[4] ;
+    polyExtrudeFacet -constructionHistory 1 -keepFacesTogether 0 -pvx 1.971313715 -pvy 0 -pvz 0 -divisions 1 -twist 0 -taper 1 -off 0 -smoothingAngle 30 pCube2.f[4];
+    // Result: polyExtrudeFace3 // 
+    move -r 1.02561 0 0 ;
+    select -r pCube2.f[4] ;
+    polyExtrudeFacet -constructionHistory 1 -keepFacesTogether 0 -pvx 2.996923804 -pvy 0 -pvz 0 -divisions 1 -twist 0 -taper 1 -off 0 -smoothingAngle 30 pCube2.f[4];
+    // Result: polyExtrudeFace4 // 
+    move -r 1.003606 0 0 ;
+    select -d pCube2.f[4] ;
+    select -cl  ;
+    
+    //make skinCluster
+    select -r joint1 ;
+    select -tgl pCube1 ;
+    newSkinCluster "-mi 4 -omi true -dr 4 -rui true"; 
+    
+    select -r joint5 ;
+    select -tgl pCube2 ;
+    newSkinCluster "-mi 4 -omi true -dr 4 -rui true"; 
+    
+    
+    select -r pCube2.vtx[0:15] ;
+    skinPercent -tv joint5 1 skinCluster2 pCube2.vtx[0:15];
+    select -cl;
+    
+    float $wt[] = na_getWeight( {"joint1","joint2","joint3","joint4"},{"pCube1.vtx[0:15]"},"skinCluster1",3);
+    
+    select -cl;
+    select -r pCube2.vtx[0:15];
+    string $vertexArray[] = `filterExpand -sm 31 -expand true`;
+    
+    na_setOverwriteWeight( $wt, {"joint5","joint6","joint7","joint8"},$vertexArray, 0);
+    
+    
+}
+/**
+*@}
+*/
+
+

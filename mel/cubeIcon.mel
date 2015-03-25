@@ -1,0 +1,70 @@
+//Author: Nathaniel Anozie
+//ogbonnawork at gmail dot com
+////description: given values from user-interface make a skeleton with ik arms and legs
+//How to Install: Source: 
+//  cubeIcon.mel
+
+//date created: January 7, 2012
+//date last revised: January 10, 2012
+//Modify at your own risk
+
+
+
+//last updated: 07/16/2013 -- working on adding a sphere icon
+
+
+
+////draw cube shaped curve and return its scene string name
+/*
+////it has an argument float for length of all sides of cube in grid units
+it needs a float for length of one side
+it assumes user will do everything to get it to be a friendly controller
+ex: it does not, freeze transforms, nonkey attr, hide attr, lock attr
+*/
+global proc string cubeIcon( float $lenCubeSide )
+{
+    //save user selection
+    string $curSel[] = `ls -sl`;
+    
+    float $len = $lenCubeSide;
+    string $name = "cube";
+    
+    //draw
+    string $curve1 = `curve -d 1 -p $len $len $len -p $len $len (-1*$len) -p $len (-1*$len) (-1*$len) -p $len (-1*$len) $len -p $len $len $len -p (-1*$len) $len $len -p (-1*$len) (-1*$len) $len -p $len (-1*$len) $len -p $len (-1*$len) (-1*$len) -p (-1*$len) (-1*$len) (-1*$len) -p (-1*$len) (-1*$len) $len -p (-1*$len) $len $len -p (-1*$len) $len (-1*$len) -p (-1*$len) (-1*$len) (-1*$len) -p (-1*$len) $len (-1*$len) -p $len $len (-1*$len) -k 0 -k 1 -k 2 -k 3 -k 4 -k 5 -k 6 -k 7 -k 8 -k 9 -k 10 -k 11 -k 12 -k 13 -k 14 -k 15` ;
+    
+    //name it
+    rename $curve1 $name;
+    
+    //restore user selection
+    select -r $curSel;  
+    
+    return $name;
+}
+
+
+//---create a sphere like Icon
+global proc string sphereIcon()
+{
+    string $sel[] = `ls -sl`;
+    float $radius = 1.0;
+    string $circAr[] = `circle -r $radius -ch 0`;
+    string $circArDupA[] = `circle -r $radius -ch 0`; //not using duplicate because need a new shape
+    string $circArShpDupA[] = `pickWalk -d down $circArDupA[0]`;
+    setAttr ($circArDupA[0] +".rotateX") -90;
+    setAttr ($circArDupA[0] +".rotateZ") -90;
+    string $circArDupB[] = `circle -r $radius -ch 0`;
+    string $circArShpDupB[] = `pickWalk -d down $circArDupB[0]`;
+    setAttr ($circArDupB[0] +".rotateX") -90;
+    //parent shapes to first curve
+    parent -shape $circArShpDupA[0] $circAr[0] ;
+    parent -shape $circArShpDupB[0] $circAr[0] ;
+    //make not significant parts not selectable
+    setAttr ($circArShpDupA[0]+".overrideEnabled") 1;
+    setAttr ($circArShpDupA[0]+".overrideDisplayType") 2;
+    setAttr ($circArShpDupB[0]+".overrideEnabled") 1;
+    setAttr ($circArShpDupB[0]+".overrideDisplayType") 2;
+    //clean up
+    delete $circArDupA[0] $circArDupB[0];
+    if(size($sel) > 0 ){select -r $sel;}else{select -cl;}//restore user selection
+    return $circAr[0];
+}

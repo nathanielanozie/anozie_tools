@@ -1,0 +1,65 @@
+/**@file na_makeMeasurementUI.mel
+@brief ui for tool for adding measurements
+@author Nathaniel O. Anozie (ogbonnawork at gmail dot com)
+@bug all functions no assert checks
+@note date created: May 16 2012
+@note date last modified: May 16 2012
+@note source naMath.mel
+@note source na_ui.mel
+@see na_ui.mel
+*/
+
+global string $gl_start = "gl_start";
+global string $gl_end = "gl_end";
+global string $gl_prefix= "gl_prefix";
+
+/**ui
+*/
+global proc
+na_makeMeasurementUI()
+{
+    
+    global string $gl_start;
+    global string $gl_end;
+    global string $gl_prefix;
+    
+    //setup up title for gui
+    string $titleWindow = "naMath.mel  make measurement";
+    string $mainWindowName = "mainWindow";
+    na_window($mainWindowName,$titleWindow, 420, 190);
+    
+    //set up format for gui
+    string $form = `formLayout -numberOfDivisions 50 "form layout"`;
+    
+    //set up ui widgets
+    na_textFieldGrp($form, $mainWindowName,"start object", 25, 5, $gl_start);
+    na_textFieldGrp($form, $mainWindowName,"end object", 55, 5, $gl_end);
+    na_textFieldGrp($form, $mainWindowName,"prefix output", 85, 5, $gl_prefix);
+    
+    na_button($form, $mainWindowName,"ok", 125, 200,"button","na_makeMeasurement_cmd");
+    
+    showWindow $mainWindowName;
+    
+    
+}
+
+/**ui command
+*/
+global proc
+na_makeMeasurement_cmd()
+{
+    global string $gl_start;
+    global string $gl_end;
+    global string $gl_prefix;
+ 
+    //used
+    string $start="";
+    string $end = "";
+    string $prefix = "";
+
+    $start = `textFieldGrp -query -text $gl_start`;
+    $end= `textFieldGrp -query -text $gl_end`; 
+    $prefix= `textFieldGrp -query -text $gl_prefix`; 
+
+    na_makeMeasurement($start, $end, $prefix);
+}

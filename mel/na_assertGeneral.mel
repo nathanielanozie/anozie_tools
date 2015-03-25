@@ -1,0 +1,529 @@
+/**@file na_assertGeneral.mel
+@brief v1.0.0 error checking asserts for things like sizes, attribute types, connections etc.
+@author Nathaniel O. Anozie (ogbonnawork at gmail dot com)
+@bug 
+@note date created: Apr 20, 2012
+@note How to Install
+@source na_assertGeneral.mel
+@source naGeneral.mel
+@note released --
+@note -- added is in list assert, added foat and int size support, added error if object exists
+@note -- added float size tool
+@note -- added some key assert tools
+@note Modify at your own risk
+*/
+
+/**@name Exist
+* Exist
+*/
+/**@{*/
+
+/**assert existence
+@note fixed bug in empyty case
+*/
+global proc
+na_assertObjectExist(string $object[] )
+{
+    if(size($object) == 0){error("object not found");}
+    
+    for($i = 0; $i < size($object); $i++ )
+    {
+        if( `objExists $object[$i]` == 0){error("object not found--"+$object[$i]);}
+    }
+}
+global proc
+na_assertAttributeExist(string $object[], string $attr )
+{
+    for($i = 0; $i < size($object); $i++ )
+    {
+        if( `attributeExists $attr $object[$i]` == 0 ){error("attribute--"+$attr+" not found on--"+$object[$i]);}
+    }
+}
+global proc
+na_assertObjectDoesNotExist(string $object[] )
+{
+  for($i = 0; $i < size($object); $i++ )
+  {
+      if( `objExists $object[$i]` == 1){error("object already exists--"+$object[$i]);}
+  }
+}
+
+
+/**assert commands exist
+@inspired by Peter Richardson where I learned about the whatIs for error catching
+*/
+global proc
+na_assertCmdExist( string $cmdArray[] )
+{   
+    for($cmd in $cmdArray)
+    {
+        if( `whatIs $cmd` == "Unknown" )
+        {
+            error("Requires Exist Procedure --"+$cmd);
+        }  
+    }
+}
+/**assert every object has no constraint connection
+*/
+global proc
+na_assertConstraintDoesNotExist(string $object[])
+{
+    string $connection[] = {};
+    for($obj in $object){ 
+        $connection = `listConnections $obj`;
+        $connection = stringArrayRemoveDuplicates($connection);
+        if(size($connection)>0){
+            na_assertSizeEqualArg( `ls -type parentConstraint $connection`, 0 );
+            na_assertSizeEqualArg( `ls -type pointConstraint $connection`, 0 );
+            na_assertSizeEqualArg( `ls -type orientConstraint $connection`, 0 );
+        }
+    };
+}
+
+/**assert every object has no connection
+*/
+global proc
+na_assertConnectionDoesNotExist(string $object[])
+{
+    string $connection[] = {};
+    for($obj in $object){ 
+        $connection = `listConnections $obj`;
+        $connection = stringArrayRemoveDuplicates($connection);
+        na_assertSizeEqualArg( $connection, 0 );
+    };
+    
+}
+
+/**assert object do not have successive underscore in name
+*/
+global proc
+na_assertSuccessiveUnderscoreDoesNotExist(string $object[])
+{
+    int $numChar = 0;
+    string $sub = "";
+    
+    for($obj in $object)
+    {
+        $numChar = size($obj);
+        if($numChar >= 1)
+        {
+            //minus one because one based index on substring command
+            for($i = 0; $i < $numChar-1; $i++)
+            {
+                $sub = substring($obj, $i+1, $i+2);
+                if( `strcmp "__" $sub` == 0){error("Succesive Underscore Found in--"+$obj);}
+            }
+        }
+        
+    }
+    
+}
+/**assert none are camera
+*/
+global proc
+na_assertDoesNotExistCamera( string $object[]  )
+{
+    if( na_isCamera($object) == 1 ){error("Requires No -- camera");}
+}
+
+/**@}*/
+
+
+
+
+
+
+
+
+
+
+
+
+
+/**@name Math
+* Math
+*/
+/**@{*/
+/**assert boolean
+*/
+global proc
+na_assertBinaryInteger(int $arg[])
+{
+  for($i = 0; $i < size($arg); $i++ )
+  {
+      if( ($arg[$i] != 0) && ($arg[$i] != 1)  ){error("binary not found--"+$arg[$i]);}
+  }
+}
+/**assert non negative
+*/
+global proc
+na_assertFloatNonNegative(float $arg[])
+{
+  for($i = 0; $i < size($arg); $i++ )
+  {
+      if( $arg[$i] < 0 ){error("negative number--"+$arg[$i]);}
+  }
+}
+/**assert non negative
+*/
+global proc
+na_assertIntNonNegative(int $arg[])
+{
+  for($i = 0; $i < size($arg); $i++ )
+  {
+      if( $arg[$i] < 0 ){error("negative number--"+$arg[$i]);}
+  }
+}
+
+/**assert is divisible by this
+*/
+global proc
+na_assertIsDivisibleByThis(int $arg, int $divisor)
+{
+  if( fmod( $arg, $divisor ) != 0 ){error("requires divisibility by "+$divisor);}
+}
+
+
+/**assert size == arg
+*/
+global proc
+na_assertSizeEqualArg( string $object[], int $arg )
+{
+    if( size($object) != $arg ){error("size not equal--"+$arg);}
+}
+/**assert float size == arg
+*/
+global proc
+na_assertFloatSizeEqualArg( float $object[], int $arg )
+{
+    if( size($object) != $arg ){error("size not equal--"+$arg);}
+}
+/**assert float size == arg
+*/
+global proc
+na_assertIntSizeEqualArg( int $object[], int $arg )
+{
+    if( size($object) != $arg ){error("size not equal--"+$arg);}
+}
+
+
+/**assert size >= arg
+*/
+global proc
+na_assertSizeGreaterEqualTo( string $object[], int $arg )
+{
+    if( size($object) < $arg ){error("size less than--"+$arg);}
+}
+/**assert size >= arg
+*/
+global proc
+na_assertFloatSizeGreaterEqualTo( float $object[], int $arg )
+{
+    if( size($object) < $arg ){error("size less than--"+$arg);}
+}
+/**assert size >= arg
+*/
+global proc
+na_assertIntSizeGreaterEqualTo( int $object[], int $arg )
+{
+    if( size($object) < $arg ){error("size less than--"+$arg);}
+}
+/**assert integer list has no duplicate integer occurences
+*/
+global proc
+na_assertIntUnique( int $object[]  )
+{
+    string $obj[] = na_getStringFromInt( $object );
+    string $noDup[] = stringArrayRemoveDuplicates($obj);
+    if( size($obj) != size($noDup) ){error("Found Duplicate--");}
+}
+/**@}*/
+
+
+
+
+
+
+
+
+
+/**@name Type
+* Assert Maya Object Types
+*/
+/**@{*/
+/**assert type is a subset of another string list
+@see na_isType
+*/
+global proc
+na_assertTypeInList( string $object[], string $list[] )
+{
+    na_assertObjectExist($object);
+    int $isValid= 0;
+    $isValid = na_isTypeSupportedArray( $object, $list );
+    if( $isValid == 0 ){error("unknown type for object(s)");}
+}
+
+/**assert double attribute type (created with float option)
+*/
+global proc
+na_assertAttrTypeInList(string $object, string $attr[], string $list[])
+{
+    int $isValid= 0;
+    $isValid = na_isAttrTypeSupportedArray( $object, $attr, $list );
+    if( $isValid == 0 ){error("unknown type for attribute(s)");}
+}
+/**@}*/
+
+
+
+
+
+
+
+
+
+
+
+
+
+/**@name Skinning
+* Skinning related asserts
+*/
+/**@{*/
+/**assert every selected vertex share same skin cluster
+*/
+global proc
+na_assertSameSkinClusterByComponent( string $object[] )
+{
+    string $cluster[] = {};
+    $cluster = na_getSkinClusterGivenComponent($object[0]);
+    na_assertSizeEqualArg($cluster ,1);
+    
+    string $cl[] = {};
+    for($obj in $object)
+    {
+         $cl = na_getSkinClusterGivenComponent($obj);
+         na_assertSizeEqualArg($cl,1);
+         na_assertAllInList( $cl, $cluster );
+    }
+
+}
+
+/**assert every selected influence have identical skin clusters
+*@note it supports checking influences with multiple skin clusters
+*/
+global proc
+na_assertSameSkinClusterByInfluence( string $object[] )
+{
+    string $cluster[] = {};
+    $cluster = na_getAllSkinClusterGivenInfluence($object[0]);
+    //print $cluster;
+    
+
+    string $cl[] = {};
+    for($obj in $object)
+    {
+         $cl = na_getAllSkinClusterGivenInfluence($obj);
+         //print $cl;
+         //print "<<\n";
+         na_assertAllInList( $cl, $cluster );
+    }
+
+}
+/**assert vertices and joint share same skin cluster only supports polygon surface
+*/
+global proc
+na_assertVerticesAndInfluenceSameSingleCluster(string $vtxArray[], string $influenceArray[], string $skinCluster)
+{
+    //make sure the vertex array is in expanded form
+    string $vertexArray[] = {};
+    $vertexArray = na_getExpanded($vtxArray);
+
+    
+    if( size($vertexArray) == 0 ){ error("Requires Polygon Surface To Assert");}
+    else{
+        na_assertSameSkinClusterByComponent( $vertexArray );
+        na_assertSameSkinClusterByInfluence( $influenceArray );
+        
+        string $skinClusterNameArrayVtx[] = na_getSkinClusterGivenComponent($vertexArray[0]); 
+        na_assertSizeEqualArg( $skinClusterNameArrayVtx, 1);
+        
+        
+        //checking whether first influence has same cluster as input
+        //probably want to do this check for all influences
+        //
+        string $skinClusterNameArrayInfluence[] = {$skinCluster};
+        string $allInfSkinCluster[] = {};
+        $allInfSkinCluster = na_getAllSkinClusterGivenInfluence($influenceArray[0]);
+        
+        //print $allInfSkinCluster;
+        //print $skinClusterNameArrayInfluence;
+        na_assertAllInList( $skinClusterNameArrayInfluence, $allInfSkinCluster);
+        
+        na_assertSizeEqualArg( $skinClusterNameArrayInfluence, 1);
+        na_assertAllInList( $skinClusterNameArrayInfluence, $skinClusterNameArrayVtx );
+        
+        //print(""+$skinClusterNameArrayInfluence[0]+" from vertices >>"+$skinClusterNameArrayVtx[0]);
+    }
+}
+
+
+/**assert two sets of vertices come from different single skins
+*/
+global proc
+na_assertVerticesFromDifferentSingleCluster(string $vertexArray1[], string $vertexArray2[])
+{
+    na_assertSameSkinClusterByComponent( $vertexArray1 );
+    na_assertSameSkinClusterByComponent( $vertexArray2 );
+    
+    string $skinClusterNameArrayVtx1[] = na_getSkinClusterGivenComponent($vertexArray1[0]);  
+    na_assertSizeEqualArg( $skinClusterNameArrayVtx1, 1);
+    string $skinClusterNameArrayVtx2[] = na_getSkinClusterGivenComponent($vertexArray2[0]);  
+    na_assertSizeEqualArg( $skinClusterNameArrayVtx2, 1);
+    
+    na_assertNoneInList( $skinClusterNameArrayVtx1, $skinClusterNameArrayVtx2 );
+}
+/**@}*/
+
+
+
+
+
+
+
+
+
+/**@name Animation
+* Animation related asserts
+*/
+/**@{*/
+/**assert for one object keyabale on input attribute(s)
+*/
+global proc
+na_assertKeyable(string $object, string $attrArray[])
+{
+    na_assertObjectExist( {$object} );
+    string $condition[]={};
+    $condition = `listAttr -k $object`;
+    na_assertSizeGreaterEqualTo($condition,1);
+    na_assertAllInList($attrArray,$condition);
+}
+
+
+/**assert animation curves of type T and no radius or visibility
+@bug I think would get bugs if animation curves were renamed in the radius computation
+*/
+global proc 
+na_assertAnimatableAnimCurve(string $sel[])
+{
+    na_assertObjectExist($sel);
+    string $supportedAnimCurve[] = {"animCurveTL","animCurveTA","animCurveTU"};
+    na_assertTypeInList($sel,$supportedAnimCurve);
+    string $sep = "_";
+    
+    //maybe put here a check if token exists in curve name
+    //
+    
+    for($crv in $sel)
+    {
+        if(  na_isLastTokenEqualNameAfterSeperator($crv,"visibility",$sep) == 1 ||
+            na_isLastTokenEqualNameAfterSeperator($crv,"radius",$sep) == 1 )
+        {
+            error("Require Non Visibility and Non Radius Curves");
+        }
+    }  
+}
+
+global proc 
+na_assertAnimatableAnimCurve_unitTest()
+{
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    setKeyframe -breakdown 0 -hierarchy none -controlPoints 0 -shape 0 {"pCube1"};
+    currentTime 12 ;
+    select -r pCube1 ;
+    move -r 0 4.136073 0 ;
+    setKeyframe -breakdown 0 |pCube1.translate;
+    setKeyframe -breakdown 0 -hierarchy none -controlPoints 0 -shape 0 {"pCube1"};
+    move -r 0 -2.464878 0 ;
+    setKeyframe -breakdown 0 |pCube1.translate;
+    setKeyframe -breakdown 0 -hierarchy none -controlPoints 0 -shape 0 {"pCube1"};
+
+    na_assertAnimatableAnimCurve({"pCube1_translateZ"});
+    na_assertAnimatableAnimCurve({"pCube1_visibility"});
+}
+/**make sure a previous frame exists
+*/
+global proc
+na_assertPrevFrameExists()
+{
+    int $cur = `currentTime -query`;
+    if( $cur <= 1 ){ error("no previous frame exists"); };
+}
+/**assert object and plug have no incoming expressions, animation curves, etc
+this is useful for checking for pasting animation for example and dont want to overwrite
+something.
+*/
+global proc 
+na_assertNoSourceConnectionsOnObjectAndPlug(string $objects[], string $attributes[])
+{
+    na_assertSizeEqualArg( $objects,size($attributes) );
+    
+    for($j = 0; $j < size($objects); $j++)
+    {
+        $anim = $objects[$j];
+        $attribute = $attributes[$j];
+        
+        //make sure all anim and attribute are on scene
+        na_assertObjectExist( {($anim+"."+$attribute)} );
+        
+        //make sure it has no current keys or incoming connections on scene
+        //this is so we don't accidentally mess up a connections that is supposed
+        //to not change
+        $curveSource = `connectionInfo -sourceFromDestination ($anim+"."+$attribute)`;
+        if( size($curveSource) != 0 )
+        {
+            error( "Requires No Frames On Destination -->"+($anim+"."+$attribute) );
+        }
+        
+    }    
+}
+/**assert for one object keyabale on input attribute(s)
+*/
+global proc
+na_assertUnlocked(string $object, string $attrArray[])
+{
+    na_assertObjectExist( {$object} );   
+    string $condition[]={};
+    $condition = `listAttr -u $object`;
+    na_assertSizeGreaterEqualTo($condition,1);
+    na_assertAllInList($attrArray,$condition);
+}
+/**@}*/
+
+
+
+
+
+
+
+
+/**assert string is a subset of another string list
+@see na_isOption
+*/
+global proc
+na_assertAllInList( string $object[], string $list[] )
+{
+    int $isValid= 0;
+    $isValid = na_isOption( $object, $list , 1);
+    if( $isValid == 0 ){error("unknown object(s)");}
+}
+global proc
+na_assertNoneInList( string $object[], string $list[] )
+{
+    int $isValid= 1;
+    $isValid = na_isOption( $object, $list , 1);
+    if( $isValid == 1 ){error("unknown object(s)");}
+}
+
+
+

@@ -1,0 +1,145 @@
+//legBones.mel
+//Make Leg IK's and IK controls
+//Author: Nathaniel Anozie
+//date created: December 3, 2010
+//date last revised: January 6, 2012
+//Modify at your own risk
+
+//last updated: 07/08/2013 -- fixed local rotation axis bug for legs, added ik for straight chain
+
+global proc legBones( int $isIK ){
+    string $ltKnee = "LT_KNEE";
+    string $rtKnee = "RT_KNEE";
+    string $ltThigh = "LT_THIGH";
+    string $rtThigh = "RT_THIGH";
+    string $ltFoot = "LT_ANKLE";
+    string $rtFoot = "RT_ANKLE";
+    
+    if($isIK == 1){
+        ik_legBones( $ltKnee,
+        $rtKnee,
+        $ltThigh,
+        $rtThigh,
+        $ltFoot,
+        $rtFoot);
+    }
+    else{
+        print("Making FK Controls ... \n");
+        eval( "source \"na_fkControl.mel\";" );
+        select -r LT_THIGH LT_KNEE RT_THIGH RT_KNEE;
+        string $sel[] = `ls -sl`;
+        for($arg in $sel){ na_fkControl($arg); }
+        print("Leg -- Completed Making FK Controls \n");
+    }
+}
+
+global proc ik_legBones(    string $ltKnee,
+string $rtKnee,
+string $ltThigh,
+string $rtThigh,
+string $ltFoot,
+string $rtFoot)
+{
+    print("[legBones] Making Leg IK's and IK controls");
+    
+    
+    //save current selection
+    string $curSel[] = `ls -sl`;
+    
+    //create ik handle
+    print("COMPUTING PREFERED ANGLE FOR STRAIGHT LEGS...\n");
+   
+    //leg
+    setAttr ($ltKnee+".rotateX") 30;
+    setAttr ($rtKnee+".rotateX") 30;
+    joint -e -spa -ch $ltKnee ;
+    joint -e -spa -ch $rtKnee ;
+    setAttr ($ltKnee+".rotateX") 0;
+    setAttr ($rtKnee+".rotateX") 0;
+
+    print("FINISHED COMPUTING PREFERED ANGLE FOR STRAIGHT LEGS...\n");
+    
+    string $ikLTLEG[] = `ikHandle -sj $ltThigh -ee $ltFoot -p 2 -w .5 -sol ikRPsolver`;
+    string $ikRTLEG[] = `ikHandle -sj $rtThigh -ee $rtFoot -p 2 -w .5 -sol ikRPsolver`;
+    rename $ikLTLEG[0] "LT_LEG_IK";
+    rename $ikRTLEG[0] "RT_LEG_IK";
+    
+    //could simplify this using constraints or an already made snap function
+    //create controller
+    ////find out where to put leg controls
+    //assumes +z is towards you, in front of character
+    //assumes +y is above you, to top of character
+    float $con_front_space = 4; //how far in front controllers are from knee
+    float $con_bottom_space = 0; //how far bottom controllers from heel
+    float $LT_KNEE_pos[] = `xform -q -ws -t $ltKnee`;//get the xyz position for LT_KNEE and RT_KNEE
+    float $LT_FOOT_pos[] = `xform -q -ws -t $ltFoot`;//get the xyz position for LT_HEEL and RT_HEEL
+    float $RT_KNEE_pos[] = `xform -q -ws -t $rtKnee`;
+    float $RT_FOOT_pos[] = `xform -q -ws -t $rtFoot`;
+    float $LT_KNEE_CON_pos[] = {$LT_KNEE_pos[0],$LT_KNEE_pos[1],$LT_KNEE_pos[2]+$con_front_space};
+    float $RT_KNEE_CON_pos[] = {$RT_KNEE_pos[0],$RT_KNEE_pos[1],$RT_KNEE_pos[2]+$con_front_space};
+    float $LT_FOOT_CON_pos[] = {$LT_FOOT_pos[0],$LT_FOOT_pos[1]-$con_bottom_space,$LT_FOOT_pos[2]};
+    float $RT_FOOT_CON_pos[] = {$RT_FOOT_pos[0],$RT_FOOT_pos[1]-$con_bottom_space,$RT_FOOT_pos[2]};
+    ////
+    
+    string $LT_KNEE_CON[]= `circle -nr 0 0 1 -c $LT_KNEE_CON_pos[0] $LT_KNEE_CON_pos[1] $LT_KNEE_CON_pos[2] -r 0.5`;
+    string $RT_KNEE_CON[]= `circle -nr 0 0 1 -c $RT_KNEE_CON_pos[0] $RT_KNEE_CON_pos[1] $RT_KNEE_CON_pos[2] -r 0.5`;
+    rename $LT_KNEE_CON[0] "LT_KNEE_CON";
+    rename $RT_KNEE_CON[0] "RT_KNEE_CON";
+    select -r LT_KNEE_CON;
+    select -tgl RT_KNEE_CON;
+    CenterPivot;
+    select -cl;
+    string $LT_FOOT_CON[]= `circle -nr 0 1 0 -c $LT_FOOT_CON_pos[0] $LT_FOOT_CON_pos[1] $LT_FOOT_CON_pos[2] -r 0.5`;
+    string $RT_FOOT_CON[]= `circle -nr 0 1 0 -c $RT_FOOT_CON_pos[0] $RT_FOOT_CON_pos[1] $RT_FOOT_CON_pos[2] -r 0.5`;
+    rename $LT_FOOT_CON[0] "LT_FOOT_CON";
+    rename $RT_FOOT_CON[0] "RT_FOOT_CON";
+    select -r LT_FOOT_CON;
+    select -tgl RT_FOOT_CON;
+    CenterPivot;
+    select -cl;
+    
+    
+    //restore selection
+    select -r $curSel;
+    
+    //add constraints
+    ik_legControl();
+    
+}
+
+
+global proc ik_legControl()
+{
+    print("[legControl] Not Supporting Renaming Controls Yet ...\n");
+    int $isReverse = 0;
+    
+    //create knee con and rev constraint
+    poleVectorConstraint -weight 1 LT_KNEE_CON LT_LEG_IK;
+    poleVectorConstraint -weight 1 RT_KNEE_CON RT_LEG_IK;
+    
+    if($isReverse == 1){
+        //constrain ik to rev ankle
+        pointConstraint -mo -weight 1 LT_REV_ANKLE LT_LEG_IK;
+        pointConstraint -mo -weight 1 RT_REV_ANKLE RT_LEG_IK;
+        
+        orientConstraint -mo -weight 1 LT_REV_HEEL LT_HEEL;
+        orientConstraint -mo -weight 1 LT_REV_BALL LT_BALL;
+        orientConstraint -mo -weight 1 LT_REV_TOE LT_TOE;
+        orientConstraint -mo -weight 1 RT_REV_HEEL RT_HEEL;
+        orientConstraint -mo -weight 1 RT_REV_BALL RT_BALL;
+        orientConstraint -mo -weight 1 RT_REV_TOE RT_TOE;
+        
+        
+        
+        //constrain rev to foot controller
+        pointConstraint -mo -weight 1 LT_FOOT_CON LT_REV_ANKLE ;
+        pointConstraint -mo -weight 1 RT_FOOT_CON RT_REV_ANKLE ;
+        orientConstraint -mo -weight 1 LT_FOOT_CON LT_REV_ANKLE ;
+        orientConstraint -mo -weight 1 RT_FOOT_CON RT_REV_ANKLE ;
+    }
+    else{
+        pointConstraint -mo -weight 1 LT_FOOT_CON LT_LEG_IK ;
+        pointConstraint -mo -weight 1 RT_FOOT_CON RT_LEG_IK ;
+    }
+}
+

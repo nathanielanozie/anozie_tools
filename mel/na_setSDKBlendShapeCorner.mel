@@ -1,0 +1,94 @@
+/**@file na_setSDKBlendShapeCorner.mel Face Rigging Tools to attach Blendshape to Animator Controls
+@author Nathaniel O. Anozie (ogbonnawork at gmail dot com)
+@note date created Aug 2,2012
+*/
+
+
+
+/**possibly make blendshape deactivated at certain corner this is to prevent double transform type shapes.
+@bug private
+*/
+proc na_deactivateBlendShapeAtDriverZeroPoints(string $blendNodePlusTarget, float $driverValuePerAttr[], 
+string $anim, string $driverAttr[], string $zeroDriverValuePerAttr[] )
+{
+    na_assertAllInList( $driverAttr, {"translateX","translateY","translateZ"} );
+    na_assertSizeEqualArg($driverAttr, size($driverValuePerAttr) );
+    na_assertObjectExist( {$anim,$blendNodePlusTarget} );
+    na_assertTypeInList({$anim},{"transform"});
+    
+    int $j = 0;
+    string $zeroDriverValue[] = {};
+    for($j=0; $j < size($zeroDriverValuePerAttr); $j++)
+    {
+        //space separated assumption used
+        //
+        $zeroDriverValue = na_getTokensByThisSeparatorOptional( $zeroDriverValuePerAttr[$j], " ");
+        na_assertSizeEqualArg($zeroDriverValue, size($driverValuePerAttr) );
+    }
+    
+    //we have okay format so deactivate blendshape at certain animator control places
+    //might want to save data from above so don't need to go through twice
+    //
+    $zeroDriverValue = {};
+    for($j=0; $j < size($zeroDriverValuePerAttr); $j++)
+    {
+        //space separated assumption used
+        //
+        $zeroDriverValue = na_getTokensByThisSeparatorOptional( $zeroDriverValuePerAttr[$j], " ");
+        na_assertSizeEqualArg($zeroDriverValue, size($driverValuePerAttr) );
+        
+        float $zeroDValue = 0.0;
+        for($m=0; $m < size($driverAttr); $m++){
+            
+            //using auto type casting.
+            $zeroDValue = $zeroDriverValue[$m];
+            na_setSDK($blendNodePlusTarget,{$zeroDValue},{0.0}, $anim, $driverAttr[$m] );
+        }
+        $zeroDriverValue = {};
+    }
+    
+    print("Completed Setting Default Shape\n");
+}
+
+
+/**quick way to setup a face rig ui, by getting a single corner of ui to correspond with blendshape
+@param $anim (string) animator moves this to control face
+@param $blendNode (string) blendweighted node
+@param $blendGeo (string) name blendTarget transform
+@param $driverAttr (string[]) what ways can animator control move example {"translateX","translateY"}
+@param $driverValuePerAttr (float[]) what should animator control be move to to trigger blendshape (float) example {1.0,-1.0}
+@param $zeroDriverValuePerAttr (string[]) example {"0.0 0.0","-1.0 1.0"}, says this blendshape should be zero at all these places
+@note must be space spearated, can have as many entries, within entry need exacty number of driverAttr
+@bug supports one corner of a ui not all the ui, animator default all zeroes
+*/
+
+global proc na_setSDKBlendShapeCorner(string $anim, string $blendNode, 
+string $blendGeo, string $driverAttr[], float $driverValuePerAttr[], string $zeroDriverValuePerAttr[])
+{
+    na_assertAllInList( $driverAttr, {"translateX","translateY","translateZ"} );
+    na_assertSizeEqualArg($driverAttr, size($driverValuePerAttr) );
+    string $blendNodePlusTarget = $blendNode+"."+$blendGeo;
+    na_assertObjectExist( {$anim,$blendNodePlusTarget} );
+    na_assertTypeInList({$blendNode},{"blendShape"});
+    na_assertTypeInList({$anim,$blendGeo},{"transform"});
+    
+
+        
+    //set driven keys 
+    int $i = 0;
+    for($i=0; $i < size($driverAttr); $i++)
+    {
+        na_setSDK($blendNodePlusTarget,{$driverValuePerAttr[$i]},{1.0}, $anim, $driverAttr[$i] );
+    }
+        
+    //possibly make blendshape deactivated at certain corners
+    //this is to prevent double transform type shapes.
+    //
+    if(size($zeroDriverValuePerAttr) > 0 ){
+    na_deactivateBlendShapeAtDriverZeroPoints($blendNodePlusTarget, $driverValuePerAttr, $anim, $driverAttr, $zeroDriverValuePerAttr );
+    }
+
+    print("Completed Blendshape UI Transfer\n");
+    
+}
+

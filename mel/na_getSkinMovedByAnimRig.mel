@@ -1,0 +1,162 @@
+/**@file na_getSkinMovedByAnimRig.mel
+@brief v1.0.0 tools to get skinned rig moved by anim rig.
+@author Nathaniel O. Anozie (ogbonnawork at gmail dot com)
+@note date created: Aug 08, 2012
+@note How to Install
+@note --
+working on adding user interface
+@note --
+@note Modify at your own risk
+*/
+
+
+/**interpret input, apply parent constraint to get one node move another node
+@param removeAnimRigSuffix (string []) one or more possibly suffixes to remove
+@param skinSuffixArray ( string [] )  suffix to find all skin rig joints
+@note it assumes all possible skin rig joints are not imported or referenced
+@note only supports joint moving another joint
+@note only supports single suffix
+@pre objects on scene
+@post makes parent constraint
+*/
+global proc
+na_getSkinMovedByAnimRig(string $removeAnimRigSuffix[], string $skinSuffixArray[], string $animRig[] )
+{
+    //verify all anim rig are joints
+    na_assertObjectExist( $animRig );
+    na_assertTypeInList( $animRig, {"joint"} );
+    na_assertSizeEqualArg($skinSuffixArray,1);
+    string $skinSuffix = $skinSuffixArray[0];
+    
+
+    
+    //did it find any scene skin rig 
+    //if no error
+    //
+    //
+    string $noDupAnimRig[] = {};
+    $noDupAnimRig = stringArrayRemoveDuplicates($animRig);
+    
+    //account for if imported or referenced in anim rig where
+    //its name would need to be parsed
+    //
+    string $baseAnimName[] = na_getBaseNameImportedObject( $noDupAnimRig );
+    na_assertSizeEqualArg($baseAnimName,size($noDupAnimRig));
+    string $baseAnimAfterEdit[] = na_removeSuffixFromArg( $baseAnimName, $removeAnimRigSuffix );
+    na_assertSizeEqualArg($baseAnimAfterEdit,size($noDupAnimRig));
+    
+    //account for existence of skin rig
+    //by default allow partial matching all the index stuff is for partial matching ability
+    //like select all anim rig joints but only some of them have deformation rig joints so
+    //move as many as can, doesn't have to be all of them
+    //
+    int $saveIndex[] = {};
+    for($i = 0; $i < size($baseAnimAfterEdit); $i++ )
+    {
+        $possibleSkin = ($baseAnimAfterEdit[$i])+"_"+$skinSuffix;
+        if( `objExists $possibleSkin` && (na_isType($possibleSkin,"joint") == 1) )
+        {
+            //Require different Anim Rig and Skin Rig
+            if( `strcmp $possibleSkin $noDupAnimRig[$i]` != 0 ){ $saveIndex[size($saveIndex)] = $i; }
+        }
+    }
+    //
+    //
+    
+    string $skinRigFound[] = {};
+    string $animRigFound[] = {};
+    for($j = 0; $j < size($saveIndex); $j++ )
+    {
+        $m = $saveIndex[$j];
+        na_assertSizeGreaterEqualTo( $baseAnimAfterEdit, ($m+1) );
+        $skinRigFound[size($skinRigFound)]  = ($baseAnimAfterEdit[$m])+"_"+$skinSuffix;
+        $animRigFound[size($animRigFound)]  = $noDupAnimRig[$m];
+    }
+
+    print("Great Day \n");
+    if(size($skinRigFound) > 0){
+        //since weve got corresponding for anim and skin rig
+        //make anim rig move skin rig
+        na_parentConstrainSkinRigToAnimRig($skinRigFound, $animRigFound);
+        print("Completed Animation Rig Transfer To Skin Rig\n"); 
+    }
+    else{ print("Skipping No Anim Rig and Skin Rig Correspondence Found\n"); }
+
+}
+
+/*
+    for($i = 0; $i < size($baseAnimAfterEdit); $i++ )
+    {
+        $possibleSkin = ($baseAnimAfterEdit[$i])+"_"+$skinSuffix;
+        na_assertObjectExist( {$possibleSkin} );
+        na_assertTypeInList( {$possibleSkin}, {"joint"} );
+        if( `strcmp $possibleSkin $noDupAnimRig[$i]` == 0 ){error("Require different Anim Rig and Skin Rig\n");}
+    }
+*/
+
+
+/**
+*/
+global proc
+na_getSkinMovedByAnimRig_unitTest()
+{
+    select -d;
+    joint -p 0 0 0 ;
+    select -cl  ;
+    select -d;
+    joint -p 5 0 0 ;
+    select -cl  ;
+    select -r joint1 ;
+    rename "joint1" "joint1";
+    select -r joint2 ;
+    rename "joint2" "joint1_skin";
+    
+    na_getSkinMovedByAnimRig({},{"skin"},{"joint1"});
+}
+
+
+/**parent constrain skin rig to anim rig element by element
+@param $skinRig (string[]) joints to be moved
+@param $animRig (string[]) joint to move skin rig
+@pre objects on scene, of joint type, same size
+*/
+global proc
+na_parentConstrainSkinRigToAnimRig(string $skinRig[], string $animRig[])
+{
+    na_assertSizeEqualArg($skinRig,size($animRig));
+    na_assertObjectExist( $skinRig );
+    na_assertObjectExist( $animRig );
+    na_assertTypeInList( $skinRig, {"joint"} );
+    na_assertTypeInList( $animRig, {"joint"} );
+    
+    //make constrained follow animation rig
+    //
+    for($i = 0; $i < size($skinRig); $i++){
+        parentConstraint -mo -weight 1 $animRig[$i] $skinRig[$i];
+    }
+       
+}
+
+
+/**
+*/
+global proc
+na_parentConstrainSkinRigToAnimRig_unitTest()
+{
+    
+    select -d;
+    joint -p 0 0 0 ;
+    select -cl  ;
+    select -d;
+    joint -p 5 0 0 ;
+    select -cl  ;
+    select -r joint1 ;
+    rename "joint1" "joint1_anim";
+    select -r joint2 ;
+    rename "joint2" "joint2_skin";
+ 
+    na_parentConstrainSkinRigToAnimRig({"joint2_skin"},{"joint1_anim"});
+}
+
+
+

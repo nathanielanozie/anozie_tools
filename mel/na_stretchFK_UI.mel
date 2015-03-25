@@ -1,0 +1,136 @@
+/**@file na_stretchFK_UI.mel v1.0.0
+@brief Tools for adding fk stretching to rig
+@author Nathaniel O. Anozie (ogbonnawork at gmail dot com)
+@bug all functions no assert checks
+@note date created: Apr 10 2012
+@note date last modified: Apr 10 2012
+@note How to Install
+@note source na_ui.mel
+@note source na_stretchFK.mel
+@note released 
+@note v1.0.0 not tested in practice
+@note Modify at your own risk
+*/
+
+//na_stretchFK("joint1", "joint3", "X","X", 1, "length");
+
+global string $gl_jointArray = "gl_jointArray";
+global string $gl_axisJoint = "gl_axisJoint";
+global string $gl_axisGeo = "gl_axisGeo";
+global string $gl_isScaleGeo = "gl_isScaleGeo";
+global string $gl_attrStretch = "gl_attrStretch";
+
+
+/**ui
+*/
+global proc
+na_stretchFK_UI()
+{
+    global string $gl_jointArray;
+    global string $gl_axisJoint;
+    global string $gl_axisGeo;
+    global string $gl_isScaleGeo;
+    global string $gl_attrStretch;
+    
+    //setup up title for gui
+    string $titleWindow = "na_stretchFK.mel  Add fk stretch";
+    string $mainWindowName = "mainWindow";
+    na_window($mainWindowName,$titleWindow, 340, 380);
+    
+    //set up format for gui
+    string $form = `formLayout -numberOfDivisions 50 "form layout"`;
+    
+    
+    //set up ui widgets
+    na_textFieldGrp($form, $mainWindowName,"joint(s)\nspace\nseparated", 25, -50, $gl_jointArray);
+    na_textFieldGrp($form, $mainWindowName,"animator\nattribute", 230, -50, $gl_attrStretch);
+    
+    
+    //widget set 1
+    na_text($form, $mainWindowName,"scale geometry", 108, 40);
+    string $col_isScaleGeo = `radioCollection`;
+    na_radioButton($form, $mainWindowName,"yes", 105, 150,"isScaleGeo_pickType_cmd(1)",$col_isScaleGeo);
+    na_radioButton($form, $mainWindowName,"no", 105, 190,"isScaleGeo_pickType_cmd(0)",$col_isScaleGeo);
+    
+    
+    //widget set 2
+    na_text($form, $mainWindowName,"joint stretch axis", 148, 40);
+    string $col_axisJoint = `radioCollection`;
+    na_radioButton($form, $mainWindowName,"x", 145, 150,"axisJoint_pickType_cmd(0)",$col_axisJoint);
+    na_radioButton($form, $mainWindowName,"y", 145, 190,"axisJoint_pickType_cmd(1)",$col_axisJoint);
+    na_radioButton($form, $mainWindowName,"z", 145, 230,"axisJoint_pickType_cmd(2)",$col_axisJoint);
+    
+    //widget set 3
+    na_text($form, $mainWindowName,"geo stretch axis", 178, 40);
+    string $col_axisGeo = `radioCollection`;
+    na_radioButton($form, $mainWindowName,"x", 175, 150,"axisGeo_pickType_cmd(0)",$col_axisGeo);
+    na_radioButton($form, $mainWindowName,"y", 175, 190,"axisGeo_pickType_cmd(1)",$col_axisGeo);
+    na_radioButton($form, $mainWindowName,"z", 175, 230,"axisGeo_pickType_cmd(2)",$col_axisGeo);
+    
+    
+    
+    na_button($form, $mainWindowName,"ok", 300, 150,"button","na_stretchFK_cmd");
+    
+    showWindow $mainWindowName;
+    
+    
+}
+
+
+/**widget commands
+*/
+global proc axisJoint_pickType_cmd(int $type)
+{
+    global string $gl_axisJoint;
+    if($type == 0){ $gl_axisJoint = "X"; }
+    else if($type == 1){ $gl_axisJoint = "Y"; }
+    else{$gl_axisJoint = "Z";}
+}
+global proc axisGeo_pickType_cmd(int $type)
+{
+    global string $gl_axisGeo;
+    if($type == 0){ $gl_axisGeo = "X"; }
+    else if($type == 1){ $gl_axisGeo = "Y"; }
+    else{$gl_axisGeo = "Z";}
+}
+global proc isScaleGeo_pickType_cmd(int $type)
+{
+    global string $gl_isScaleGeo;
+    if($type == 0){ $gl_isScaleGeo = "0"; }
+    else{$gl_isScaleGeo = "1";}
+}
+
+
+/**ui command
+*/
+global proc
+na_stretchFK_cmd()
+{
+    global string $gl_jointArray;
+    global string $gl_axisJoint;
+    global string $gl_axisGeo;
+    global string $gl_isScaleGeo;
+    global string $gl_attrStretch;    
+    
+    //used
+    string $jointArray[]={};
+    string $downChainAxisTranslate="";
+    string $downChainAxisScale="";
+    int $isGeoToBeScaled=0;
+    string $nameFKStretchAttr="";
+    
+    //temp
+    string $jointAll = "";
+    int $isGeoToBeScaledArray[] = na_stringIsInteger( $gl_isScaleGeo,{0,1});
+    $jointAll = `textFieldGrp -query -text $gl_jointArray`;
+
+    
+    $jointArray = stringToStringArray($jointAll," ");
+    $downChainAxisTranslate = $gl_axisJoint;
+    $downChainAxisScale = $gl_axisGeo;
+    if(size($isGeoToBeScaledArray)==1){ $isGeoToBeScaled = $isGeoToBeScaledArray[0];  }
+    $nameFKStretchAttr = `textFieldGrp -query -text $gl_attrStretch`;
+    
+    
+    na_stretchFK($jointArray, $downChainAxisTranslate, $downChainAxisScale,$isGeoToBeScaled, $nameFKStretchAttr);
+}

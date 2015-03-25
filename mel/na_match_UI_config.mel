@@ -1,0 +1,604 @@
+/**@file  na_match_UI_config.mel v1.0.0
+*/
+/**this has all the attributes that directly control rig switching in scene file
+@note for multiple characters this would need to be changed
+*/
+
+
+
+//last updated: 05/15/2014-05/15/2014 -- reodered code made functions global
+
+
+
+/**
+only place it actually uses the ui widget is changing the settings after snapping.
+ex:
+if in fk, having snap to fk (ik hand, elbow, ik/fk hand) 
+if in ik/fk, having snap to ik/fk (fk up,low,hand and ik hand)
+if in ik, having snap to ik  (fk up,low,hand  and ik/fk hand)
+ex: if current widget is 0, possible widget 0,1,2 it will select nameA set its attribute to valueA and snap cause its first
+@bug if namespace it doesn't know how to change its names up
+@bug doesn't find what to set efficiently
+*/
+global proc na_match_setLeftArm(int $widget)
+{
+    int $possibleWidget[] = {0,1,2};   
+    int $stateIndex = 0;
+    int $modeIndex = 1;
+    
+    int $settingIndex[] = {$stateIndex,$modeIndex};
+    
+    string $nameA[] = {"l_ik_elbow_anim","l_ik_hand_anim","l_fk_hand_elbow_anim"};
+    int $valueA[] = {0,0,0};
+    
+    string $nameB[] = {"l_fk_up_arm_anim","l_fk_low_arm_anim","l_fk_hand_anim","l_ik_hand_anim"};
+    int $valueB[] = {0,0,1,1};
+    
+    
+    string $nameC[] = {"l_fk_up_arm_anim","l_fk_low_arm_anim","l_fk_hand_anim","l_ik_elbow_anim","l_fk_hand_elbow_anim"};
+    int $valueC[] =  {0,0,0,0,1};
+    
+    
+    na_match_naSnapWithSetting($widget, $settingIndex, $possibleWidget, $nameA, $valueA, $nameB, $valueB, $nameC, $valueC);
+}
+global proc na_match_setRightArm(int $widget)
+{
+    int $possibleWidget[] = {3,4,5};   
+    int $stateIndex = 5;
+    int $modeIndex = 6;
+    
+    int $settingIndex[] = {$stateIndex,$modeIndex};
+    
+    string $nameA[] = {"r_ik_elbow_anim","r_ik_hand_anim","r_fk_hand_elbow_anim"};
+    int $valueA[] = {0,0,0};
+    
+    string $nameB[] = {"r_fk_up_arm_anim","r_fk_low_arm_anim","r_fk_hand_anim","r_ik_hand_anim"};
+    int $valueB[] = {0,0,1,1};
+    
+    
+    string $nameC[] = {"r_fk_up_arm_anim","r_fk_low_arm_anim","r_fk_hand_anim","r_ik_elbow_anim","r_fk_hand_elbow_anim"};
+    int $valueC[] =  {0,0,0,0,1};
+    
+    
+    na_match_naSnapWithSetting($widget, $settingIndex, $possibleWidget, $nameA, $valueA, $nameB, $valueB, $nameC, $valueC);
+}
+
+
+
+
+/**
+ex:
+if in fk, having snap to fk (ik knee, ik foot) 
+if in ik no knee, having snap to ik no knee( fk upleg,lowleg,foot,toe,  ik knee)
+if in ik knee vis, having snap to ik knee vis  ( fk upleg,lowleg,foot,toe,  ik foot)
+*/
+global proc na_match_setLeftLeg(int $widget)
+{
+    int $possibleWidget[] = {6,7,8};   
+    int $stateIndex = 3;
+    int $modeIndex = 4;
+    
+    int $settingIndex[] = {$stateIndex,$modeIndex};
+    
+    string $nameA[] = {"l_knee_anim","l_foot_anim"};
+    int $valueA[] = {0,0};
+    
+    string $nameB[] = {"l_fk_upLeg_anim","l_fk_lowLeg_anim","l_fk_foot_anim","l_fk_toe_anim","l_knee_anim"};
+    int $valueB[] = {0,0,0,0,1};
+    
+    
+    string $nameC[] = {"l_fk_upLeg_anim","l_fk_lowLeg_anim","l_fk_foot_anim","l_fk_toe_anim","l_foot_anim"};
+    int $valueC[] =  {0,0,0,0,1};
+    
+    
+    na_match_naSnapWithSetting($widget, $settingIndex, $possibleWidget, $nameA, $valueA, $nameB, $valueB, $nameC, $valueC);
+}
+
+global proc na_match_setRightLeg(int $widget)
+{
+    int $possibleWidget[] = {9,10,11};   
+    int $stateIndex = 8;
+    int $modeIndex = 7;
+    
+    int $settingIndex[] = {$stateIndex,$modeIndex};
+    
+    string $nameA[] = {"r_knee_anim","r_foot_anim"};
+    int $valueA[] = {0,0};
+    
+    string $nameB[] = {"r_fk_upLeg_anim","r_fk_lowLeg_anim","r_fk_foot_anim","r_fk_toe_anim","r_knee_anim"};
+    int $valueB[] = {0,0,0,0,1};
+    
+    
+    string $nameC[] = {"r_fk_upLeg_anim","r_fk_lowLeg_anim","r_fk_foot_anim","r_fk_toe_anim","r_foot_anim"};
+    int $valueC[] =  {0,0,0,0,1};
+    
+    
+    na_match_naSnapWithSetting($widget, $settingIndex, $possibleWidget, $nameA, $valueA, $nameB, $valueB, $nameC, $valueC);
+}
+
+
+
+
+global proc string na_matchGetCurrentStateObject()
+{
+    return "settings_anim";
+}
+global proc int na_match_getNumberOfWidgetRow()
+{
+    return size(na_match_getNumberOfWidgetPerRow());
+}
+/**
+@see na_match_numberWidget
+*/
+global proc string[] na_match_getLabelPerWidget()
+{
+    return {
+        "l_arm_fk","l_arm_ik/fk","l_arm_ik",
+        "r_arm_fk","r_arm_ik/fk","r_arm_ik",
+        "l_leg_fk","l_leg_ik","l_leg ik_kneeVis",
+        "r_leg_fk","r_leg_ik","r_leg ik_kneeVis" };
+}
+global proc string[] na_match_getTitlePerRow()
+{
+    string $result[] = {"l arm","r arm","l leg","r leg" };
+    na_assertSizeEqualArg($result,na_match_getNumberOfWidgetRow());
+    return $result;
+}
+global proc int[]
+na_match_getCurrentEnumAsUIWidget()
+{        
+    int $result[] = {};
+    
+    string $cmd_widgetPerRow = "na_match_getNumberOfWidgetPerRow";
+    string $cmd_anim = "na_match_getSetting";
+    
+
+    
+    int $numWidgetPerRow[] = eval($cmd_widgetPerRow);
+    na_assertIntSizeGreaterEqualTo($numWidgetPerRow,1);
+    
+    //this is used for some math to offset scene attr ex: enum in such a way
+    //that it corresponds to a ui widget
+    //
+    int $sum[] = na_accumlateSum_integer( $numWidgetPerRow );
+    na_assertIntSizeEqualArg($sum, size($numWidgetPerRow) );
+    //one anim corresponds to one row
+    //
+    
+    string $animArray[] = eval( $cmd_anim );
+    na_assertSizeEqualArg($animArray,size($numWidgetPerRow));
+    
+    
+    int $indexSelectedOnAttribute = 0;
+    string $attr[] = {};
+    //take care of the first case which is a little special cause we don't need the sum
+    $anim = $animArray[0];
+
+
+    string $setting = na_matchGetCurrentStateObject();
+    
+    na_assertObjectExist({($setting+"."+$anim)});
+    $indexSelectedOnAttribute = `getAttr ($setting+"."+$anim)`;
+    
+
+    $result[size($result)] = 0 + $indexSelectedOnAttribute;
+    
+    //loop over rows of ui (not sure how this extends to tabs) i think could extend to tabs or menus etc.
+    for($i = 1; $i < size($numWidgetPerRow); $i++ )
+    {
+        $anim = $animArray[$i];
+        
+        //change this
+        //
+        na_assertObjectExist({($setting+"."+$anim)});
+        $indexSelectedOnAttribute = `getAttr ($setting+"."+$anim)`;
+        //
+        //
+ 
+        //now we found the scene attribute value, we want to get it as a widget for the ui
+        //
+        //need the minus 1 to get the math to work
+        $result[size($result)] = $sum[$i-1] + $indexSelectedOnAttribute;
+    }   
+    
+    na_assertIntSizeEqualArg($result,size($numWidgetPerRow));
+    
+    return $result;
+}
+
+/**
+@see na_matchGetCurrentStateObject
+*/
+global proc string[] na_matchGetAllAttribute()
+{
+    return {
+        "l_arm_state",
+        "l_elbow_state",
+        "torso_state",
+        "l_leg_state",
+        "l_knee_vis",
+        "r_arm_state",
+        "r_elbow_state",
+        "r_knee_vis",
+    "r_leg_state" };
+}
+
+
+
+/**put animator controls here
+*/
+global proc string[] na_match_getSetting()
+{
+    return {"l_arm_naSetting","r_arm_naSetting","l_leg_naSetting","r_leg_naSetting"};
+}
+global proc int[] na_match_getNumberOfWidgetPerRow()
+{
+    return {3,3,3,3};
+}
+
+/**makes the ui using configuration
+*/
+global proc na_match_UI_config(string $title, string $mainWindowName)
+{
+    
+    //external get these from a config file
+    int $colPerRow[] = {};
+    string $allLabel[] = {};
+    string $allRowTitle[] = {};
+    int $numRow = 0;
+    
+    $colPerRow = na_match_getNumberOfWidgetPerRow();
+    $allLabel = na_match_getLabelPerWidget();
+    $allRowTitle = na_match_getTitlePerRow();
+    $numRow = na_match_getNumberOfWidgetRow();
+    
+    
+    na_match_UI($title,$mainWindowName,$colPerRow,$allLabel,$allRowTitle,$numRow);
+    
+    
+    //here select radio buttons according to user scene.
+    int $currentWidget[] = na_match_getCurrentEnumAsUIWidget();
+    na_assertIntSizeGreaterEqualTo($currentWidget,1);
+    na_match_selectUI($currentWidget);
+}
+
+
+
+
+
+
+
+
+/**
+@note could also find pre setup scripts
+*/
+global proc string na_match_getSnapCmd()
+{
+    string $cmd = na_snap_getSnapCmd();
+    na_assertCmdExist({$cmd});
+    return $cmd;
+}
+global proc string na_match_getSnapSwitchAttribute()
+{ 
+    return na_snap_getIndexAttribute();
+}
+
+
+
+
+global proc int na_match_numberWidget()
+{
+    return 12;
+}
+
+
+/**
+*/
+global proc int[] na_match_getIDPerWidget()
+{
+    int $result[] = {};
+    int $numberWidget = na_match_numberWidget();
+    for($i = 0; $i < $numberWidget; $i++ )
+    {
+        $result[size($result)] = $i;
+    }
+    
+    return $result;
+}
+
+
+
+
+
+
+global proc na_match_sizeError(int $index,string $object[])
+{
+    int $n = size($object);
+    if($index >= $n){error("Requires Index Smaller Than "+$n);}
+}
+global proc na_match_intSizeError(int $index,int $object[])
+{
+    int $n = size($object);
+    if($index >= $n){error("Requires Index Smaller Than "+$n);}
+}
+global proc na_match_assertObjectAndAttribute()
+{
+    //can we use this object for matching rig
+    //since were going to need current scene information based on specific
+    //attributes respondible for saying rig in different modes we check to
+    //see if config file is updated.
+    //some scene change like removing an attribute on settings can cause a bug here.
+    //
+    string $object = "";
+    $object = na_matchGetCurrentStateObject();
+    na_assertObjectExist({$object});
+    string $allAttr[] = na_matchGetAllAttribute(); 
+    string $sceneAttribute[] = {};
+    $sceneAttribute = `listAttr -ud $object`;
+    na_isOption( $allAttr, $sceneAttribute , 1 );
+    //
+    
+}
+
+
+
+
+/**this snaps but doesn't update to newly chosen animator mode
+@pre snapping procedure dependent on any tool that can do snapping running a no argument command
+with animator controls selected
+*/
+global proc na_match_setSnapping( int $widget, int $possibleWidget[], string $nameA[], string $nameB[], string $nameC[], int $valueA[], int $valueB[], int $valueC[] )
+{
+    na_assertIntSizeEqualArg($possibleWidget,3);
+ 
+    na_assertSizeEqualArg($nameA,size($valueA));
+    na_assertSizeEqualArg($nameB,size($valueB));
+    na_assertSizeEqualArg($nameC,size($valueC));
+    
+    string $sel[] = {};
+    
+    
+    //shows that snapping dependent on any tool that can do snapping with one command
+    //and that just needs animator controls selected
+    //
+    string $cmd = na_match_getSnapCmd();
+    
+    
+    na_assertCmdExist({$cmd});
+    string $switchAttr = na_match_getSnapSwitchAttribute();
+    
+    string $selAndPlug[] = {};//like anim1.switchAttr, anim2.switchAttr ...
+    int $switchValue[] = {};
+    
+    //since matching tool first selects appropriate animator controls
+    //this decides what animator control to select
+    //
+    if( $widget == $possibleWidget[0]){
+        $sel = $nameA;
+        $selAndPlug = na_getPlug( $sel, $switchAttr );
+        na_assertObjectExist($selAndPlug);
+        $switchValue = $valueA;
+    }
+    else if( $widget == $possibleWidget[1]){
+        $sel = $nameB;
+        $selAndPlug = na_getPlug( $sel, $switchAttr );
+        na_assertObjectExist($selAndPlug);
+        $switchValue = $valueB;
+    }
+    else if( $widget == $possibleWidget[2]){
+        $sel = $nameC;
+        $selAndPlug = na_getPlug( $sel, $switchAttr );
+        na_assertObjectExist($selAndPlug);
+        $switchValue = $valueC;
+    }
+    //no error for final else so this can run for any widget
+
+    //since matching depends on setting a particular attribute on animator control
+    //this sets that attribute and runs a snapping procedure
+    //
+    if(size($sel) > 0){
+
+        for($i = 0; $i < size($selAndPlug); $i++)
+        {
+            //because matching proc depends on switch attribute order matters
+            na_match_intSizeError($i,$switchValue);
+            
+            //because cleaning rig probably made backend attrs locked or maybe a locked node
+            //so we use this over regular set attr
+            na_setIntAttribute($sel[$i],$switchAttr,$switchValue[$i]);
+            
+            //because of special kinds of snapping
+            //like length, one animator control is snapped at a time
+            na_match_sizeError($i,$sel);
+            select -r $sel[$i];
+            eval($cmd);
+        }
+        
+        
+    }
+   
+}
+
+
+
+
+
+
+/**given attribute index try to figure out the current ui widget corresponding to current state
+@note
+       this is kindof how we use assumption there is one state and a mode
+       first == 0  use first widget
+       first == 1 and second == 1 use second widget
+       first == 1 and second == 0 use third widget
+   
+       so for the rig, the numbers are indexes
+// l_arm( {0,1}, widget index {0,1,2}  ) 
+// r_arm( {5,6}, {3,4,5}   )
+// l_leg( {3,4}, {6,7,8}  )
+// r_leg( {8,7}, {9,10,11} )
+@see na_matchGetAllAttribute()
+@see na_matchGetWidget()
+@bug not finding current widget efficiently
+*/
+global proc int[]
+na_match_getCurrentUI(int $stateIndex, int $modeIndex, int $widget1Index, int $widget2Index, int $widget3Index )
+{
+    int $result[] = {};
+    
+    na_match_assertObjectAndAttribute();
+    string $object = na_matchGetCurrentStateObject();
+    
+    int $possibleWidget[] = na_match_getIDPerWidget();
+    na_assertIntSizeEqualArg($possibleWidget,na_match_numberWidget());
+    
+    string $attr[] = {};
+    int $attrIndex = 0;
+    int $attr1Index = 0;
+    int $widgetIndex = 0;
+        
+    
+    $attrIndex = $stateIndex;//ex l_arm_state
+    $attrIndex1 = $modeIndex;//ex l_elbow_state
+    
+    string $allAttr[] = {};
+    $allAttr = na_matchGetAllAttribute(); 
+    na_match_sizeError($attrIndex,$allAttr);
+    na_match_sizeError($attrIndex1,$allAttr);
+    
+    
+    $attr = {$allAttr[$attrIndex],$allAttr[$attrIndex1]};
+    if(  na_getIntAttribute( $object,$attr[0] ) == 0  )
+    {
+        $widgetIndex = $widget1Index;//ex l_arm fk
+        na_match_intSizeError($widgetIndex,$possibleWidget);
+        $result = {$possibleWidget[$widgetIndex]};
+        
+    }
+    else{
+        $attr = {$allAttr[$attrIndex],$allAttr[$attrIndex1]};
+        
+        if(  na_getIntAttribute( $object,$attr[0] ) == 1   && na_getIntAttribute( $object,$attr[1] ) == 0 )
+        {
+            $widgetIndex = $widget2Index;//ex l_arm fk/ik elbow
+            na_match_intSizeError($widgetIndex,$possibleWidget);
+            $result = {$possibleWidget[$widgetIndex]};
+        }
+        else{
+            $attr = {$allAttr[$attrIndex],$allAttr[$attrIndex1]};
+            
+            if(  na_getIntAttribute( $object,$attr[0] ) == 1   && na_getIntAttribute( $object,$attr[1] ) == 1 )
+            {
+                $widgetIndex = $widget3Index;//ex l_arm ik elbow
+                na_match_intSizeError($widgetIndex,$possibleWidget);
+                $result = {$possibleWidget[$widgetIndex]};
+            }
+        }
+    }
+    
+    string $possibleLabel[] = na_match_getLabelPerWidget();
+    int $index = $result[0];
+    print($possibleLabel[$index]+"\n" );
+    return $result;
+}
+
+
+
+
+/**update user chosen animator mode should not get popping
+@pre widget is a possible widget
+@pre 3 options per rig element
+*/
+global proc
+na_match_setCurrentUI(int $widget, int $stateIndex, int $modeIndex, int $option[] )
+{
+    int $numberOptions = 3;
+    
+    na_assertIntUnique($option);
+    na_assertIntSizeEqualArg($option,$numberOptions);
+    int $widget1Index = $option[0];
+    int $widget2Index = $option[1];
+    int $widget3Index = $option[2];
+    
+    na_match_assertObjectAndAttribute();
+    string $object = na_matchGetCurrentStateObject();
+    
+    int $possibleWidget[] = na_match_getIDPerWidget();
+    na_assertIntSizeEqualArg($possibleWidget,na_match_numberWidget());
+    
+    
+    string $allAttr[] = {};
+    $allAttr = na_matchGetAllAttribute(); 
+
+    //get state and mode on scene
+    //
+    string $attr[] = {};
+    na_match_sizeError($stateIndex,$allAttr);
+    na_match_sizeError($modeIndex,$allAttr);
+    $attr = {$allAttr[$stateIndex],$allAttr[$modeIndex]};
+    
+    //the reason having 3 if's here is because there are 3 possible options
+    //for every rig part, ex: the arm has fk, ik, or ik with fk elbow, the leg
+    //has fk, ik knee vis, ik.  So if the rig part just had ik or fk one of these if
+    //would be removed and also number options would be 2 not 3
+    //
+    if($widget == $widget1Index){
+        na_setIntAttribute( $object,$attr[0], 0 );
+    }
+    else if($widget == $widget2Index){
+        na_setIntAttribute( $object,$attr[0], 1 );
+        na_setIntAttribute( $object,$attr[1], 0 ); 
+    }
+    else if($widget == $widget3Index){
+        na_setIntAttribute( $object,$attr[0], 1 );
+        na_setIntAttribute( $object,$attr[1], 1 ); 
+    }
+    
+    
+    string $possibleLabel[] = na_match_getLabelPerWidget();
+    print($possibleLabel[$widget]+"\n" );
+}
+
+
+
+/**performs position snapping and updates scene state
+@pre existence integer animator attribute
+@pre integer values on animator attribute
+@pre a state and a mode required
+@pre for each rig part at most three options can determine all modes
+@post animator controls snapped to place and scene mode changed
+@note for $nameA,B,C snapped according to ordering of names, so put things to be snapped first at earlier index in $nameA,B,C
+*/
+global proc na_match_naSnapWithSetting(int $widget, int $settingIndex[], int $possibleWidget[], string $nameA[], int $valueA[], string $nameB[], int $valueB[], string $nameC[], int $valueC[])
+{
+    na_assertIntSizeEqualArg($possibleWidget,3);
+ 
+    na_assertSizeEqualArg($nameA,size($valueA));
+    na_assertSizeEqualArg($nameB,size($valueB));
+    na_assertSizeEqualArg($nameC,size($valueC));
+    
+    na_assertIntSizeEqualArg($settingIndex,2);
+    int $stateIndex = $settingIndex[0];
+    int $modeIndex = $settingIndex[1];
+    
+    //transform scene information into ui information
+    //
+    int $currentWidget[] = na_match_getCurrentUI( $stateIndex,$modeIndex,$possibleWidget[0] ,$possibleWidget[1], $possibleWidget[2] );
+    na_assertIntSizeEqualArg($currentWidget,1);
+    
+    
+    //because i was seeing offset of low arm joint tz if in fk and chose to snap to fk, then chose to go to ik
+    //dont do anything if already in the posing option we want
+    //
+    if( $widget != $currentWidget[0] )
+    {
+        na_match_setSnapping( $currentWidget[0], $possibleWidget, $nameA, $nameB, $nameC, $valueA, $valueB, $valueC  );
+        
+        //update user chosen animator mode
+        na_match_setCurrentUI($widget,$stateIndex,$modeIndex,$possibleWidget);
+    }
+    
+}
+
+
+
+

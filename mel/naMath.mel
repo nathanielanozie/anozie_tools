@@ -1,0 +1,2268 @@
+/**@file naMath.mel
+@brief v1.0.2 common math operations on objecs ex: computing lengths, distance etc.
+@author Nathaniel O. Anozie (ogbonnawork at gmail dot com)
+@bug how to get length of a sub hierarchy
+@note date created: Jan 10, 2012 
+@note -- working on adding querying min and max from attribut
+@note -- working on bug move object world space (if translation frozen currently uses move relative to pivot)
+@note Acknowledgements: Duncan Brinsmead for rounding a float to decimal places
+@note                   Bryan Ewert, xyz2 dot net for rounding a float to decimal places, querying number cvs
+@note Modify at your own risk
+*/
+
+
+
+/**sum by element two float arrays
+@result float list summation by element
+@param float list array
+@param float list array
+*/
+global proc float[]
+na_sumByElementFloatArray( float $array1[], float $array2[] )
+{
+    float $result[] = {};
+    if(size($array1) == size($array2) ){
+        for($i = 0; $i < size($array1); $i++)
+        {
+            $result[size($result)] = $array1[$i] + $array2[$i];
+        }
+    }
+    return $result;
+}
+global proc 
+na_sumByElementFloatArray_unitTest()
+{
+    print( na_sumByElementFloatArray( {1.0,5.0},{0.0,1.0} ) );
+    print("\n");
+    print(na_sumByElementFloatArray( {1.0,5.0},{1.0,0.0} ) );
+    print("\n");
+}
+
+
+
+
+
+
+
+
+/**subset at index of string list $array where $array can have varying columns
+@result subset of $array for given $index
+@param int $index  index we wish to recover elements
+@param float $array[]  list of all possible elements
+@param int $num[]   number of elements per each row, since it may be different
+@param int $sum[]   cummulative sum of elements per each row it helps speed up calculation
+*/
+global proc string[] na_get2DArrayDiffSize(int $index, string $array[], int $num[], int $sum[] )
+{
+    string $result[] = {};
+        
+    //assert data okay to use
+    na_get2DArrayDiffSize_assert($index,$array,$num,$sum);
+    int $i = 0;
+    
+    for($j=0; $j < $num[$index]; $j++)
+    {
+        //use the cumulative sum and the number for a given row to figure out recovered element
+        $i = $sum[$index] - ( $num[$index] - $j );
+        $result[size($result)] = $array[ $i ];
+        
+    }
+    return $result;
+}
+
+
+/**get index(s) from count int array. 
+@note zero based index
+ex: input [2,3] result [0,1,0,1,2]
+@param list of strictly greater zero elements
+*/
+global proc int[]
+na_getIndexFromCount(int $countArray[])
+{
+    int $result[] = {};
+    for($count in $countArray)
+        { na_assertIntNonNegative({$count});}
+
+    //since we are doing zero based index
+    //we start from zero on each count
+    //
+    int $start = 0;
+    for($count in $countArray)
+    {
+        $start = 0;
+        for($i = 0; $i<$count; $i++)
+        {$result[size($result)] = $start+$i;}
+    }
+    
+    return $result;
+    
+}
+global proc
+na_getIndexFromCount_unitTest()
+{
+    print( na_getIndexFromCount({2,3})  );
+    print("--\n");
+}
+
+
+/**repeat string from count int array
+ex: input ( {"a","b"}, {2,3} ) result {"a","a","b","b","b"}
+@pre strict greater zero coutn, and equal sizes for repeat times and elements
+@param elements
+@param times to repeat each element
+*/
+global proc string[]
+na_repeatStringByCount( string $array[], int $countArray[] )
+{
+    string $result[] = {};
+    for($count in $countArray)
+        { na_assertIntNonNegative({$count});}
+    na_assertSizeEqualArg($array, size($countArray) );
+    
+    //this part repeats a string given number of times
+    //
+    for($i = 0; $i < size($array) ;$i++)
+    {
+        for( $j = 0; $j < $countArray[$i]; $j++ ){ $result[size($result)] = $array[$i]; }
+    }
+    
+    return $result;
+}
+/**repeat int from count int array
+na_repeatIntByCount({1,4},{2,3});
+// Result: 1 1 4 4 4 // 
+*/
+global proc int[]
+na_repeatIntByCount( int $array[], int $countArray[] )
+{
+    int $result[] = {};
+    for($count in $countArray)
+        { na_assertIntNonNegative({$count});}
+    na_assertIntSizeEqualArg($array, size($countArray) );
+
+    for($i = 0; $i < size($array) ;$i++)
+    {
+        for( $j = 0; $j < $countArray[$i]; $j++ ){ $result[size($result)] = $array[$i]; }
+    }
+    
+    return $result;
+}
+global proc
+na_repeatStringByCount_unitTest()
+{
+    print( na_repeatStringByCount({"a","b"},{2,3}) );
+    print("--\n");
+}
+
+/**
+*/
+global proc 
+na_get2DArrayDiffSize_assert(int $index, string $array[], int $num[], int $sum[])
+{
+    if($index < 0){ error("error expecting non-negative index"); }
+    if(size($array) == 0){ error("error expecting an array with elements"); }
+    if($index >= size($array) ){ error("error expecting smaller index"); }
+    if( size($num)  == 0 ){ error("error some number of elements per row"); }
+    if( size($num) !=  size($sum)  ){error("error expecting sum and num same length");}
+    if( $num[$index] <= 0  ){error("error expecting number of elements > 0");} 
+    if( $sum[$index] <= 0  ){error("error expecting sum of elements > 0");} 
+}
+/**
+*/
+global proc 
+na_get2DArrayDiffSize_unitTest()
+{
+    string $array[] = {"1","2","1","4","5","6"};
+    int $num[] = {3,1,2};
+    int $sum[]= {3,4,6};
+    
+    print( na_get2DArrayDiffSize(0,$array,$num,$sum) );
+    print("\n");
+    print( na_get2DArrayDiffSize(1,$array,$num,$sum) );
+    print("\n");
+    print( na_get2DArrayDiffSize(2,$array,$num,$sum) );
+    print("\n");
+    print( na_get2DArrayDiffSize(5,$array,$num,$sum) );
+    print("\n");
+   
+}
+
+
+
+
+/**get cumulative sum given integer array
+@result float list cummulative sum
+@note no input check
+*/
+global proc int[]
+na_accumlateSum_integer( int $array[] )
+{
+    int $result[] = {};    
+    int $n = size($array);
+    
+    if($n > 0){
+        //for cummulative sum we have a start
+        $result[size($result)] = $array[0];
+        if($n > 1){
+            for( $i = 1; $i < $n; $i++ )
+            {
+                //why we start from 1 so we can retrieve previous cummulative sum
+                //and add a new integer to it
+                $result[size($result)] = $result[ ($i-1) ] + $array[$i];
+            }
+        }
+    }
+    return $result;
+}
+
+/**assumes empty scene
+*/
+global proc
+na_accumlateSum_integer_unitTest( )
+{
+    print( na_accumlateSum_integer({1,3,5}) );
+    print("\n");
+    print( na_accumlateSum_integer({1,1,3,10,2,1}));
+    print("\n");
+    print( na_accumlateSum_integer({0}) );
+    print("\n");
+    print( na_accumlateSum_integer({-1}) );
+    print("\n");
+    print( na_accumlateSum_integer({}) );
+    print("\n");
+    print( na_accumlateSum_integer({1.3}) );
+    print("\n");
+}
+
+
+/**return integer number of cvs
+@param $userCurve -- curve argument
+@result int list where first element is number of cvs
+*/
+global proc int[]
+na_getNumberCurveCV(string $userCurve)
+{
+    int $result[] = {};
+    //check this is a curve     
+    int $isCurve = 0;
+    $isCurve = na_isCurve($userCurve);
+    
+    if($isCurve == 1){
+        int $degree[]={};
+        int $span[]={};
+        
+        $degree[0] = `getAttr ($userCurve+".degree")`;
+        $span[0] = `getAttr ($userCurve+".spans")`;
+        //number cvs equals number spans plus degree of curve
+        $numcv = $span[0] + $degree[0];
+        
+        $result[size($result)] = $numcv;
+	}
+	else{ print("cannot perform operation on this node type\n"); }
+	
+	return $result;
+}
+
+
+/**get length of joint hiearchy
+@param string $root root joint
+@resul float list if nonempty only element is the length
+@pre assumes root only hiearchy of interest
+@post gives length if hierarchy was completely stretched out
+@see na_selectJointsInHierarchy
+@see na_getLengthArray
+*/
+global proc float[]
+na_getHierarchyLength(string $root)
+{
+    float $result[] = {};
+    string $jointArray[] = {};
+    $jointArray = na_selectJointsInHierarchy($root);;
+    $result = na_getLengthArray($jointArray); 
+    return $result;
+}
+/**
+@pre expect clean maya scene
+*/
+global proc float[]
+na_getHierarchyLength_userTest()
+{
+    joint -p 0 0 0 ;
+    joint -p 7 0 0 ;
+    joint -e -zso -oj xyz -sao yup "joint1";
+    
+    return na_getHierarchyLength("joint1");
+}
+
+/**get length of subset joint hiearchy
+@param string $start start joint
+@param string $end end joint
+@resul float list if nonempty only element is the length
+@pre assumes start and end in same hierarchy
+@post gives length if hierarchy was completely stretched out
+@see na_selectJointsInHierarchySubset
+@see na_getLengthArray
+*/
+global proc float[]
+na_getHierarchyLengthSubset(string $start, string $end)
+{
+    float $result[] = {};
+    string $jointArray[] = {};
+    string $startJoint = "";
+    string $endJoint = "";
+    $startJoint = $start;
+    $endJoint = $end;
+    $jointArray = na_selectJointsInHierarchySubset($startJoint, $endJoint);;
+    $result = na_getLengthArray($jointArray); 
+    return $result;
+}
+/**
+@pre expect clean maya scene
+*/
+global proc
+na_getHierarchyLengthSubset_userTest()
+{
+    joint -p 0 0 0 ;
+    joint -p 7 0 0 ;
+    joint -p 10 0 0 ;
+    joint -e -zso -oj xyz -sao yup "joint1";
+    select -d;
+    joint -p 0 0 3 ;
+
+    print("joint2 to joint3\n");
+    print( na_getHierarchyLengthSubset("joint2","joint3") );
+    print("joint1 to joint2\n");
+    print( na_getHierarchyLengthSubset("joint1","joint2") );
+    print("joint1 to joint4\n");
+    print( na_getHierarchyLengthSubset("joint1","joint4") );
+}
+
+
+
+
+/**get total shortest distance of input nodes
+@param string list $objects what things it will compute lengths of
+@note input need not be in same hierarchy
+@result float list if nonempty only element is the length
+@post gives length if input was all in one straight line
+@see na_getLength
+@see na_assertObjectExist
+*/
+
+global proc float[]
+na_getLengthArray(string $object[] )
+{
+    na_assertObjectExist($object);
+    
+    float $result[] = {};
+    string $arg[] = {};
+    $arg = $object;
+ 
+    if(size($arg) == 1){
+        $result[size($result)] = 0;
+    }
+    else if(size($arg) > 0){
+        $result[size($result)] = 0;
+        
+        //find joint length we see we require two or more nodes cause
+        // i-1 below, also see if no length computed skips to next
+        float $cur[] = {};
+        for( $i=1; $i< size($arg); $i++){
+            $cur = na_getLength($arg[$i-1], $arg[$i]);
+            if(size($cur) == 1){
+                $result[0] = $result[0] + $cur[0];
+            }
+        }
+    }
+    return $result;
+}
+/**unit test
+*/
+global proc
+na_getLengthArray_unitTest()
+{
+    
+    curve -d 1 -p -2.510849 0 -2.012224 -p -0.72411 0 -3.798963 -p 1.988782 0 -3.262422 -p 5.201091 0 -1.633485 -p 6.649415 0 0.216118 -p 8.043133 0 1.69161 -p 8.989032 0 1.362766 -p 9.559007 0 -0.0745739 -p 9.837656 0 -2.430866 -k 0 -k 1 -k 2 -k 3 -k 4 -k 5 -k 6 -k 7 -k 8 ;
+    // curve1 // 
+    setAttr "curveShape1.dispCV" 1;
+    select -d;
+    joint -p -2.510849 0 -2.012224 ;
+    select -cl  ;
+    JointTool;
+    select -d;
+    joint -p -0.72411 0 -3.798963 ;
+    select -cl  ;
+    JointTool;
+    select -d;
+    joint -p 1.988782 0 -3.262422 ;
+    select -cl  ;
+    JointTool;
+    select -d;
+    joint -p 5.201091 0 -1.633485 ;
+    select -cl  ;
+    JointTool;
+    select -d;
+    joint -p 6.649415 0 0.216118 ;
+    select -cl  ;
+    JointTool;
+    select -d;
+    joint -p 8.043133 0 1.69161 ;
+    select -cl  ;
+    JointTool;
+    select -d;
+    joint -p 8.989032 0 1.362766 ;
+    select -cl  ;
+    JointTool;
+    select -d;
+    joint -p 9.559007 0 -0.0745739 ;
+    select -cl  ;
+    JointTool;
+    select -d;
+    joint -p 9.837656 0 -2.430866 ;
+    select -cl  ;
+
+    print("na_getLengthArray--");
+    print( na_getLengthArray({"joint1","joint2","joint3","joint4","joint5","joint6","joint7","joint8","joint9"} ) );
+    print("\n arcLength--");
+    arclen -ch 1 curve1;
+    // Result: curveInfo1 // 
+    print( `getAttr curveInfo1.arcLength` );
+}
+
+
+
+
+/**
+@pre expect clean maya scene
+@pre naMath.mel
+@pre naSegment.mel
+@pre naGeneral.mel
+*/
+global proc float[]
+na_getLength_userTest()
+{
+    joint -p 0 0 0 ;
+    joint -p 7 0 0 ;
+    joint -e -zso -oj xyz -sao yup "joint1";
+    
+    return na_getLength("joint1","joint2");
+}
+
+
+
+/**return shortest distance between two nodes
+*/
+global proc float[]
+na_getLength(string $startNode, string $endNode)
+{
+    float $result[];
+    
+    if(  (`objExists $startNode`) && ( `objExists $endNode` ) )
+    {
+        
+        //make things to help give us length
+        //here were going to use the length of curve drawn between end points
+        float $startPos[] = {};
+        float $endPos[] = {};
+        string $tempName = "naTempCurve_na_getLength";
+        string $tempNameNode = "naTempNode_na_getLength";
+        
+        $startPos = getComponentWorldPosition({$startNode});
+        $endPos = getComponentWorldPosition({$endNode});
+        
+        na_drawCurveBySegment(1,$tempName, $startPos, $endPos);
+        //note change to drawCurve through all points between these to figure
+        //out length for a curving joint hiearchy
+        
+        
+        na_makeCurveInfoNode({$tempName}, {$tempNameNode});
+        
+        
+        if( `objExists $tempNameNode` )
+        {  
+            $result[size($result)] = `getAttr ($tempNameNode+".arcLength")`; 
+        }  
+        
+        
+        //clean up created helper things
+        if( `objExists $tempName` ){ delete $tempName; }
+        if( `objExists $tempNameNode` ){ delete $tempNameNode; }  
+    }
+    
+    return $result;
+}
+
+
+
+/**
+*/
+global proc
+na_makeMeasurement_unitTest()
+{
+    select -d;
+    joint -p 0 0 0 ;
+    joint -p 5 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint1;
+    joint -p 7 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint2;
+
+    na_makeMeasurement("joint1","joint2","pre");
+    na_makeMeasurement("joint2","joint3","pre_low");
+}
+global proc
+na_makeMeasurement_unitTest_2()
+{
+    select -d;
+    joint -p 0 0 0 ;
+    joint -p 4 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint1;
+    select -cl  ;
+
+    na_makeMeasurement("joint1","joint2","pre");
+}
+
+/**create two locators and a distance node at both inputs, it uses prefix for node naming
+@param start object
+@param end object
+@param prefix
+@post a distance node created
+*/
+global proc
+na_makeMeasurement(string $startObject, string $endObject, string $prefixArg)
+{
+    string $sel[] = `ls -sl`;
+    
+    //assert
+    //
+    na_assertObjectExist({$startObject,$endObject});
+    
+    string $prefix = $prefixArg;
+    string $start_suffix = "start_loc";
+    string $end_suffix = "end_loc";
+    string $dist_suffix = "dist";
+    
+    string $dist = "";
+    $dist = $prefix+"_"+$dist_suffix;
+    na_assertObjectDoesNotExist({$dist});
+    
+    string $start = "";
+    $start = $prefix+"_"+$start_suffix;
+    na_assertObjectDoesNotExist({$start});
+
+    string $end = "";
+    $end = $prefix+"_"+$end_suffix;
+    na_assertObjectDoesNotExist({$end});  
+    
+    
+    
+    //we need world positions for this tool
+    //
+    float $startPos[] = {};
+    float $endPos[] = {};
+    
+    $startPos = getComponentWorldPosition({$startObject});
+    $endPos = getComponentWorldPosition({$endObject});
+    
+
+    
+    //we use world position and names to make tool
+    //
+    //because we want a pair of locators for each measurment needed to initially offset it a bit
+    //
+    //float $e = 1000;//may give bug if grid size is very big
+    //string $shape = "";
+    //$shape = `distanceDimension -sp ($startPos[0]+$e) ($startPos[1]+$e) ($startPos[2]+$e) 
+    //-ep ($endPos[0]+$e) ($endPos[1]+$e) ($endPos[2]+$e)`;
+    //na_assertTypeInList({$shape},{"distanceDimShape"});
+    
+    
+    string $shape = "";
+    $shape = `distanceDimension -sp 0 0 0 -ep 1 0 0`;
+    na_assertTypeInList({$shape},{"distanceDimShape"});
+    
+    
+    string $loc[] = {};
+    $loc = `listConnections -source true $shape`;
+    string $locShape[] = {};
+    $locShape = `listConnections -plugs true -source true $shape`;
+    $locShape = stringArrayRemoveDuplicates($locShape);
+    na_assertSizeEqualArg($locShape,2);
+    na_assertTypeInList($locShape,{"locator"});
+
+    
+    //because we want a pair of locators for each measurment needed to offset it a bit
+    //
+    xform -ws -translation $startPos[0] $startPos[1] $startPos[2] $loc[0];
+    xform -ws -translation $endPos[0] $endPos[1] $endPos[2] $loc[1];
+    
+    //rename so we can find measurments in outliner
+    //
+    string $node[] = {};
+    select -r $shape;
+    $node = `pickWalk -d up`;
+    na_assertSizeEqualArg($node,1);
+
+    
+    rename $node[0] $dist;
+    rename $loc[0] $start;
+    rename $loc[1] $end;
+    
+    
+    
+    select -r $sel;
+}
+
+
+
+
+/**create a pair of locators aim at eachother, would need to position to fit where needed
+@note uses object up
+*/
+global proc na_createPairLocatorAimAtEachOther()
+{
+    
+    //make aiming items for pair, for each pair two things are for selecting
+    //
+    string $locator1Array[] = `spaceLocator -p 0 0 0`;//1
+    string $locator1 = $locator1Array[0];
+    string $locator2Array[] = `spaceLocator -p 0 0 0`;//1
+    string $locator2 = $locator2Array[0];
+    string $locator3Array[] = `spaceLocator -p 0 0 0`;//1
+    string $locator3 = $locator3Array[0];
+    string $locator4Array[] = `spaceLocator -p 0 0 0`;//1
+    string $locator4 = $locator4Array[0];
+    
+    string $suffix = "up";
+    na_assertObjectDoesNotExist( { ($locator1+"_"+$suffix), ($locator2+"_"+$suffix),
+    ($locator1+"_"+"grp"), ($locator2+"_"+"grp")   });
+    
+    select -r $locator2;
+    move -rpr -z -5;
+    select -r $locator3;
+    move -rpr -x 3;
+    select -r $locator4;
+    move -rpr -x 3 -z -5;
+    
+
+    
+    string $locator1u = ($locator1+"_"+$suffix);
+    string $locator2u = ($locator2+"_"+$suffix);
+    rename $locator3 $locator1u;
+    rename $locator4 $locator2u;
+    
+    
+    //get pair to aim at each other
+    //
+    //first aim at second
+    select -r $locator2;
+    select -tgl $locator1 ;
+    aimConstraint -offset 0 0 0 -weight 1 -aimVector 0 0 -1 -upVector 1 0 0 -worldUpType "object" -worldUpObject $locator1u;
+    
+    //second aim at first
+    select -r $locator1 ;
+    select -tgl $locator2 ;
+    aimConstraint -offset 0 0 0 -weight 1 -aimVector 0 0 1 -upVector 1 0 0 -worldUpType "object" -worldUpObject $locator2u;
+    
+    
+    //organize
+    string $group1 = ($locator1+"_"+"grp");
+    select -r $locator1 ;
+    select -add $locator1u ;
+    group -n $group1; xform -os -piv 0 0 0;
+    
+    string $group2 = ($locator2+"_"+"grp");
+    select -r $locator2 ;
+    select -add $locator2u ;
+    group -n $group2; xform -os -piv 0 0 0;
+    
+    select -r $group1 $group2;
+    group; xform -os -piv 0 0 0;
+    
+}
+
+
+global proc na_createPairLocatorAimAtEachOther_unitTest()
+{
+    na_createPairLocatorAimAtEachOther();
+}
+
+
+
+
+/**excepts float and number of decimal places to round, returns float rounded appropriately
+@param float $arg -- number to round
+@param int $numberOfPlaces -- number of places to round
+@note default returns 0.0
+*/
+global proc float roundToNearestDecimal(float $arg, int $numberOfPlaces)
+{
+    //idea adding 0.5 to 0.5 then flooring makes it 1, adding 0.5 to 0.4 makes it 0.9 flooring makes it 0
+    //multiply a decimal by 10 raised to number of places puts number in position to add or subtract 0.5
+    float $rounded = 0.0;
+    if($numberOfPlaces >= 0 ){
+        
+        int $multiplyFactor = pow(10, $numberOfPlaces);
+        if($arg > 0){
+            $rounded = trunc( $arg*$multiplyFactor + 0.5 ) / $multiplyFactor ; // since positive adding 0.5 then truncating
+        }
+        else{
+            $rounded = trunc( $arg*$multiplyFactor - 0.5  ) /$multiplyFactor ; //since negative subtracting 0.5 then truncating
+        }
+    }
+    return $rounded;
+}
+
+//excepts array of floats and number of decimal places to round, returns float rounded appropriately
+//default returns 0.0
+global proc float[] roundToNearestDecimalArray(float $arg[], int $numberOfPlaces)
+{
+    float $return[];
+    int $n=size($arg);
+    int $i=0;
+    for($i=0; $i<$n;$i++)
+    {
+        $return[$i] = roundToNearestDecimal($arg[$i],$numberOfPlaces);
+    }
+    
+    return $return;
+}
+
+
+
+
+/**return 1 if the integer value is within range specified [min,max)
+//ex: indexInRange(0,5),  0 is allowed,  4 is allowed, but 5 is not
+@param int $value -- number
+@param int $min -- low inclusive
+@param int $max -- upper not inclusive
+*/
+global proc int
+indexInRange(int $value, int $min, int $max)
+{
+    int $result = 0;
+    if( ($value >= 0) && ($value < $max ) ){
+        $result = 1;
+    }
+    return $result;
+}
+
+
+/**return 1 if the integer value is in any element of input integer array
+//ex:
+@note na_isIntInList(0,{1,0});
+// Result: 1 // 
+@note na_isIntInList(0,{1,3});
+// Result: 0 // 
+@param int $value -- number
+@param int $min -- low inclusive
+@param int $max -- upper not inclusive
+*/
+global proc int
+na_isIntInList(int $value, int $list[])
+{
+    int $result = 0;
+    //once find first match exit we found it in list
+    //
+    for($element in $list)
+    {
+        if($value == $element){ $result = 1; break; }
+    }
+    return $result;
+}
+
+/**give me the world positions for these components
+@param string list $component  components
+@note supports: vertices, joints, edges, faces
+@note returned world positions  {x y z, x y z, ... x y z} a 1-D array to get a vtx use [i*3+0]..[i*3+2]
+*/
+global proc float[]
+getComponentWorldPosition( string $component[] )
+{
+    float $result[];
+    
+    //loop over component
+    for($i=0; $i<size($component); $i++){
+        
+        if(  `objExists $component[$i]` == 0 ){error("cannot find: "+$component[$i]);}
+
+        float $selPos[] = `xform -q -t -ws $component[$i]`;
+        $result[size($result)] = $selPos[0];
+        $result[size($result)] = $selPos[1];
+        $result[size($result)] = $selPos[2];
+        
+    }
+    
+    return $result;
+}
+
+
+
+/**
+@param 
+@param float $attrSetValue value to set attribute to
+@param string $attr the attribute
+@param string $anim the anim control with the attribute
+@param string $endObject the object that moves with attriubte
+@note shouldn't confuse point a 3 element float array from , object a string name for node on scene
+@param takes the end object scene name so we can retrieve its world position at attrSetValue
+@post doesn't change scene
+@bug no error checking, no checking locked attribute, no checking attribute type matches set value type
+*/
+global proc float[]
+na_getEndWorldPointAfterSetAttribute(float $attrSetValue, string $attr, string $anim, string $endObject )
+{
+    na_assertObjectExist( {($anim+"."+$attr), $endObject} );
+    
+	float $result[] = {};
+	
+	//were going to be changing attribute so we save
+	//its start value so we can return an answer yet not change the scene
+	//
+	float $startAttr = `getAttr ($anim+"."+$attr)`; 
+	//if(size($startAttr) != 1 ){ error("error requires single float attribute"); }
+	
+	setAttr ($anim+"."+$attr) $attrSetValue;
+	$result = `xform -q -worldSpace -translation $endObject`;
+	
+	setAttr ($anim+"."+$attr) $startAttr;
+	
+	return $result;
+}
+
+global proc 
+na_getEndWorldPointAfterSetAttribute_unitTest()
+{
+    select -d;
+    joint -p 0 0 0 ;
+    joint -p 4 0 0 ;
+    select -d;
+    select -cl;
+    joint -p 0 4 0 ;
+    select -d;
+    select -cl;
+    
+    print( na_getEndWorldPointAfterSetAttribute(20,"rotateZ", "joint1","joint2") );
+    
+    //select -r joint1 ;
+    //setAttr "joint1.rotateZ" 20;
+    //xform -q -ws -translation joint2;
+    // Result: 3.75877 1.368081 0 // 
+}
+
+
+
+
+
+
+/**get difference in position of two joints
+@param string $jointStart
+@param string $jointEnd
+@result 3 element float array
+*/
+global proc float[]
+na_getJointWorldPositionDiff(string $jointStart, string $jointEnd)
+{
+    float $result[] = {};
+    string $start = "";
+    string $end = "";
+    int $directionFound = 0; //when we find a direction don't need to check others
+        
+    
+    //verify they are joints
+    int $isStartJoint = na_isType($jointStart,"joint") ;
+    int $isEndJoint = na_isType($jointEnd,"joint") ;
+    
+    if( $isStartJoint == 0  || $isEndJoint == 0 )
+    {error("expecting joints in direction calculation");}
+    
+    $start = $jointStart;
+    $end = $jointEnd;
+    
+    //we have world positions of start and end
+    float $pos[] = getComponentWorldPosition({$start,$end});
+    float $start_tx = $pos[0*3+0];
+    float $start_ty = $pos[0*3+1];
+    float $start_tz = $pos[0*3+2];
+    float $end_tx = $pos[1*3+0];
+    float $end_ty = $pos[1*3+1];
+    float $end_tz = $pos[1*3+2];
+
+    //then we get difference
+    float $tx = $end_tx - $start_tx;
+    float $ty = $end_ty - $start_ty;
+    float $tz = $end_tz - $start_tz;
+    
+    $result[size($result)] = $tx;
+    $result[size($result)] = $ty;
+    $result[size($result)] = $tz;
+    
+    return $result;
+}
+
+/**
+@param suffix is name for node
+@see na_saveJointWorldTranslateOffset
+*/
+global proc
+na_saveJointWorldTranslateOffsetSel( string $suffixNode )
+{   
+    //1 means second thing selected
+    //0 means first thing select
+    int $infIndex = 1;
+    int $bindIndex = 0;
+    
+    string $sel[] = `ls -sl`;
+    na_assertSizeEqualArg( $sel, 2 );
+    na_assertTypeInList( {$sel[0],$sel[1]}, {"joint"} );
+ 
+    string $bindJoint = "";
+    $bindJoint = $sel[$bindIndex];
+    string $influenceJoint = "";
+    $influenceJoint = $sel[$infIndex];
+    na_saveJointWorldTranslateOffset( $bindJoint, $influenceJoint, $suffixNode );
+}
+
+/**make a multiply divide node storing world offset so bindjoint world position + result = influence world position
+@param $bindJoint the joint
+@param $influenceJoint another joint
+@post created node influenceJoint_suffix 
+@note useful for expression in skin painting where want to get influence to move with original bind location but influence at difference starting location  ex: locator1.translateX = joint1.translateX + joint2_naSkin.outputX;
+*/
+global proc
+na_saveJointWorldTranslateOffset( string $bindJoint, string $influenceJoint, string $suffixNode )
+{
+    string $node = $influenceJoint+"_"+$suffixNode;
+        
+    //assert object exist, node doesnt exit and objects are joint
+    na_assertObjectExist( {$bindJoint,$influenceJoint} );
+    na_assertObjectDoesNotExist( {$node} );
+    na_assertTypeInList( {$bindJoint,$influenceJoint}, {"joint"} );
+
+    string $bind = $bindJoint;
+    string $influence = $influenceJoint;
+    string $suffix = $suffixNode;
+
+    
+    float $offset[] = {};
+    $offset = na_getJointWorldPositionDiff($bind,$influence);
+    //assert offset exists
+    na_assertFloatSizeEqualArg( $offset, 3 );
+    
+    
+    na_makeMultiplyDivide($node);
+    //assert node exists
+    na_assertObjectExist( {$node} );
+
+    setAttr ($node+".input1X") $offset[0];
+    setAttr ($node+".input1Y") $offset[1];
+    setAttr ($node+".input1Z") $offset[2];
+}
+
+
+global proc
+na_saveJointWorldTranslateOffset_unitTest()
+{
+    select -d;
+    joint -p 0 0 0 ;
+    select -d joint1 ;
+    select -d;
+    joint -p 4 0 0 ;
+    na_saveJointWorldTranslateOffset( "joint1", "joint2", "nd" );
+    
+    float $j1[] = `xform -q -ws -translation joint1`;
+    
+    print(  ($j1[0] + `getAttr joint2_nd.outputX`) );
+    print("\n");
+    print(  ($j1[1] + `getAttr joint2_nd.outputY`) );
+    print("\n");
+    print(  ($j1[2] + `getAttr joint2_nd.outputZ`) );
+    print("\n");
+    //4
+    //0
+    //0
+}
+
+
+/**expects empty scene
+*/
+global proc
+na_getStraightJointDirectionOfPair_unitTest_1()
+{
+    select -cl;
+    joint -p 0 0 0 ;
+    joint -p 7 0 0 ;
+    
+    string $result1[] = na_getStraightJointDirectionOfPair("joint1","joint2");
+    
+    
+    select -cl;
+    
+    joint -p 0 0 0 ;
+    joint -p 0 4 0 ;
+    
+    string $result2[] = na_getStraightJointDirectionOfPair("joint3","joint4");
+    
+    
+    print $result1;
+    print "\n";
+    print $result2;
+}
+global proc
+na_getStraightJointDirectionOfPair_unitTest_2()
+{
+    joint -p 0 -2 0 ;
+    joint -p 0 4 0 ;
+    joint -e -zso -oj xyz -sao yup joint1;
+    string $result1[] = na_getStraightJointDirectionOfPair("joint1","joint2");
+    
+    print $result1;
+}
+
+
+global proc
+na_getStraightJointSignOfPair_unitTest_1()
+{
+    select -cl;
+    joint -p 0 0 0 ;
+    joint -p 7 0 0 ;
+    
+    int $result1[] = na_getStraightJointSignOfPair("joint1","joint2");
+    
+    
+    select -cl;
+    
+    joint -p 0 0 0 ;
+    joint -p -7 0 0 ;
+    
+    int $result2[] = na_getStraightJointSignOfPair("joint3","joint4");
+    
+    
+    print $result1;
+    print "\n";
+    print $result2;
+}
+
+
+/**get direction for a straight joint in world space returns empty if joints not straight
+@param string $jointStart -- start joint
+@param string $jointEnd -- end joint
+@result direction going from one joint to the next joint ex: "X" or "Y" or "Z"
+@note pair joints don't need to be in same hierarchy
+@note returns empty result if input not on same plane that is if joint end has more than one nonzero translate axis
+@pre there needs to be some sort of length of chain to find direction
+*/
+global proc string[]
+na_getStraightJointDirectionOfPair(string $jointStart, string $jointEnd)
+{
+    string $result[] = {};
+    int $directionFound = 0; //when we find a direction don't need to check others
+
+    float $diff[] = {};
+    $diff = na_getJointWorldPositionDiff($jointStart,$jointEnd);
+    if( size($diff) != 3 ){ error("skipping -- cannot compute direction"); }
+    
+    //then we get difference
+    float $tx = $diff[0];
+    float $ty = $diff[1];
+    float $tz = $diff[2];
+    
+    //because channel editor showed zero there was still some numeric value really small
+    //anything below this i assume as zero
+    float $constZero = (1.0 * pow(10,-14) );
+    
+    //non zero translate z but all others zero says
+    //direction is z
+    if($directionFound == 0){
+        if(  ((abs($ty) + abs($tx)) < $constZero) && (abs($tz) > 0) )
+        {
+            $result[size($result)] = "Z";
+            $directionFound = 1;
+        } 
+    }
+    
+    //non zero translate y but all others zero says
+    //direction is y
+    if($directionFound == 0){
+        if(  ((abs($tx) + abs($tz)) < $constZero) && (abs($ty) > 0) )
+        {
+            $result[size($result)] = "Y";
+            $directionFound = 1;
+        } 
+    }
+    
+    //
+    if($directionFound == 0){
+        if(  ((abs($ty) + abs($tz)) < $constZero) && (abs($tx) > 0) )
+        {
+            $result[size($result)] = "X";
+            $directionFound = 1;
+        } 
+    }
+
+    return $result;
+}
+
+/**what sign is straight joint chain in world space
+@param start joint
+@param end joint
+*/
+global proc int[]
+na_getStraightJointSignOfPair(string $jointStart, string $jointEnd)
+{
+    int $result[] = {};
+    string $direction[] = {}; 
+    float $val[] = {};
+    $direction = na_getStraightJointDirectionOfPair($jointStart, $jointEnd);
+    
+    if(size($direction) == 1 ){ 
+        
+        //weve got the direction the chain is in world
+        //now we use it to find the sign of the direction
+        //ex: is it positive or negative.
+        float $diff[] = {};
+        $diff = na_getJointWorldPositionDiff($jointStart,$jointEnd);
+        if( size($diff) != 3 ){ error("skipping -- cannot compute sign direction down chain"); }
+        int $index[] = {};
+        if( `strcmp $direction[0] "X"` == 0 ){ $index[0] = 0;}
+        else if( `strcmp $direction[0] "Y"` == 0 ){ $index[0] = 1;}
+        else if( `strcmp $direction[0] "Z"` == 0 ){ $index[0] = 2;}
+        else{error("error computing sing -- unknown direction input");}   
+        $val[size($val)] = $diff[$index[0]];//index 0 for X, 1 for Y, 2 for Z
+        
+        if($val[0] > 0)
+            { $result[size($result)] = -1; }
+        else if($val[0] < 0)
+            { $result[size($result)] = 1; }
+        else{ print("please verify chain has a positive length\n"); }
+    }
+    else{ print("skipping currently needs straightness of chain to figure out direction of chain \n") ;}
+    
+    return $result;
+}
+
+
+
+
+
+
+/**get me the nearest joints to specified world positions
+@param float array     world positions  {x y z, x y z, ... x y z} a 1-D array to get a vertex use [i*3+0]..[i*3+2]
+@param float           how close do we need to be
+*/
+global proc string[]
+getClosestJointToWorldPositionArray(float $pointArray[], float $epsilon)
+{
+    string $result[] = {};   
+    
+    if( isDivisibleByThis(size($pointArray),3) == 0){
+        error("check for 3 worldpositions per component");
+    }
+    
+    //this could be extended to getting nearest locators, clusters by
+    //moving this to be a parameter
+    string $argJoint[] = getListAllJoints();
+    $result = getClosestToComponentArray($argJoint,$pointArray,$epsilon); 
+          
+    return $result;
+}
+
+
+
+
+/**get me the vertices that are closest to the worldpositions i give you in the mesh i give you
+it really is expecting this to be done on meshes where the positions we give are exactly at a vertex 
+@param string          poly
+@param float array     world positions  {x y z, x y z, ... x y z} a 1-D array to get a vertex use [i*3+0]..[i*3+2]
+*/
+//assumes nearestPointOnMesh plugin loaded
+global proc string[]
+getClosestVertexToWorldPosition(string $polyName, float $wolrdPos[], float $epsilon )
+{
+    string $result[];
+    print(`date -time`+"\n");
+    string $sel[] = `ls -sl`;  
+    
+    if( isDivisibleByThis(size($wolrdPos),3) == 0){
+        error("check for 3 worldpositions per vertex");
+    }
+    int $numberVertices = (size($wolrdPos)/3);
+    
+    if(  `objExists $polyName`  ){
+        
+        string $nearestFace[];  //nearest face to each vtx
+        
+        //get shape for mesh that has these verts
+        string $shapes[] = `listRelatives - shapes $polyName`;
+        string $shape = $shapes[0];
+        
+        
+        //this will be able to tell given a point what is nearest face to it
+        string $near = "nearNode";
+        addNearNodeToShape($shape,$near);
+   
+        //loop over verts
+        for($i=0; $i<$numberVertices; $i++){
+            
+            float $selPos[] = { ($wolrdPos[$i*3+0]), ($wolrdPos[$i*3+1]), ($wolrdPos[$i*3+2])  };
+            
+            //get position for each slected vtx
+            float $vPosX = $selPos[0];
+            float $vPosY = $selPos[1];
+            float $vPosZ = $selPos[2];
+            
+            //we give it the point
+            tellNodeWhereToLook($near, {$vPosX,$vPosY,$vPosZ});
+            
+            //we get the face  
+            $nearestFace[$i] = getClosestFace( $polyName, $near  );
+            
+            //we get the vertex
+            string $closeVtx[] = getClosestVertToPosOfFace($nearestFace[$i],{$vPosX,$vPosY,$vPosZ},$epsilon);
+            $result[$i] = $closeVtx[0];
+           
+        }
+        //end loop
+        
+        
+        //delete created nodes
+        delete($near);
+    } 
+    else{ print("skipping -- poly not found\n"); }
+    print(`date -time`+"\n");
+    
+    select -r $sel;
+    
+    return $result;
+}
+
+/**give near node point were interested in
+@param    string          near node name
+@param float array     world position  {x y z}
+@note kindof lowlevel cause it needs a node to operate
+*/
+global proc tellNodeWhereToLook(string $nearNodeName, float $pos[])
+{
+    if(  `objExists $nearNodeName` ){
+        setAttr ($nearNodeName+".inPositionX") ($pos[0]);
+        setAttr ($nearNodeName+".inPositionY") ($pos[1]);
+        setAttr ($nearNodeName+".inPositionZ") ($pos[2]);
+    }
+    else{
+        error("cannot find node: "+$nearNodeName);
+    }   
+}
+
+
+
+
+/**this will be able to tell given a point what is nearest face to it
+@param string shape
+@param string name for near node
+*/
+global proc
+addNearNodeToShape(string $shape, string $nearNodeName)
+{
+    //no checks for if shape exists
+    
+    //don't make if node exists
+    if(  `objExists $nearNodeName` == 0  ){
+        createNode nearestPointOnMesh -n $nearNodeName;
+        connectAttr -f ($shape+".outMesh") ($nearNodeName+".inMesh");
+    }
+    else{
+        print("skipping, node exists\n");
+    }
+}
+
+
+/**given face and a world position get the closest vertex of face to that position
+@param string name of face ex: "pCube1.f[2]"
+@param float 3 element array ex: {0.5,0.5,0.5}
+@note I think this is more useful on onetime operations than something like attaching nulls to world position of geometry
+*/
+global proc string[] 
+getClosestVertToPosOfFace(string $_face, float $wpos[], float $howCloseIsEnough )
+{
+    string $sel[] = `ls -sl`;
+    na_assertObjectExist({$_face});
+    
+    string $result[];  
+    string $face = $_face;
+    
+    
+    string $_vertsOfFace[] = `polyListComponentConversion -ff -tv $face`;//has [2:3] possibly
+    
+    //replace with filter expand
+    select -cl;
+    select -r $_vertsOfFace;
+    string $vertsOfFace[] = `filterExpand -sm 31 -expand true`;
+    
+    if(size($wpos)==3){
+        string $minVertex = $vertsOfFace[0];
+        float $minWorldPos[] = `xform -q -t  -ws $minVertex`;
+        float $bestDistance[] = euclidDistance( $minWorldPos, $wpos );
+        
+        //loop verts of face
+        int $i=0;
+        string $_minVertex="";
+        float $_minWorldPos[];
+        float $_minValue[];
+        
+        for($i=0; $i<size($vertsOfFace); $i++)
+        {
+            $_minVertex = $vertsOfFace[$i];
+            $_minWorldPos = `xform -q -t  -ws $_minVertex`;
+            $_minValue = euclidDistance( $_minWorldPos, $wpos );     
+            
+            //if found a closer point to input position save it
+            if( $_minValue[0] < $bestDistance[0] )
+            {
+                $minVertex = $_minVertex;
+                $minWorldPos = $_minWorldPos;
+                $bestDistance[0] = $_minValue[0];
+            }
+
+            $_minVertex="";
+        }
+        //end loop
+        if( $bestDistance[0] > $howCloseIsEnough )
+        {
+            print("Could not find vertex within--"+$howCloseIsEnough+"--for face--"+$face);
+        }
+        else{
+            $result[0] = $minVertex;  
+        }
+    }
+    
+    
+    select -r $sel;
+    
+    return $result;
+}
+
+
+
+
+
+/**give me the nearest face
+@param    string poly
+@param   string  name for near node
+*/
+global proc string
+getClosestFace( string $polyName, string $nearNodeName  )
+{
+    string $result;
+    
+    //does poly exist
+    if(  `objExists $polyName` == 0 ){
+        error("cannot find poly: "+$polyName);
+    }
+    
+    //get face using node if node is there
+    if(  `objExists $nearNodeName` ){
+    string $nearestFaceId = `getAttr $nearNodeName (".nearestFaceIndex")`;
+    $result = $polyName+".f"+"["+$nearestFaceId+"]";
+    }
+    else{
+        error("cannot find node: "+$nearNodeName);
+    }
+    return $result;
+}
+
+
+
+
+
+
+/**get me the nearest component to specified world position
+@param string array       components we will search in for nearest point
+@param float array        1-d array of 3d points to find closest component to
+@param float           how close do we need to be
+*/
+global proc string[]
+getClosestToComponentArray(string $argComponent[], float $pointArray[], float $epsilon)
+{
+    string $result[] = {};  
+    
+    if( isDivisibleByThis(size($pointArray),3) == 0){
+        error("check for 3 worldpositions per component");
+    }
+    int $numberMatchingComponentsWeNeed = (size($pointArray)/3);
+    
+    //loop points
+    string $nearestComponent[]={};//temporary hold nearest component
+    for($j=0; $j < $numberMatchingComponentsWeNeed; $j++){
+        //first get a single point x y z
+        float $point[] ={};
+        $point[size($point)] = $pointArray[$j*3+0];
+        $point[size($point)] = $pointArray[$j*3+1];
+        $point[size($point)] = $pointArray[$j*3+2];
+        
+        //saving nearest component if possible
+        clear($nearestComponent);
+        $nearestComponent = getClosestComponentToWorldPosition($argComponent, $point, $epsilon);
+        if(size($nearestComponent)>0)
+        {
+            $result[size($result)] = $nearestComponent[0];
+        }
+        else
+            { error("could not find a match for point (xyz)"+$point[0]+","+$point[1]+","+$point[2]+"\n");}
+    }
+    
+    return $result;
+}
+
+
+
+global proc
+getClosestComponentToWorldPosition_unitTest()
+{
+ 
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    
+    string $vtx = "pCube1.vtx[10]";
+    float $point[] = `xform -q -ws -t $vtx`;
+    string $argComponent[] = {};
+    $argComponent = getVtxFromPoly("pCube2");
+    
+    print( getClosestComponentToWorldPosition($argComponent,$point,0.001) );
+    print("\n");
+}
+
+
+global proc
+getClosestVertexBySingleWorldPosition_unitTest()
+{
+ 
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    
+    string $vtx = "pCube1.vtx[10]";
+    float $point[] = `xform -q -ws -t $vtx`;
+
+   
+    print( getClosestVertexBySingleWorldPosition("pCube2",$point,0.001) );
+    print("\n");
+}
+
+global proc
+na_getNearestVertexInPolygon_unitTest()
+{
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    
+    string $fromComponent[] = {};
+    $fromComponent = getVtxFromPoly("pCube1");
+    
+    string $arg[] = {};
+    $arg = na_getNearestVertexInPolygon($fromComponent,"pCube2",0.001, {});
+    
+    for($i = 0; $i < size($arg); $i++)
+    {
+        print($arg[$i]);
+        print("-- for ");
+        print($fromComponent[$i]);
+        print("\n");
+    }
+
+    
+}
+
+
+global proc
+na_getNearestVertexInPolygon_unitTest_2()
+{
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    
+    string $fromComponent[] = {};
+    $fromComponent = getVtxFromPoly("pCube1");
+    
+    string $arg[] = {};
+    $arg = na_getNearestVertexInPolygon($fromComponent,"pCube2",0.001, {"pCube2.vtx[0]","pCube2.vtx[1]"
+    ,"pCube2.vtx[2]","pCube2.vtx[3]","pCube2.vtx[4]","pCube2.vtx[5]","pCube2.vtx[6]","pCube2.vtx[7]"});
+    
+    for($i = 0; $i < size($arg); $i++)
+    {
+        print($arg[$i]);
+        print("-- for ");
+        print($fromComponent[$i]);
+        print("\n");
+    }
+
+}
+
+global proc
+na_getNearestVertexInPolygon_unitTest_3()
+{
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    
+    string $fromComponent[] = {};
+    $fromComponent = getVtxFromPoly("pCube1");
+    
+    string $arg[] = {};
+    $arg = na_getNearestVertexInPolygon($fromComponent,"pCube2",0.001, {"pCube2.vtx[0:5]"});
+    
+    for($i = 0; $i < size($arg); $i++)
+    {
+        print($arg[$i]);
+        print("-- for ");
+        print($fromComponent[$i]);
+        print("\n");
+    }
+
+}
+
+/**find nearest vertices on input polygon to input vertices
+@note most likely used when input vertices are not on input polygon
+@note if toVtxLookInThis array is empty it looks at the whole to polygon otherwise it looks only at vertices in toVtxLookInThis
+@param from vertices
+@param to polygon
+*/
+global proc string[]
+na_getNearestVertexInPolygon(string $fromComponent[], string $toPoly, float $epsilon, string $toLookInThisVertexArray[])
+{
+    string $result[] = {};
+    
+    na_assertFloatNonNegative( {$epsilon} );
+    na_assertObjectExist( {$toPoly} );
+    na_assertTypeInList( {$toPoly}, {"transform"} );
+
+    na_assertObjectExist( $fromComponent );
+    na_assertTypeInList( $fromComponent, {"mesh"} );
+    
+    //can a close enough vertex on source mesh be found for all vertices on target mesh
+    //
+    float $point[] = {};
+    string $closestArray[] = {};
+    for($i = 0; $i < size($fromComponent); $i++)
+    {
+        $point = `xform -q -ws -t $fromComponent[$i]`;
+        $closestArray = na_getNearestVerticesUsingWorldPointAndCandidatePoints($toPoly,$point,$epsilon,$toLookInThisVertexArray);
+
+        if( size($closestArray) == 1  ){
+            $result[size($result)] = $closestArray[0];
+        }
+        else
+        {
+            print("Requires Finding one vertex in-- "+$toPoly+" --close to "+$point[0]+","+$point[1]+","+$point[2]+"\n");
+            $result = {};
+            break;
+        }
+
+    }
+    
+    return $result;
+}
+
+/**given a polygon of candidate components, find the one closest to input point
+@param polygon
+@param one world point
+@param how close is good enough
+@param list of vertices in polygon that could be a candidate, it helps to speed up calculation for larger poly
+*/
+global proc string[]
+na_getNearestVerticesUsingWorldPointAndCandidatePoints(string $poly, float $point[], float $epsilon, string $polyCandidateVertex[] )
+{
+    string $sel[] = `ls -sl`;
+    //make sure vertices are separated
+    if( size($polyCandidateVertex) > 0 ){
+        na_assertObjectExist( $polyCandidateVertex );
+        select -r $polyCandidateVertex; 
+        $polyCandidateVertex = `filterExpand -sm 31 -expand true`;
+        select -r $sel;
+    }
+    
+    string $result[] = {};
+    
+    na_assertFloatNonNegative( {$epsilon} );
+    na_assertObjectExist( {$poly} );
+    na_assertTypeInList( {$poly}, {"transform"} );
+    
+    //try to search in smaller set if possible
+    //otherwise search in whole polygon
+    //
+    string $argComponent[] = {};
+    if(size($polyCandidateVertex) > 0 )
+    {
+        $argComponent = $polyCandidateVertex;
+    }
+    else{
+        $argComponent = getVtxFromPoly($poly);
+    }
+
+    na_assertObjectExist( $argComponent );
+    na_assertTypeInList( $argComponent, {"mesh"} );
+    
+    string $closestArray[] = {};
+    $closestArray = getClosestComponentToWorldPosition($argComponent,$point,$epsilon);
+    if(size($closestArray) > 0)
+    {
+        $result = $closestArray;
+    }
+    
+    
+    return $result;
+}
+
+
+
+/**get me the nearest joint to specified world position
+@param float array     the point we should compare every candidate too         
+@param float           how close do we need to be
+@note note it returns a single element as soon as it finds a joint close enough  to the threshold
+*/
+global proc string[]
+getClosestComponentToWorldPosition(string $argComponent[], float $point[], float $epsilon)
+{
+    na_assertObjectExist( $argComponent );
+    
+    string $result[] = {}
+    ;   
+    if( isDivisibleByThis(size($point),3) == 0){
+        error("check for 3 worldpositions per component");
+    }
+    
+    //loop candidate components comparing to this point
+    for($i=0; $i < size($argComponent); $i++){
+        
+        //which of all components is closest to this point
+        string $component = $argComponent[$i];
+        float $posComponent[] = `xform -q -t  -ws $component`;
+        float $distanceArray[] = euclidDistance( $point, $posComponent );
+        if(size($distanceArray) > 0){
+            $distance = $distanceArray[0];
+            
+            //exit when found a nearest component to point
+            if( $distance < $epsilon ){ 
+                $result = {$component};
+                break;//exit loop
+            }
+        }
+    } 
+
+    return $result;
+}
+
+
+
+
+/**
+translate,rotate, scale or any combination the first argument to the second argument
+@pre all arguments and attributes exist, all arguments and attributes t,r or s or not connected or locked, type has 1,2,or 3 or any unique
+combination, type has length at most 3; 1 means translate, 2 means rotate, or 3 means scale
+@post moves things on scene, if repeats in type uses one
+@bug no error checking no checking on lock status
+*/
+global proc 
+na_moveFirstArgToSecond(string $arg_1, string $arg_2, int $moveType[] )
+{
+    na_assertObjectExist( {$arg_1,$arg_2} );
+	for( $type in $moveType )
+	{
+	    switch($type){
+	        case 1:
+	        na_translationWorldFirstArgToSecond($arg_1, $arg_2);
+	        break;
+	        case 2:
+	        na_rotationWorldFirstArgToSecond($arg_1, $arg_2);
+	        break;
+	        case 3:
+	        na_scaleWorldFirstArgToSecond($arg_1, $arg_2);
+	        break;
+	        default:
+	        break;
+	    }
+	    
+	}
+	
+}
+/**world translation the first argument to the second argument
+@pre all arguments and attributes exist, first argument and attribute translation not connected or locked
+@bug no error checking, no checking on lock status
+@bug using     //xform -worldSpace -translation $t[0] $t[1] $t[2]  $arg_1; so used move -rpr
+*/
+global proc
+na_translationWorldFirstArgToSecond(string $arg_1, string $arg_2)
+{
+    na_assertObjectExist( {$arg_1,$arg_2} );
+    float $t[] = `xform -q -worldSpace -translation $arg_2`;
+    move -rpr -ws $t[0] $t[1] $t[2] $arg_1;//bug frozen transformation get problem with xform, this is relative to rotate pivot
+
+    //xform -ws -translation $t[0] $t[1] $t[2] $arg_1;
+}
+
+/**world rotation the first argument to the second argument
+@pre all arguments and attributes exist, first argument and attribute rotation not connected or locked
+@bug no error checking no checking on lock status
+*/
+global proc
+na_rotationWorldFirstArgToSecond(string $arg_1, string $arg_2)
+{
+    na_assertObjectExist( {$arg_1,$arg_2} );
+    float $r[] = `xform -q -worldSpace -rotation $arg_2`;
+    xform -worldSpace -rotation $r[0] $r[1] $r[2]  $arg_1;
+}
+
+
+
+
+
+
+/**mirror transform by inverting scale correspond chosen rotate plane
+@param string $object list transform
+@param int $axisToMirrorAccross what axis to change
+0 -- x
+1 -- y
+2 -- z
+@pre it expects transform, it expects all channels unlocked, it expects to change at most 1 axis, it expects object to have retrievable world rotation ex: rotate not frozen i think
+@post it rotates and scales a duplicate of object on scene to be in mirrored position, it also
+removes any orig nodes from surface
+@bug orignode duplicated it shouldn't be.
+deleteShapeOrigSelectedIfExist from selected surface may be helpful,
+origin not a parameter
+*/
+global proc string[]
+na_mirrorObjectByScale( string $object[], int $axisToMirrorAccross)
+{
+    string $result[] = {};
+    float $origin[] = {0.0,0.0,0.0}; //would need to change this if didn't want to mirror across origin
+    
+    na_assertObjectExist($object); 
+    na_assertTypeInList($object,{"transform"}); 
+
+    string $sel[] = `ls -sl`;
+    
+    string $dupObject[] = {};
+    for( $obj in $object ){
+        
+        //duplicate object
+        $dupObject = {};
+        $dupObject = `duplicate -rr $obj`;
+        
+        select -r $dupObject;
+        //in case it was from a bound object etc. we do this to be able to move it
+        na_unLockPrimaryAttributeOfSelected();
+        
+        
+        //group it and scale group
+        $toScaleGroup = "";
+        $toScaleGroup = `group $dupObject`;
+        xform -os -piv $origin[0] $origin[1] $origin[2] $toScaleGroup;
+        
+        //according to rotatePlane save world rotation after offset
+        switch($axisToMirrorAccross){
+            case 0:
+            setAttr ($toScaleGroup+".scaleX") -1;
+            break;
+            case 1:
+            setAttr ($toScaleGroup+".scaleY") -1;
+            break;
+            case 2:
+            setAttr ($toScaleGroup+".scaleZ") -1;
+            break;
+            default:
+            error("Require rotatePlane 0,1,2 to change either z,y, or x respectively");
+            break;
+        }	
+        
+        //parent duped object to world and remove group since were done with it
+        parent -w $dupObject[0];
+        delete $toScaleGroup;
+        
+        $result[size($result)] = $dupObject[0];
+    }
+    
+    select -r $sel;
+    
+    //clean shape orig
+    na_removeOrigNodeFromArg( $result );
+    
+    return $result;
+}
+/**@pre empty scene
+*/
+global proc
+na_mirrorObjectByScale_unitTest()
+{
+    select -cl;
+    spaceLocator -p 0 0 0;
+    polyCone -r 1 -h 2 -sx 8 -sy 1 -sz 0 -ax 0 1 0 -rcp 0 -cuv 3 -ch 1;
+    select -cl  ;
+    select -r pCone1 ;
+    select -add locator1 ;
+    parent;
+    
+    na_mirrorObjectByScale( {"locator1"}, 0 );
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/**local scale the first argument to the second argument
+@pre all arguments and attributes exist, first argument and attribute scale not connected or locked
+@bug no error checking no checking on lock status
+*/
+global proc
+na_scaleWorldFirstArgToSecond(string $arg_1, string $arg_2)
+{
+    na_assertObjectExist( {$arg_1,$arg_2} );
+    float $s[] = `xform -q -r -scale $arg_2`;
+    xform -scale $s[0] $s[1] $s[2]  $arg_1;
+}
+
+
+
+
+
+/**given a trio of node plugs and a node list, set the translation of each object in object list
+@param objects to move
+@param node per object to find plug
+@param plug on node (should exist on all nodes)
+@param $type (translation or rotation)
+*/
+global proc
+na_setWorldPositionGivenNodeAndPlug(string $object[], string $nodeArray[], string $plug[], string $type)
+{
+    int $n = size($object);
+    na_assertSizeEqualArg($nodeArray,$n);
+    na_assertSizeEqualArg($plug,3);
+    
+    if( na_isOption({$type},{"rotation","translation"},1) == 0 ){ error("Requires Type--rotation--or--translation");}
+    
+    string $node = "";
+    string $obj = "";
+    for($i=0; $i < size($object); $i++)
+    {
+        $obj = $object[$i];
+        $node = $nodeArray[$i];
+        
+        float $posx = 0;
+        float $posy = 0;
+        float $posz = 0;
+        $posx = `getAttr ($node+"."+$plug[0])`;
+        $posy = `getAttr ($node+"."+$plug[1])`;
+        $posz = `getAttr ($node+"."+$plug[2])`;
+        
+        //move constraining object
+        string $cmd = "";
+        $cmd = "xform -ws -"+$type+" "+$posx+" "+$posy+" "+$posz+" "+$obj; 
+        eval($cmd);
+    }
+    
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/**get 1 if argument is divisibile by second integer
+@param    int     size of argument array
+@param   int     what we need it to be divisible by
+@note ex: isDivisibleByThis( 5,2 ) get 0, but isDivisibleByThis( 6,2 ) get 1
+*/
+global proc int
+isDivisibleByThis( int $arg, int $divisibleBy )
+{
+    int $result = 0;
+    
+    //checking divisibility by 3 for world position
+    //a way of doing that check if ceil and floor of result are equal
+    float $numberArg = ($arg/$divisibleBy );
+    if( ceil($numberArg) == floor($numberArg) ){
+        $result = 1;
+    }
+    
+    return $result;
+}
+
+
+
+
+
+/**given two 3-D vectors return euclidean distance
+@param float $a[] -- first vector of 3 elements
+@param float $b[] -- second vector of 3 elements
+@note this is used to find closeness on a mesh
+suppose you wanted to know of the vertices of a face
+which one is closest this other point, user can
+use this to find out
+@bug doesn't work for arbitray length
+*/
+global proc float[] 
+euclidDistance(float $a[], float $b[] )
+{
+    na_assertFloatSizeEqualArg( $a, 3 );
+    na_assertFloatSizeEqualArg( $b, 3 );
+    
+    float $result[];
+    
+    $result[0] = sqrt( pow(($a[0]-$b[0]),2)+
+    pow(($a[1]-$b[1]),2)+
+    pow(($a[2]-$b[2]),2)
+    );
+ 
+    return $result;
+}
+
+
+
+
+/**
+@see euclidDistance
+@param first point 3 element float array, second point 3 element float array
+@note should work for local, world, É 
+@pre epsilon in units of maya scene
+@bug no assert exact size of 3
+*/
+global proc 
+int na_isDistanceClose( float $point1[], float $point2[], float $epsilon )
+{
+    na_assertFloatSizeEqualArg( $point1, 3 );
+    na_assertFloatSizeEqualArg( $point2, 3 );
+	int $result = 0;
+	
+	//assert exact size of 3
+	
+	float $dist[]={};
+	$dist = euclidDistance( $point1, $point2 );
+	if(size($dist) == 1){
+	if( abs($dist[0]) <= $epsilon ){ $result = 1; }  }
+	
+	return $result;
+}
+
+
+
+
+
+/**get the minimum value in float input list 
+@note na_min( {3, 2, 30, 1} ); // Result: 1 //
+@param float $arg[] list of floats to search for minimum
+@note return value not index
+@result float the minimum value in input list
+*/
+global proc float[]
+na_min(float $arg[])
+{
+    float $result[] = {};
+    if(size($arg) > 0){
+        float $curArg = $arg[0];
+        float $curMin = $curArg;
+        
+        for($i = 0; $i < size($arg); $i++)
+        {
+            $curArg = $arg[$i];
+            if( $curArg < $curMin ){ $curMin = $curArg; }
+        }
+        //so nothing returned if didn't enter here
+        $result[size($result)] = $curMin;
+    }
+    return $result;
+}
+
+
+/**get the index with min value in input float list
+@param float $arg[] list of floats to search for minimum
+@post return index not value, for multiple mins returns last min index
+if non empty should return one element int array
+@result int the index with min value in input list
+@bug 
+@note
+na_minIndex( {1.0,1.0,2.0} );
+// Result: 0 1 // 
+na_minIndex( {1.0,1.1,2.0} );
+// Result: 0 // 
+*/
+global proc int[]
+na_minIndex(float $arg[])
+{
+    int $result[] = {};
+    if(size($arg) > 0){
+        float $curArg = $arg[0];
+        float $curMin = $curArg;
+        int $curIndex = 0;
+        
+        //computation
+        //index
+        for($i = 0; $i < size($arg); $i++)
+        {
+            $curArg = $arg[$i];
+            if( $curArg < $curMin ){ 
+                $curMin = $curArg; 
+                $curIndex = $i;
+            }
+        }
+        
+        //computation
+        //save all ties
+        float $min = $arg[$curIndex];
+        float $element = $arg[0];
+        float $epsilon = 0.000001; //may need to be smaller
+        
+        for($j = 0; $j < size($arg); $j++){ 
+            $element = $arg[$j];
+            if( abs($element - $min) <= $epsilon )
+            {
+                $result[size($result)] = $j;
+            } 
+        }       
+    }
+    
+    return $result;
+}
+/**get the index with min value in input float list
+@param float $arg[] list of floats to search for minimum
+@param float $epsilon determines what tie is
+@post return index not value, for multiple mins returns last min index
+if non empty should return one element int array
+@result int the index with min value in input list
+@bug assumes ties are within two decimal places, probably not good in general
+@note
+
+*/
+global proc int[]
+na_minIndexGeneral(float $arg[], float $epsilon)
+{
+    int $result[] = {};
+    if(size($arg) > 0){
+        float $curArg = $arg[0];
+        float $curMin = $curArg;
+        int $curIndex = 0;
+        
+        //computation
+        //index
+        for($i = 0; $i < size($arg); $i++)
+        {
+            $curArg = $arg[$i];
+            if( $curArg < $curMin ){ 
+                $curMin = $curArg; 
+                $curIndex = $i;
+            }
+        }
+        
+        //computation
+        //save all ties
+        float $min = $arg[$curIndex];
+        float $element = $arg[0];
+
+        for($j = 0; $j < size($arg); $j++){ 
+            $element = $arg[$j];
+            if( abs($element - $min) <= $epsilon )
+            {
+                $result[size($result)] = $j;
+            } 
+        }       
+    }
+    
+    return $result;
+}
+
+
+
+global proc
+na_minIndex_unitTest()
+{
+   print( na_minIndex(  {7.173179359, 3.541961901, 7.576749046 } ) );
+   print("\n");
+   print( na_minIndex(  {1, 2, 1 } ) );
+   print("\n");
+}
+
+
+
+/**print local rotate of transform
+@note supports transforms, joint
+@param list of object
+*/
+global proc
+na_printLocalRotate(string $objectArray[])
+{
+    na_assertTypeInList( $objectArray, {"transform","joint"} );
+    for( $object in $objectArray )
+    {
+        print($object+"\n");
+        print `getAttr ($object+"."+"rotateX")`;	
+        print " ";
+        print `getAttr ($object+"."+"rotateY")`;	
+        print " ";
+        print `getAttr ($object+"."+"rotateZ")`;	
+        print " ";
+        print("\n");
+    }
+    
+}
+/**print local translate of transform
+@note supports transforms, joint
+@param list of object
+*/
+global proc
+na_printLocalTranslate(string $objectArray[])
+{
+    na_assertTypeInList( $objectArray, {"transform","joint"} );
+    for( $object in $objectArray)
+    {
+        print($object+"\n");
+        print `getAttr ($object+"."+"translateX")`;	
+        print " ";
+        print `getAttr ($object+"."+"translateY")`;	
+        print " ";
+        print `getAttr ($object+"."+"translateZ")`;	
+        print " ";
+        print("\n");
+    }
+}
+
+
+/**for helping a new control also get the range of attributes of old control
+it should be empty if no range to take care of
+@bug not making sure attribute is of correct type
+*/
+global proc int[]
+na_getMinIntAttr(string $anim, string $argAttr)
+{
+    na_assertObjectExist( {$anim+"."+$argAttr} );
+    na_assertAttrTypeInList($anim,{$argAttr},{"long"});
+    int $minArray[] = {};
+    
+    if( `attributeQuery -node $anim -minExists $argAttr` == 1){ 
+        
+        $minArray = `attributeQuery -node $anim -min $argAttr`;
+        na_assertIntSizeEqualArg($minArray,1);
+    };
+    
+    return $minArray;
+}
+global proc int[]
+na_getMaxIntAttr(string $anim, string $argAttr)
+{
+    na_assertObjectExist( {$anim+"."+$argAttr} );
+    na_assertAttrTypeInList($anim,{$argAttr},{"long"});
+    int $maxArray[] = {};
+    
+    if( `attributeQuery -node $anim -maxExists $argAttr` == 1){ 
+        
+        $maxArray = `attributeQuery -node $anim -max $argAttr`;
+        na_assertIntSizeEqualArg($maxArray,1);
+    };
+    return $maxArray;
+}
+
+
+global proc float[]
+na_getMinFloatAttr(string $anim, string $argAttr)
+{
+    na_assertObjectExist( {$anim+"."+$argAttr} );
+    na_assertAttrTypeInList($anim,{$argAttr},{"double"});
+    float $minArray[] = {};
+    
+    if( `attributeQuery -node $anim -minExists $argAttr` == 1){ 
+        
+        $minArray = `attributeQuery -node $anim -min $argAttr`;
+        na_assertFloatSizeEqualArg($minArray,1);
+    };
+    
+    return $minArray;
+}
+global proc float[]
+na_getMaxFloatAttr(string $anim, string $argAttr)
+{
+    na_assertObjectExist( {$anim+"."+$argAttr} );
+    na_assertAttrTypeInList($anim,{$argAttr},{"double"});
+    float $maxArray[] = {};
+    
+    if( `attributeQuery -node $anim -maxExists $argAttr` == 1){ 
+        
+        $maxArray = `attributeQuery -node $anim -max $argAttr`;
+        na_assertFloatSizeEqualArg($maxArray,1);
+    };
+    return $maxArray;
+}
+
+global proc
+na_getStringFromInt_unitTest()
+{
+   int $number1[] = {2,5,1,-3};
+   print( na_getStringFromInt( $number1) );
+   
+}
+
+global proc string[]
+na_getStringFromInt( int $object[] )
+{
+    string $result[] = {};   
+    string $str = "";
+    for($obj in $object)
+    {
+        $str = $obj;
+        $result[size($result)] = $str;
+    }
+    return $result;
+}
+
+
+
+/**get if using anim's attribut we can get close enough between endpoint and goal point
+@param $attr what thing to change
+@param $anim where is it
+@param $attrMovesThisObject what gets move with each change of attribute, 
+@param $goalObject where are we comparing it is stationary, how many iterations to use, 
+@param $attrValue whats the default attr value to be used to see if need to do anything
+@param $howClose how close is close enough in units of attribute
+@result 1 if not close enough
+@see
+*/
+global proc int 
+na_getIsCloseToGoalUsingAttrValue(string $attr,string $anim,string $attrMovesThisObject,string $goalObject, float $attrValue, float $howClose)
+{
+    int $result  = 0;
+        
+    na_assertObjectExist( {($anim+"."+$attr), $attrMovesThisObject, $goalObject} );
+    float $goalPoint[] = {};
+    $goalPoint = `xform -q -worldSpace -translation $goalObject`;
+    na_assertFloatSizeEqualArg( $goalPoint, 3 );
+    
+    //how close are we from endpoint to goal point
+    //
+    float $endPointAfterAttributeSet[] = {};
+    $endPointAfterAttributeSet = na_getEndWorldPointAfterSetAttribute($attrValue, $attr, $anim, $attrMovesThisObject );
+    na_assertFloatSizeEqualArg( $endPointAfterAttributeSet, 3 );
+    float $dist[]={};
+	$dist = euclidDistance( $endPointAfterAttributeSet, $goalPoint );
+	na_assertFloatSizeEqualArg( $dist, 1 );
+
+    if( $dist[0] > $howClose){
+        $result = 1;   
+    }
+    
+    //print( "for this attr--"+$attr+"\n" );
+    //print( "between these--"+$goalObject+"  "+$attrMovesThisObject+"\n");
+    //print("got this distance--"+$dist[0]+"\n");
+    
+    return $result;
+}
+
+
+

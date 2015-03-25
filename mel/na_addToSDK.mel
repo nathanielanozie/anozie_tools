@@ -1,0 +1,3 @@
+
+
+//----global proc na_addToSDK(string $attribute){//assumes icon then joint(wish to hook up to) selected, icon and joint axis matchstring $sel[] = `ls -sl`;if(size($sel) != 2){error("expecting icon then joint");}string $arg = $sel[1];string $at = $attribute;//string $at = "rotateX";string $add = $sel[0];string $inputs[] = {};$inputs = `listConnections -plugs true ($arg+"."+$at)`; //get what isif(size($inputs) == 1){	string $conserveAt = $inputs[0];string $pm = `createNode plusMinusAverage`;connectAttr -f $conserveAt ($pm+"."+"input1D[0]"); //existingconnectAttr -f ($add+"."+$at) ($pm+"."+"input1D[1]"); //additionalconnectAttr -f ($pm+"."+"output1D") ($arg+"."+$at); //finish add}else{print("Error, Expecting An SDK Input in --"+$add);}}//----

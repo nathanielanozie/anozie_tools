@@ -1,0 +1,457 @@
+/**@file na_stretchIK.mel 
+*
+*Applying setdriven key techniques on inverse-kinematic or forward-kinematics three joint chains. 
+*
+*@brief example: used for two or three joint stretching at a time, with option to allow stretch
+*to zero or stretch only after full extension, (requires joints in same plane differing in at most one axis)
+*@author Nathaniel O. Anozie (ogbonnawork at gmail dot com)
+*@bug Requires entering animation editor to change how much stretching happens
+*@bug How to track all the animation curves, joints, handles, in one central place
+*@note date created: Mar 22, 2012
+*@note Modify at your own risk
+*@note -- code runs on chain that isn't straight
+*@note -- added stretch to subset of joint hierarchy
+*@note -- added optional shrinking so should support elbow locking
+*@note Inspired by Jason Schleifer's Animator Friendly Rigging.
+*@defgroup stretch Some Set Driven Key Applications
+*@{
+*Techniques to make various joint hierarchies stretch and squash using various techniques.
+*
+*/
+
+
+
+
+
+
+global proc 
+na_stretchTranslateIK_unitTest1()
+{
+    joint -p 0 0 0 ;
+    joint -p 6 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint1;
+    select -cl  ;
+    select -r joint1 ;
+    //num segments, start joint, end joint, prefix for newly created joints
+    eval( "source \"na_segment.mel\";" );
+    na_segment(4, "joint1", "joint2", "pre");
+
+    
+    select -cl  ;
+    select -r joint1.rotatePivot ;
+    select -add joint2.rotatePivot ;
+    ikHandle; 
+    select -cl  ;
+    distanceDimension -sp 0 0 -2 -ep 5 0 -3 ;
+    select -cl  ;
+    select -r locator1 ;
+    move -rpr 0 0 0 ;
+    select -cl  ;
+    select -r locator2 ;
+    move -rpr 6 0 0 ;
+    select -r ikHandle1 ;
+    parent ikHandle1 locator2 ;
+    setAttr ikHandle1.visibility 0;
+    select -cl  ;
+    
+    na_stretchTranslateIK(1,"joint1","joint2","X","distanceDimensionShape1 ","distance");
+   
+   
+    
+}
+global proc 
+na_stretchTranslateIK_unitTest2()
+{
+    joint -p 0 0 0 ;
+    joint -p 6 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint1;
+    select -cl  ;
+    select -r joint1 ;
+    //num segments, start joint, end joint, prefix for newly created joints
+    eval( "source \"na_segment.mel\";" );
+    na_segment(4, "joint1", "joint2", "pre");
+
+    
+    select -cl  ;
+    select -r joint1.rotatePivot ;
+    select -add joint2.rotatePivot ;
+    ikHandle; 
+    select -cl  ;
+    distanceDimension -sp 0 0 -2 -ep 5 0 -3 ;
+    select -cl  ;
+    select -r locator1 ;
+    move -rpr 0 0 0 ;
+    select -cl  ;
+    select -r locator2 ;
+    move -rpr 6 0 0 ;
+    select -r ikHandle1 ;
+    parent ikHandle1 locator2 ;
+    setAttr ikHandle1.visibility 0;
+    select -cl  ;
+    
+    na_stretchTranslateIK(0,"joint1","joint2","X","distanceDimensionShape1 ","distance");
+  
+    
+}
+
+/**stretch subset hierarchy by translate using a driver object and allowing shrinking
+@param int $isShrinkToMinimum 1 if stretching allowed to shrink to minimum
+@param string $start -- start joint name
+@param string $end -- end joint name
+@param string $downChainAttr -- scale axis ex: "X"
+@param string $driver_arg -- driver node that has driver attr  ex: "name.distShape" or "normalizedNode"
+@param string $driver_attr -- driver attr  ex: "distance" for distance nodes or "output" for multiply divides
+@see na_selectJointsInHierarchySubset
+@see na_setSDK
+@see na_stretchCleanCurve
+@see na_getPlug
+@post geo smoothed linearly by default, assumes to use scale for stretch geo
+*/
+global proc
+na_stretchTranslateIK(int $isShrinkToMinimum, string $start, string $end, string $downChainAttr, string $driver_arg, string $driver_attr )
+{    
+    
+    string $joints[] = {};
+    $joints = na_selectJointsInHierarchySubset($start,$end);
+    na_assertObjectExist($joints);
+    na_assertBinaryInteger({$isShrinkToMinimum});
+    na_assertSizeGreaterEqualTo($joints,2);
+    
+    ////do set driven keys
+    //    
+    string $driver = $driver_arg+"."+$driver_attr;
+    float $cur = `getAttr $driver`;
+    
+
+    
+    //driver values independent of the joints
+    float $frame[] = {};
+    float $lenArray[] = {};
+    float $len = 0.0;
+    $lenArray = na_getHierarchyLengthSubset($start,$end); //so we can stretch curvy chain
+    $len = $lenArray[0];
+    $frame = {$cur,1*$len,0,2*$len};//frames
+    
+    
+    //driven values depends on joints
+    string $drivenPlusAttrArray[] = {};
+    //format driven plug
+    string $attr = "";
+    $attr = "translate"+$downChainAttr;
+    $drivenPlusAttrArray = na_getPlug( $joints, $attr );
+
+    float $jointStartLen = 0.0;
+    float $shrinkValue = 0.0;
+    float $value[] = {};
+    //why start at 1
+    //because we are stretching child joints only
+    for($i = 1; $i < size($drivenPlusAttrArray); $i++ )
+    {   
+        $jointStartLen = `getAttr $drivenPlusAttrArray[$i]`;
+        if( $isShrinkToMinimum == 0 ){ $shrinkValue = $jointStartLen; }
+        $value = {$jointStartLen,$jointStartLen,$shrinkValue,2*$jointStartLen};
+        //at default stretch default
+        //at moment to stretch default
+        //at 0 stretch is $shrinkValue 
+        //at length 2 object should have 2 times default stretch
+        
+        
+    
+        na_setSDK($drivenPlusAttrArray[$i], $frame, $value, $driver_arg, $driver_attr); 
+    }
+    //make curve smoothly interpolated
+    na_stretchCleanCurve( $joints, {$attr});
+}
+
+
+
+
+
+global proc 
+na_stretchScaleIK_unitTest1()
+{
+    joint -p 0 0 0 ;
+    joint -p 6 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint1;
+    select -cl  ;
+    select -r joint1 ;
+    //num segments, start joint, end joint, prefix for newly created joints
+    eval( "source \"na_segment.mel\";" );
+    na_segment(4, "joint1", "joint2", "pre");
+
+    
+    select -cl  ;
+    select -r joint1.rotatePivot ;
+    select -add joint2.rotatePivot ;
+    ikHandle; 
+    select -cl  ;
+    distanceDimension -sp 0 0 -2 -ep 5 0 -3 ;
+    select -cl  ;
+    select -r locator1 ;
+    move -rpr 0 0 0 ;
+    select -cl  ;
+    select -r locator2 ;
+    move -rpr 6 0 0 ;
+    select -r ikHandle1 ;
+    parent ikHandle1 locator2 ;
+    setAttr ikHandle1.visibility 0;
+    select -cl  ;
+    
+    na_stretchScaleIK(1,"joint1","joint2","X","distanceDimensionShape1 ","distance");
+   
+    
+    
+}
+
+global proc 
+na_stretchScaleIK_unitTest2()
+{
+    joint -p 0 0 0 ;
+    joint -p 6 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint1;
+    select -cl  ;
+    select -r joint1 ;
+    //num segments, start joint, end joint, prefix for newly created joints
+    eval( "source \"na_segment.mel\";" );
+    na_segment(4, "joint1", "joint2", "pre");
+
+    
+    select -cl  ;
+    select -r joint1.rotatePivot ;
+    select -add joint2.rotatePivot ;
+    ikHandle; 
+    select -cl  ;
+    distanceDimension -sp 0 0 -2 -ep 5 0 -3 ;
+    select -cl  ;
+    select -r locator1 ;
+    move -rpr 0 0 0 ;
+    select -cl  ;
+    select -r locator2 ;
+    move -rpr 6 0 0 ;
+    select -r ikHandle1 ;
+    parent ikHandle1 locator2 ;
+    setAttr ikHandle1.visibility 0;
+    select -cl  ;
+    
+    na_stretchScaleIK(0,"joint1","joint2","X","distanceDimensionShape1 ","distance");
+  
+    
+}
+
+
+/**stretch subset hierarchy by translate using a driver object and allowing shrinking
+@param float $shrinkValue what stretching should be allowed to shrink to
+@param string $start -- start joint name
+@param string $end -- end joint name
+@param string $downChainAttr -- scale axis ex: "X"
+@param string $driver_arg -- driver node that has driver attr  ex: "name.distShape" or "normalizedNode"
+@param string $driver_attr -- driver attr  ex: "distance" for distance nodes or "output" for multiply divides
+@see na_selectJointsInHierarchySubset
+@see na_setSDK
+@see na_stretchCleanCurve
+@see na_getPlug
+@post geo smoothed linearly by default, assumes to use scale for stretch geo
+*/
+global proc
+na_stretchScaleIK(int $isShrinkToMinimum, string $start, string $end, string $downChainAttr, string $driver_arg, string $driver_attr )
+{    
+    
+    string $joints[] = {};
+    $joints = na_selectJointsInHierarchySubset($start,$end);
+    na_assertObjectExist($joints);
+    na_assertBinaryInteger({$isShrinkToMinimum});
+    
+
+    ////do set driven keys
+    //    
+    //driven value does not depend on joints
+    float $lenArray[] = {};
+    float $len = 0.0;
+    $lenArray = na_getHierarchyLengthSubset($start,$end); //so we can stretch curvy chain
+    $len = $lenArray[0];
+    
+    string $driver = $driver_arg+"."+$driver_attr;
+    float $cur = `getAttr $driver`;
+    
+    float $frame[] = {};
+    $frame = {$cur,1*$len,0,2*$len};//frames
+    
+    //how small can we stretch, independent of joints
+    float $shrinkValue = 1.0;
+    if( $isShrinkToMinimum == 1 ){ $shrinkValue = 0.0; }
+    
+    float $value[] = {};
+    $value = {1.0,1.0,$shrinkValue,2.0};
+        //at default stretch default 1
+        //at moment to stretch default 1
+        //at 0 stretch is $shrinkValue 
+        //at length 2 object should have 2 times default stretch 2
+    
+    string $drivenPlusAttrArray[] = {};
+    //format driven plug
+    string $attr = "";
+    $attr = "scale"+$downChainAttr;
+    $drivenPlusAttrArray = na_getPlug( $joints, $attr );
+    
+    for($i = 0; $i < size($drivenPlusAttrArray); $i++ )
+    {   
+        na_setSDK($drivenPlusAttrArray[$i], $frame, $value, $driver_arg, $driver_attr); 
+    }
+    //make curve smoothly interpolated
+    na_stretchCleanCurve( $joints, {$attr});
+}
+
+
+
+
+
+
+
+/**stretch geo by scale using a driver object
+@param float $shrinkValue what stretching should be allowed to shrink to
+@param string $start -- start joint name
+@param string $end -- end joint name
+@param string $downChainAttr -- scale axis ex: "X"
+@param string $driver_arg -- driver node that has driver attr  ex: "name.distShape" or "normalizedNode"
+@param string $driver_attr -- driver attr  ex: "distance" for distance nodes or "output" for multiply divides
+@see na_selectJointsInHierarchySubset
+@see na_setSDK
+@see na_stretchCleanCurve
+@see na_getPlug
+@post geo smoothed linearly by default, assumes to use scale for stretch geo
+*/
+global proc
+na_stretchGeo(int $isShrinkToMinimum, string $start, string $end, string $downChainAttr, string $driver_arg, string $driver_attr )
+{    
+
+        
+    string $joints[] = {};
+    $joints = na_selectJointsInHierarchySubset($start,$end);
+    
+    na_assertObjectExist($joints);
+    na_assertBinaryInteger({$isShrinkToMinimum});
+    
+    //get geo
+    string $geo[] = {};
+    $geo = na_getGeoFromNodeArray( $joints );
+    
+    ////do set driven keys
+    //    
+    //format sdk value and frame
+    float $frame[] = {};
+    
+    //this says when driver is at default, geo scale is 1
+    //when driver at 0, geo scale is 0
+    //when driver at 2 times its default, geo scale is 2
+    
+    float $lenArray[] = {};
+    float $len = 0.0;
+    $lenArray = na_getHierarchyLengthSubset($start,$end); //so we can stretch curvy chain
+    $len = $lenArray[0];
+    
+    string $driver = $driver_arg+"."+$driver_attr;
+    float $cur = `getAttr $driver`;
+    
+    $frame = {$cur,1*$len,0,2*$len};//frames
+    
+    //how small can we stretch, independent of joints
+    float $shrinkValue = 1.0;
+    if( $isShrinkToMinimum == 1 ){ $shrinkValue = 0.0; }
+    float $value[] = {};
+    $value = {1.0,1.0,$shrinkValue,2.0};
+        //at default stretch default 1
+        //at moment to stretch default 1
+        //at 0 stretch is $shrinkValue 
+        //at length 2 object should have 2 times default stretch 2
+        
+        
+    string $drivenPlusAttrArray[] = {};
+    //format driven plug
+    string $attr = "";
+    $attr = "scale"+$downChainAttr;
+    $drivenPlusAttrArray = na_getPlug( $geo, $attr );
+    
+    for($i = 0; $i < size($drivenPlusAttrArray); $i++ )
+    {   
+        na_setSDK($drivenPlusAttrArray[$i], $frame, $value, $driver_arg, $driver_attr); 
+    }
+    //make curve smoothly interpolated
+    na_stretchCleanCurve( $geo, {$attr});
+}
+
+/**
+@pre clean scene
+*/
+global proc 
+na_stretchGeo_unitTest()
+{
+    joint -p 0 0 0 ;
+    joint -p 6 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint1;
+    select -cl  ;
+    select -r joint1 ;
+    //num segments, start joint, end joint, prefix for newly created joints
+    eval( "source \"na_segment.mel\";" );
+    na_segment(4, "joint1", "joint2", "pre");
+
+    
+    select -cl  ;
+    select -r joint1.rotatePivot ;
+    select -add joint2.rotatePivot ;
+    ikHandle; 
+    select -cl  ;
+    distanceDimension -sp 0 0 -2 -ep 5 0 -3 ;
+    select -cl  ;
+    select -r locator1 ;
+    move -rpr 0 0 0 ;
+    select -cl  ;
+    select -r locator2 ;
+    move -rpr 6 0 0 ;
+    select -r ikHandle1 ;
+    parent ikHandle1 locator2 ;
+    setAttr ikHandle1.visibility 0;
+    select -cl  ;
+    
+    
+    na_addGeoSinglePlaneJoint("joint1");
+    na_stretchGeo(1,"joint1","joint2","Y","distanceDimensionShape1 ","distance");
+   
+   
+    
+}
+
+/**
+*@}
+*/
+
+/**make all joints in hierarchy's aniamtion curves linear
+@param string $root root joint
+@param string list $attr names of attributes
+@post animation curves are set to linear
+@see na_selectJointsInHierarchy
+@see na_stretchCleanCurve
+*/
+global proc na_linearCurveJointHierarchy(string $root, string $attr[])
+{
+    string $joints[] = {};
+    $joints = na_selectJointsInHierarchy($root);
+    na_stretchCleanCurve($joints,$attr);
+}
+/**make all joints in subset hierarchy's aniamtion curves linear
+@param string $start -- start joint name
+@param string $end -- end joint name
+@param string list $attr names of attributes
+@post animation curves are set to linear
+@see na_selectJointsInHierarchy
+@see na_stretchCleanCurve
+*/
+global proc na_linearCurveJointHierarchySubset(string $start, string $end, string $attr[])
+{
+    string $joints[] = {};
+    $joints = na_selectJointsInHierarchySubset($start,$end);
+    na_stretchCleanCurve($joints,$attr);
+}
+
+
+
+

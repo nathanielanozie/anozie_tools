@@ -1,0 +1,474 @@
+/**@file na_scaleStretch.mel Scaling With Nodes
+@brief 
+@author Nathaniel O. Anozie (ogbonnawork at gmail dot com)
+@note date created: May 11, 2012
+@note Modify at your own risk
+@note Inspired by Jason Schleifer's Animator Friendly Rigging (jasonschleifer dot com) learning about stretching spine ik with
+volume preserved
+*@defgroup scaleJointNode Scaling With Nodes
+*@{
+*Techniques to scale joints using Maya builtin nodes (tested with Maya 2008)
+*
+*/
+
+
+
+global proc
+na_stretchWithNodeFromCurve_unitTest()
+{
+    na_makeSelectToolActive();
+    select -d;
+    joint -p 0 0 0 ;
+    joint -p 2 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint1;
+    joint -p 4 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint2;
+    select -cl  ;
+    curve -d 1 -p 0 0 0 -p 4 0 0 -k 0 -k 1 ;
+    // Result: curve1 // 
+    select -d curve1 ;
+    select -r joint1.rotatePivot ;
+    select -add joint3.rotatePivot ;
+    select -add curve1 ;
+    ikHandle -sol ikSplineSolver -ccv false -pcv false -snc true;
+    
+    cluster curve1.cv[0];;
+    cluster curve1.cv[3];
+    
+    setAttr "cluster1.relative" 0;
+    setAttr "cluster2.relative" 0;
+    
+    na_stretchWithNodeFromCurve("curve1", "joint1", "joint3","greatDay", "X" );
+    na_scaleStretchSetStretchFactor({"joint1","joint2","joint3"},{0.5*(1),0.5*(1.1),0.5*(1)}, "X" );
+}
+
+
+global proc
+na_stretchWithNodeFromCurve_unitTest_2()
+{
+    select -d;
+    joint -p 0 1 0 ;
+    joint -p 0 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint1;
+    joint -p 0 -1 0 ;
+    joint -e -zso -oj xyz -sao yup joint2;
+    joint -p 0 -2 0 ;
+    joint -e -zso -oj xyz -sao yup joint3;
+    joint -p 0 -3 0 ;
+    joint -e -zso -oj xyz -sao yup joint4;
+    select -cl  ;
+    curve -d 1 -p 0 1 0 -p 0 -3 0 -k 0 -k 1 ;
+    // Result: curve1 // 
+    select -cl  ;
+    select -r joint1.rotatePivot ;
+    select -add joint5.rotatePivot ;
+    select -add curve1 ;
+    ikHandle -sol ikSplineSolver -ccv false -pcv false -snc true;
+    
+    cluster curve1.cv[0];;
+    cluster curve1.cv[3];
+    
+    setAttr "cluster1.relative" 0;
+    setAttr "cluster2.relative" 0;
+    
+    na_stretchWithNodeFromCurve("curve1", "joint1", "joint5","greatDay", "X" );
+    na_scaleStretchSetStretchFactor({"joint1","joint2","joint3","joint4","joint5"},{0.5,0.6,0.8,0.6,0.5}, "X" );
+}
+
+global proc
+na_stretchWithNodeFromCurve_unitTest_4()
+{
+    na_makeSelectToolActive();
+    select -d;
+    joint -p 0 0 0 ;
+    joint -p 1 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint1;
+    joint -p 2 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint2;
+    joint -p 3 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint3;
+    joint -p 4 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint4;
+    joint -p 5 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint5;
+    joint -p 6 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint6;
+    select -cl  ;
+    select -r joint1 joint7;
+    
+    ikHandle -sol ikSplineSolver;
+    spaceLocator -p 0 0 0;
+    spaceLocator -p 0 0 0;
+    move -rpr 6 0 0 ;
+    
+    
+    cluster curve1.cv[0];;
+    cluster curve1.cv[3];
+    
+    setAttr "cluster1.relative" 0;
+    setAttr "cluster2.relative" 0;
+    parent cluster1Handle locator1 ;
+    parent cluster2Handle locator2 ;
+    
+    
+    na_stretchWithNodeFromCurve("curve1", "joint1", "joint7","greatDay", "X" );
+    na_scaleStretchSetStretchFactor({"joint1","joint2","joint3","joint4","joint5","joint6","joint7"},
+    {0.5*(1),0.5*(1),0.5*(1.1),0.5*(1.2),0.5*(1.2),0.5*(1.1),0.5*(1)  }, "X" );
+}
+
+
+global proc
+na_stretchWithNodeFromCurve_unitTest_3()
+{
+    na_makeSelectToolActive();
+    select -d;
+    joint -p 0 0 0 ;
+    joint -p -2 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint1;
+    joint -p -4 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint2;
+    select -cl  ;
+    select -r joint1.rotatePivot ;
+    select -add joint3.rotatePivot ;
+    ikHandle -sol ikSplineSolver;
+    select -r ikHandle1 ;
+    cluster curve1.cv[3];
+    cluster curve1.cv[0];;
+    spaceLocator -p 0 0 0;
+    spaceLocator -p 0 0 0;
+    move -rpr -4 0 0 ;
+    setAttr "cluster1.relative" 0;
+    setAttr "cluster2.relative" 0;
+    select -r cluster1Handle ;
+    parent cluster1Handle locator2 ;
+    select -r cluster2Handle ;
+    parent cluster2Handle locator1 ;
+    select -r locator2 ;
+    select -cl;
+    
+    na_stretchWithNodeFromCurve("curve1", "joint1", "joint3","greatDay", "X" );
+}
+
+
+global proc
+na_stretchWithNodeFromCurve_unitTest_5()
+{
+    na_makeSelectToolActive();
+    select -d;
+    joint -p 0 0 0 ;
+    joint -p 1 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint1;
+    joint -p 2 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint2;
+    joint -p 3 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint3;
+    joint -p 4 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint4;
+    joint -p 5 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint5;
+    joint -p 6 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint6;
+    select -cl  ;
+    select -r joint1.rotatePivot ;
+    select -add joint7.rotatePivot ;
+    ikHandle -sol ikSplineSolver;
+    spaceLocator -p 0 0 0;
+    spaceLocator -p 0 0 0;
+    move -rpr 6 0 0 ;
+    
+    cluster curve1.cv[0];;
+    cluster curve1.cv[3];
+    
+    setAttr "cluster1.relative" 0;
+    setAttr "cluster2.relative" 0;
+    parent cluster1Handle locator1 ;
+    parent cluster2Handle locator2 ;
+    
+    na_stretchWithNodeFromCurve("curve1", "joint1", "joint7","greatDay", "X" );
+}
+
+
+/**
+na_stretchWithNodeFromCurve()
+*/
+global proc
+na_stretchWithNodeFromCurve(string $curve, string $startJoint, string $endJoint,string $prefix, string $longAxis )
+{
+    string $suffix = "naScaleStretch";
+    string $allPrefix = $prefix;
+    
+    //we need the overall length that is changed when animator moves
+    na_assertObjectExist( {$curve} );
+    string $tempInfo = `arclen -ch 1 $curve`;
+    string $curveInfoNodeName = $prefix+"_"+"curveInfo"+"_"+$suffix; //ex (l_up_curveInfo_naSpIKStretch)
+    if( `objExists $curveInfoNodeName` ){ error("found--"+$curveInfoNodeName+"\n");  }
+    rename $tempInfo $curveInfoNodeName;
+    
+    string $lenFromNode = $curveInfoNodeName;
+    string $lenFromPlug = "arcLength"; 
+    
+    //add default stretching
+    na_scaleStretch($lenFromNode, $lenFromPlug, $startJoint, $endJoint, $prefix, $longAxis );  
+}
+
+
+
+global proc
+na_scaleStretch_unitTest_2()
+{
+    select -d;
+    joint -p 0 0 0 ;
+    joint -p 3 0 1 ;
+    joint -e -zso -oj xyz -sao yup joint1;
+    joint -p 5 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint2;
+    select -cl  ;
+    select -r joint1.rotatePivot ;
+    select -add joint3.rotatePivot ;
+    ikHandle -sol ikRPsolver;
+    // Result: ikHandle1 effector1 // 
+    select -cl  ;
+    distanceDimension -sp 0 0 0 -ep 5 0 0 ;
+    // Result: distanceDimension1 distanceDimensionShape1 // 
+    select -r locator2 ;
+    select -r ikHandle1 ;
+    parent ikHandle1 locator2 ; 
+    
+    na_scaleStretch("distanceDimensionShape1","distance", "joint1", "joint3", "wonderfulDay", "X" );  
+}
+
+
+global proc
+na_scaleStretch_unitTest()
+{
+    
+select -d;
+joint -p 0 0 0 ;
+joint -p 3 0 1 ;
+joint -e -zso -oj xyz -sao yup joint1;
+joint -p 5 0 0 ;
+joint -e -zso -oj xyz -sao yup joint2;
+select -cl  ;
+select -r joint1.rotatePivot ;
+select -add joint3.rotatePivot ;
+ikHandle -sol ikRPsolver;
+select -cl  ;
+distanceDimension -sp 0 0 -1 -ep 1 0 -2 ; 
+distanceDimension -sp 3 0 -2 -ep 4 0 -2 ;
+select -cl  ;
+select -r locator1 ;
+move -rpr 0 0 0 ;
+select -r locator2 ;
+move -rpr 3 0 1 ;
+select -r locator3 ;
+move -rpr 3 0 1 ;
+select -r locator4 ;
+move -rpr 5 0 0 ;
+select -r ikHandle1 ;
+parent ikHandle1 locator4 ;
+select -r locator3 ;
+circle -c 0 0 0 -nr 0 1 0 -sw 360 -r 1 -d 3 -ut 0 -tol 0.01 -s 8 -ch 1; objectMoveCommand;
+move -rpr 3 0 1 ;
+select -r locator3 ;
+parent locator3 nurbsCircle1 ;
+select -r locator2 ;
+parent locator2 nurbsCircle1 ; 
+select -r ikHandle1 ;
+setAttr "ikHandle1.visibility" 0;
+select -r nurbsCircle1 ;
+select -add ikHandle1 ;
+poleVectorConstraint -weight 1;
+
+na_scaleStretch("distanceDimensionShape1","distance", "joint1", "joint2", "wonderfulDay", "X" ); 
+
+}
+
+
+/**it makes joint stretch given curve, root joint, long axis ex: X, and prefix ex: l_up
+@param $curve name for curve used in spine ik
+@param $startJoint  start joint
+@param $endJoint    end joint
+@param $longAxis     axis to consider as being down the chain
+@param $prefix what should the prefix be for backend
+@note needs 2 or more joints
+@bug not checking whether it shouldn't make some things, no checking is first input a curve
+no asserts, no checking whether overwriting connection is okay
+na_scaleStretch
+*/
+global proc
+na_scaleStretch(string $lenFromNode, string $lenFromPlug, string $startJoint, string $endJoint, string $prefix, string $longAxis )
+{
+    
+    string $sel[] = `ls -sl`;
+    select -cl;
+    
+    //assert
+    na_assertObjectExist( {$startJoint+"."+"scale"+$longAxis} );
+    na_assertObjectExist( {$lenFromNode+"."+$lenFromPlug} );
+    
+    string $suffix = "naScaleStretch";
+    string $allPrefix = $prefix;
+    
+    
+    //get joints
+    string $jointArray[] = {};
+    $jointArray = na_selectJointsInHierarchySubset($startJoint,$endJoint);
+    na_assertSizeGreaterEqualTo( $jointArray, 2 );
+    na_assertObjectExist( $jointArray );
+    
+    
+    //so animator moving control begins stretching we need access to length
+    string $curLenNodeName = $prefix+"_"+"curLength"+"_"+$suffix;
+    if( `objExists $curLenNodeName` ){ error("found--"+$curLenNodeName+"\n");  }
+    na_makeMultiplyDivide( $curLenNodeName );
+    setAttr ($curLenNodeName+"."+"operation") 2;//divide
+    
+    na_assertObjectExist( {$lenFromNode+"."+$lenFromPlug} );
+    na_assertObjectExist( {$curLenNodeName+"."+"input1X"} );
+    na_setInputToMDByPlugLetter($curLenNodeName,"X",$lenFromNode,$lenFromPlug,"input1");
+    
+    //so we start with scale of 1 we divide by default length
+    float $defaultLen = `getAttr ($lenFromNode+"."+$lenFromPlug)`;
+    setAttr ($curLenNodeName+"."+"input2X") $defaultLen;
+    
+    //to add ability to control stretching in inverse type of relationship between long stretch and width stretch
+    string $powNodeArray[] = {};
+    string $powNodeName = "";
+    
+    for( $joint in $jointArray )
+    {
+        $powNodeName = $prefix+"_"+$joint+"_"+"powNode"+"_"+$suffix;//ex (joint1_powNode_naSpIKStretch)
+        if( `objExists $powNodeName` ){ error("found--"+$powNodeName+"\n");  }
+        na_makeMultiplyDivide( $powNodeName );
+        setAttr ($powNodeName+"."+"operation") 3;//power
+    }
+    
+    
+    //to tell which way to stretch in down chain direction and other directions
+    string $longScalePlug = "scale"+$longAxis;
+    string $other1Plug = "";
+    string $other2Plug = "";
+    $temp = stringArrayRemoveExact( {$longAxis}, {"X","Y","Z"});
+    na_assertSizeEqualArg( $temp, 2 );
+    $other1Plug = "scale"+$temp[0];
+    $other2Plug = "scale"+$temp[1];
+    clear($temp);
+    
+    $powNodeName = "";
+    $temp = na_getPlug($jointArray,$longScalePlug);
+    na_assertObjectExist( $temp );
+    $temp = na_getPlug($jointArray,$other1Plug);
+    na_assertObjectExist( $temp );
+    $temp = na_getPlug($jointArray,$other2Plug);
+    na_assertObjectExist( $temp );
+    //
+    
+    
+    //get joints needed info to stretch
+    for( $joint in $jointArray )
+    {
+        
+        
+        $curLenNodeName = $prefix+"_"+"curLength"+"_"+$suffix;
+        na_assertObjectExist( {$curLenNodeName+"."+"outputX"} );
+        //makes joint long scale ex: scaleX get its number from a different place ex: a multiply divide node's ouputX
+        na_setOutputToMDByPlugLetter($curLenNodeName,"X",$joint,$longScalePlug);
+        
+        //sends joint long scale ex: scaleX to a pow node's plug
+        $powNodeName = $prefix+"_"+$joint+"_"+"powNode"+"_"+$suffix;//ex (joint1_powNode_naSpIKStretch)
+        na_assertObjectExist( {$powNodeName+"."+"input1X"} );
+        na_assertObjectExist( {$joint+"."+$longScalePlug} );
+        na_setInputToMDByPlugLetter($powNodeName,"X",$joint,$longScalePlug,"input1");
+        
+        //sends shrinking of long scale for joint to other scales of joint
+        $powNodeName = $prefix+"_"+$joint+"_"+"powNode"+"_"+$suffix;//ex (joint1_powNode_naSpIKStretch)
+        na_assertObjectExist( {$powNodeName+"."+"outputX"} );
+        na_assertObjectExist( {$joint+"."+$other1Plug} );
+        na_setOutputToMDByPlugLetter($powNodeName,"X",$joint,$other1Plug);
+        
+        na_assertObjectExist( {$joint+"."+$other2Plug} );
+        na_setOutputToMDByPlugLetter($powNodeName,"X",$joint,$other2Plug); 
+    }
+    
+    select -r $sel;
+    
+}
+
+
+
+global proc
+na_scaleStretchSetStretchFactor_unitTest()
+{
+    na_makeSelectToolActive();
+    select -d;
+    joint -p 0 0 0 ;
+    joint -p -2 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint1;
+    joint -p -4 0 0 ;
+    joint -e -zso -oj xyz -sao yup joint2;
+    select -cl  ;
+    select -r joint1.rotatePivot ;
+    select -add joint3.rotatePivot ;
+    ikHandle -sol ikSplineSolver;
+    select -r ikHandle1 ;
+    cluster curve1.cv[3];
+    cluster curve1.cv[0];;
+    spaceLocator -p 0 0 0;
+    spaceLocator -p 0 0 0;
+    move -rpr -4 0 0 ;
+    setAttr "cluster1.relative" 0;
+    setAttr "cluster2.relative" 0;
+    select -r cluster1Handle ;
+    parent cluster1Handle locator2 ;
+    select -r cluster2Handle ;
+    parent cluster2Handle locator1 ;
+    select -r locator2 ;
+    select -cl;
+    
+    na_stretchWithNodeFromCurve("curve1", "joint1", "joint3","greatDay", "X" );
+    na_scaleStretchSetStretchFactor({"joint1","joint2","joint3"},{0.5*(1),0.5*(1.1),0.5*(1)}, "X" );
+}
+
+/**change stretch factor for input joints given a down chain axis and factors to use per joint
+na_scaleStretchSetStretchFactor
+input is joint list, longAxis or downChain axis, and float list
+@param $jointArray  joints
+@param $longAxis     axis to consider as being down the chain
+@param $factorArray for float list, the number is going to be multiplied by -1 before scale so it mostly should be between
+0.5 and 1.2,  bigger make it the more width and depth will change when length change (more squeezing)
+@bug not checking if pow node is connected to other scalles than the long scale
+*/
+global proc
+na_scaleStretchSetStretchFactor(string $jointArray[], float $factorArray[], string $longAxis )
+{
+    
+    na_assertObjectExist( $jointArray );
+    int $n = size($factorArray);
+    na_assertSizeEqualArg( $jointArray, $n );
+    
+    string $longScalePlug = "scale"+$longAxis;
+    string $jointAndPlug[] = {};
+    $jointAndPlug = na_getPlug($jointArray,$longScalePlug);
+    na_assertObjectExist($jointAndPlug);
+    
+    string $possiblePowNode[] = {};
+    string $powNode = "";
+    for( $i = 0; $i < size($jointArray); $i++ ){
+        
+        $possiblePowNode = na_getOutConnect( ($jointArray[$i]+"."+$longScalePlug),"multiplyDivide");
+        na_assertSizeEqualArg( $possiblePowNode, 1 );
+        $powNode = $possiblePowNode[0];
+        na_assertObjectExist( {$powNode+"."+"operation"} );
+        na_assertObjectExist( {$powNode+"."+"input2X"} );
+        if( `getAttr ($powNode+"."+"operation")` == 3 )
+        {
+            setAttr ($powNode+"."+"input2X") (-1*$factorArray[$i]);
+        }
+        
+    }
+    
+}
+
+/**
+*@}
+*/

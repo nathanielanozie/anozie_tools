@@ -1,0 +1,272 @@
+//author: Nathaniel Anozie (ogbonnawork at gmail dot com)
+//
+//
+
+//modify at own risk
+//last updated: 08/26/2014, 09/02/2014 -- working on making it more usable
+
+eval( "source \"fk_ik_pick.mel\";" );
+
+//source na_ui.mel
+//Acknowledgement scriptspot dot com  I learned about global variables
+
+//globals gl_joint, gl_ik_joint, gl_fk_joint, gl_type
+global string $gl_joint="gl_joint";
+global string $gl_ikJoint="gl_ikJoint";
+global string $gl_fkJoint="gl_fkJoint";
+global string $gl_type="gl_type";
+global string $gl_settingControl="gl_settingControl";
+global string $gl_attr="gl_attr";
+global string $gl_nodePrefix="gl_nodePrefix";
+
+
+
+
+/**remove window and windows preferences if it exists
+@param string $mainWindowName window global name
+*/
+proc na_windowRemoveIfExist(string $mainWindowName)
+{
+    //delete window pref for this window if it exists
+    if(`windowPref -exists $mainWindowName`){ windowPref -remove $mainWindowName;}
+    
+    if( `window -exists $mainWindowName`  )
+    {
+        deleteUI $mainWindowName;
+    }
+}
+/**
+@result 1 if window exist, 0 otherwise
+*/
+proc int
+na_isWindowExist(string $mainWindowName)
+{
+    int $result = 0;
+    if(`window -exists $mainWindowName`)
+    {
+        $result = 1;
+    }
+    return $result;
+}
+/**create an empty window
+@param string $mainWindowName window global name
+@param string $titleWindow
+@param float $width
+@param float $height
+@bug sizeable fixed
+*/
+proc na_window(string $mainWindowName, string $titleWindow, float $width, float $height)
+{
+    
+    na_windowRemoveIfExist($mainWindowName);
+    window -t $titleWindow -width $width -height $height -sizeable true $mainWindowName;
+    
+}
+/**add a button to a window
+@parm string $form -- name of form
+@param string $winName -- name of window
+@param string $label -- ?should be label
+@param float $top  position top
+@param float $left position left
+@param string $globalName  global variable to hold value
+@param string $cmd command for button
+*/
+global proc na_button(string $form, string $winName, string $label, float $top, float $left, string $globalName, string $cmd)
+{
+    if( `window -exists $winName`  )
+    {       
+        button -label $label -command $cmd $globalName;
+               
+        //how should things be positioned
+        formLayout -edit 
+        -attachForm $globalName "top" $top
+        -attachForm $globalName "left" $left
+        $form;
+        
+        //setParent $winName;//add tab to arg window
+    }
+    else{
+        
+    }
+}
+
+
+/**add a text field to a window
+@parm string $form -- name of form
+@param string $winName -- name of window
+@param string $label -- ?should be label
+@param float $top  position top
+@param float $left position left
+@param string $globalName  global variable to hold value
+*/
+proc na_textFieldGrp(string $form, string $winName, string $label, float $top, float $left, string $globalName)
+{
+    if( `window -exists $winName`  )
+    {       
+        textFieldGrp -label $label $globalName;
+               
+        //how should things be positioned
+        formLayout -edit 
+        -attachForm $globalName "top" $top
+        -attachForm $globalName "left" $left
+        $form;
+        
+        //setParent $winName;//add tab to arg window
+    }
+    else{
+        //ui_errorMessage();
+    }
+}
+
+/**add a radio button to a window
+@parm string $form -- name of form
+@param string $winName -- name of window
+@param string $label -- label
+@param float $top  position top
+@param float $left position left
+@param string $cmd command for button
+@param string $collection container to hold this radio button
+*/
+proc na_radioButton(string $form, string $winName, string $label, float $top, float $left, string $cmd, string $collection)
+{
+    if( `window -exists $winName`  )
+    {       
+        string $val = `radioButton -label $label -onc $cmd -cl $collection`;
+               
+        //how should things be positioned
+        formLayout -edit 
+        -attachForm $val "top" $top
+        -attachForm $val "left" $left
+        $form;
+        
+
+        //setParent $winName;//add tab to arg window
+        
+        //to make sure something is selected, avoids empty 
+        //thing sent to places
+        radioCollection -edit -select $val $collection;
+        
+    
+    }
+    else{
+        //ui_errorMessage();
+    }
+}
+
+
+
+/**ui
+*/
+global proc fk_ik_pickUI()
+{
+    global string $gl_joint;
+    global string $gl_ikJoint;
+    global string $gl_fkJoint;
+    global string $gl_type;
+    global string $gl_settingControl;
+    global string $gl_attr;
+    global string $gl_nodePrefix;
+    
+    //setup up title for gui
+    string $titleWindow = "Add fk/ik to enum";
+    string $mainWindowName = "fkIkChoice";
+    na_window($mainWindowName,$titleWindow, 320, 225);
+    
+    //set up format for gui
+    string $form = `formLayout -numberOfDivisions 50 "form layout"`;
+    
+    //add ui elements like textfields,buttons, and/or radio buttons
+    na_textFieldGrp($form, $mainWindowName,"joint", 5, -80, $gl_joint);
+    na_textFieldGrp($form, $mainWindowName,"ik", 25, -80, $gl_ikJoint);
+    na_textFieldGrp($form, $mainWindowName,"fk", 45, -80, $gl_fkJoint);
+    na_textFieldGrp($form, $mainWindowName,"control", 65, -80, $gl_settingControl);
+    na_textFieldGrp($form, $mainWindowName,"fk ik attribute", 85, -80, $gl_attr);
+    na_textFieldGrp($form, $mainWindowName,"prefix", 105, -80, $gl_nodePrefix);
+    na_button($form, $mainWindowName,"ok", 165, 5,"button","fk_ik_pick_cmd");
+    
+    string $collection = `radioCollection`;
+    na_radioButton($form, $mainWindowName,"translate", 145, 100,"fk_ik_pickType_cmd(0)",$collection);
+    na_radioButton($form, $mainWindowName,"rotate", 145, 170,"fk_ik_pickType_cmd(1)",$collection);
+    
+    
+    showWindow $mainWindowName;
+}
+
+global proc fk_ik_pickType_cmd(int $type)
+{
+    global string $gl_type;
+    if($type == 0){ $gl_type = "translate"; }
+    else{ $gl_type = "rotate"; }
+}
+
+
+/**ui command
+*/
+global proc fk_ik_pick_cmd()
+{
+    global string $gl_joint;
+    global string $gl_ikJoint;
+    global string $gl_fkJoint;
+    global string $gl_type;
+    global string $gl_settingControl;
+    global string $gl_attr;
+    global string $gl_nodePrefix;
+    
+    string $joint="";
+    string $fk_joint="";
+    string $ik_joint="";
+    string $type="";
+    string $control ="";
+    string $attr="";
+    string $prefix="";
+    
+    $joint = `textFieldGrp -query -text $gl_joint`;
+    $fk_joint = `textFieldGrp -query -text $gl_fkJoint`;
+    $ik_joint = `textFieldGrp -query -text $gl_ikJoint`;
+    $type =  $gl_type;
+    $control = `textFieldGrp -query -text $gl_settingControl`;
+    $attr = `textFieldGrp -query -text $gl_attr`;
+    $prefix = `textFieldGrp -query -text $gl_nodePrefix`;
+    
+    
+    //adding multiple space separated argument support
+    string $jointAr[] = {};
+    $jointAr = stringToStringArray( $joint, " ");
+    $jointAr = stringArrayRemoveDuplicates($jointAr);    
+    string $fk_jointAr[] = {};
+    $fk_jointAr = stringToStringArray( $fk_joint, " ");
+    $fk_jointAr = stringArrayRemoveDuplicates($fk_jointAr);  
+    string $ik_jointAr[] = {};
+    $ik_jointAr = stringToStringArray( $ik_joint, " ");
+    $ik_jointAr = stringArrayRemoveDuplicates($ik_jointAr);
+    
+    //a little error checking
+    if( size($jointAr) == size($fk_jointAr) && size($jointAr) == size($ik_jointAr) ){    
+        for( $i = 0; $i < size($jointAr); $i++ ){
+            string $jointArg = "";
+            string $fk_jointArg = "";
+            string $ik_jointArg = "";
+            $jointArg = $jointAr[$i];
+            $fk_jointArg = $fk_jointAr[$i];
+            $ik_jointArg = $ik_jointAr[$i];
+            //run the stuff here
+            string $prefixArg = $prefix;
+            $prefixArg = $prefix+"_"+$i;
+            fk_ik_pick($jointArg, $fk_jointArg, $ik_jointArg, $type, $control, $attr, $prefixArg);
+        }
+        
+    }
+    else{print("Skipping Requires Identical number of arguments, space separated");}
+    
+}
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,98 @@
+/**@file na_snapAttrMake_UI.mel v1.0.0
+@brief ui for presetup snapping with attributes
+@author Nathaniel O. Anozie (ogbonnawork at gmail dot com)
+@bug all functions no assert checks
+@note date created: May 1 2012
+@note date last modified: May 23 2012
+@note How to Install
+@note source na_snapAttr.mel
+@note released 
+@note v1.0.0 not tested in practice
+@note Modify at your own risk
+*/
+
+
+global string $gl_animArg = "gl_animArg";
+global string $gl_attrArrayArg = "gl_attrArrayArg";
+global string $gl_endArrayArg = "gl_endArrayArg";
+global string $gl_goalArrayArg = "gl_goalArrayArg";
+global string $gl_snapAttrName = "gl_nodeName";
+global string $gl_prefix = "gl_prefix";
+
+/**ui
+*/
+global proc
+na_snapAttrMake_UI()
+{
+    global string $gl_animArg;
+    global string $gl_attrArrayArg;
+    global string $gl_endArrayArg;
+    global string $gl_goalArrayArg;
+    global string $gl_snapAttrName;
+    global string $gl_prefix;
+    
+    //setup up title for gui
+    string $titleWindow = "na_snap.mel  Add ik fk attr matching";
+    string $mainWindowName = "mainWindow";
+    na_window($mainWindowName,$titleWindow, 400, 460);
+    
+    
+    //set up format for gui
+    string $form = `formLayout -numberOfDivisions 50 "form layout"`;
+    
+    //set up ui widgets
+    na_textFieldGrp($form, $mainWindowName,"animator\ncontrol", 25, -20, $gl_animArg);
+    na_textFieldGrp($form, $mainWindowName,"attr(s)\nspace\nseparated", 80, -20, $gl_attrArrayArg);
+    na_textFieldGrp($form, $mainWindowName,"end point(s)\nspace\nseparated", 155, -20, $gl_endArrayArg);
+    na_textFieldGrp($form, $mainWindowName,"goal point(s)\nspace\nseparated", 230, -20, $gl_goalArrayArg);
+    na_textFieldGrp($form, $mainWindowName,"prefix", 300, -20, $gl_prefix);
+    na_textFieldGrp($form, $mainWindowName,"find attr", 370, -20, $gl_snapAttrName);
+    
+    na_button($form, $mainWindowName,"ok", 410, 180,"button","na_snapAttrMake_cmd");
+    
+    
+    showWindow $mainWindowName;
+    
+}
+
+
+
+/**ui command
+*/
+global proc
+na_snapAttrMake_cmd()
+{
+    global string $gl_animArg;
+    global string $gl_attrArrayArg;
+    global string $gl_endArrayArg;
+    global string $gl_goalArrayArg;
+    global string $gl_snapAttrName;
+    global string $gl_prefix;
+    
+    //used
+    string $animArg = "";
+    string $attrArrayArg[]={};
+    string $endArrayArg[]={};
+    string $goalArrayArg[]={};
+    string $snapAttrName = "";
+    string $prefix = "";
+    //temp
+    string $attr = "";
+    string $end = "";
+    string $goal = "";
+    
+    $animArg = `textFieldGrp -query -text $gl_animArg`;
+    $attr = `textFieldGrp -query -text $gl_attrArrayArg`;
+    $attrArrayArg = stringToStringArray($attr," ");
+    $end = `textFieldGrp -query -text $gl_endArrayArg`;
+    $endArrayArg = stringToStringArray($end," ");
+    $goal = `textFieldGrp -query -text $gl_goalArrayArg`;
+    $goalArrayArg = stringToStringArray($goal," ");
+    $snapAttrName = `textFieldGrp -query -text $gl_snapAttrName`;
+    $prefix = `textFieldGrp -query -text $gl_prefix`;
+    //main
+    na_snapAttrMake($animArg,$attrArrayArg,$endArrayArg,$goalArrayArg,$snapAttrName,$prefix);
+
+    
+}
+  

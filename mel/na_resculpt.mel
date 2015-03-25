@@ -1,0 +1,84 @@
+/**@file na_resculpt.mel
+@author Nathaniel O. Anozie (ogbonnawork at gmail dot com)
+@note modify at your own risk
+@bug 
+*/
+
+//last updated: 06/18/2014-06/18/2014 -- initial release
+
+/*
+(only thing need to do ahead of time is 
+1. enter string for.. select -r vtx[0:100].. command so tool can run it to find all ear area vertices (can use save select script)
+2. act like making a normal blendshape, select all blendshapes and then the default(it should have new ears)
+3. type na_resculpt("mel command to select exclusion vertices area"); in MEL editor
+*/
+
+global proc na_resculpt( string $vtxCmd ){
+    python( "import re" ); //used as quick way to get vertex numbers from MEL string array of vertex names
+    
+    //get vertex indices    --
+    //get blendshapes       --
+    //get base mesh         --    
+    string $vtxForNewSculptedArea[] = {};
+    string $blendshapesToEdit[] = {};
+    string $baseMeshForNewSculptedArea = "";
+    
+    //only using user parameters here so a ui can be built easily
+    string $sel[] = `ls -sl`;
+    if(size($sel) < 2){error("Error!!! Select all blendshapes then default new mesh");}
+    for($i=0; $i < size($sel)-1; $i++){$blendshapesToEdit[size($blendshapesToEdit)] = $sel[$i]; } //all but last thing are blendshapes
+    $baseMeshForNewSculptedArea = $sel[size($sel)-1]; //last thing is base mesh
+    select -cl; eval( $vtxCmd );
+    if(size(`ls -sl`) == 0){error("Error, Make sure command given can select vertices on new default mesh");}
+    $vtxForNewSculptedArea = `ls -sl`;
+    print( stringArrayToString($vtxForNewSculptedArea," ") );print("\n");
+    print( stringArrayToString($blendshapesToEdit," ") );print("\n");
+    print $baseMeshForNewSculptedArea;
+    //when done here should have all we are going to need
+    
+    
+
+    //do for each blendshape
+    string $blendshapeResults[] = {};
+    
+    for($targetObject in $blendshapesToEdit){
+    
+    //make target into a new mesh  (use appropriate base mesh and target)
+    string $unSculptedMeshAr[] = `duplicate -rr $baseMeshForNewSculptedArea`; //we will remove this when were done
+    string $unSculptedMesh = $unSculptedMeshAr[0];
+    string $blendshapeAr[] = `duplicate -rr $targetObject`; //we will remove this when were done
+    string $blendshape = $blendshapeAr[0];
+    string $blendAr[] = `blendShape $blendshape $unSculptedMesh`;//make a blendshape with single target shape
+    setAttr ($blendAr[0] + "." + $blendshape) 1;//set blendshape weight to 1
+    
+    
+    //save out resulting mesh (do appropriate exclusion of weights to correct vertices and on correct target)
+    //so we can exclude weights 
+    string $newVtxCmd = `substitute "$baseMeshForNewSculptedArea" $vtxCmd "$unSculptedMesh"`;
+    select -cl; eval( $newVtxCmd );
+    if(size(`ls -sl`) == 0){error("Error na_resculpt.mel check how tool finding vertices to exclude");}
+    string $vertsAr[] = `filterExpand -sm 31 -expand true`;
+    for($arg in $vertsAr){
+        //blendshape weight setting requires vertex number so we get it here.
+        string $vert = python( "re.search(re.escape('[')+'(.*)'+re.escape(']'),' "+$arg+" ').group(1)" );
+        //setAttr blendShape1.inputTarget[0].inputTargetGroup[0].targetWeights[16] 0;
+        setAttr ($blendAr[0]+".inputTarget[0].inputTargetGroup[0].targetWeights[" + int($vert) +"]") 0;
+    }    
+    
+    string $newNameForTarget = $targetObject+"_new";
+    string $sculptedMeshAr[] = `duplicate -n $newNameForTarget -rr $unSculptedMesh`;
+    string $sculptedMesh = $sculptedMeshAr[0];
+    delete( `parentConstraint $targetObject $sculptedMesh` );//where to go to comes first
+
+    $blendshapeResults[size($blendshapeResults)] = $sculptedMesh;
+    
+    
+    //clean up should only have generated meshes
+    catch(`delete $unSculptedMesh`);
+    catch(`delete $blendshape`);
+    select -cl;
+    }
+    
+    
+}
+

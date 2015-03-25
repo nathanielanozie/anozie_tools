@@ -1,0 +1,90 @@
+/**@file na_cutGeo_UI.mel v1.0.0
+*/
+
+
+global string $gl_geoToCut = "gl_geoToCut";
+
+
+/**ui
+*/
+global proc
+na_cutGeo_UI()
+{
+    global string $gl_geoToCut;
+
+    
+    //setup up title for gui
+    string $titleWindow = "na_cutGeo.py  Straight Cut Polygon";
+    string $mainWindowName = "mainWindow";
+    na_window($mainWindowName,$titleWindow, 400, 140);
+    
+    //set up format for gui
+    string $form = `formLayout -numberOfDivisions 50 "form layout"`;
+    
+        
+    //set up ui widgets
+    na_textFieldGrp($form, $mainWindowName,"Poly Transform", 25, -15, $gl_geoToCut);
+    na_button($form, $mainWindowName,"ok", 75, 190,"button","na_cutGeo_cmd");
+    
+    showWindow $mainWindowName;
+    
+}
+
+
+
+
+
+
+
+/**call python function from mel. 
+@note shows example for parse string array, and other strings
+*/
+proc
+na_cutGeo_py(string $geoToCut )
+{
+    //Change Python module here
+    //string $importStatement = "from cutGeo import cutGeo";
+    string $importStatement = "import cutGeo\nreload(cutGeo)\nfrom cutGeo import cutGeo\n";
+    python $importStatement;
+    
+    
+    string $geoToCutPadded = na_getStringPadded($geoToCut,"'","'");
+    
+    
+    
+    //Change Python Function Here
+    //shows 1 parameters cause 1 row
+    string $tempcmd = "cutGeo"+"("+
+    "character = "+$geoToCutPadded
+    +")";
+    
+    print("Running the following python command >>"+$tempcmd+"\n");
+    python $tempcmd;
+    
+}
+
+
+
+
+
+
+
+/**ui command
+*/
+global proc
+na_cutGeo_cmd()
+{
+    global string $gl_geoToCut;
+
+    
+    //used
+    string $geoToCut="";
+
+    
+    $geoToCut = `textFieldGrp -query -text $gl_geoToCut`;
+    
+    //python command
+    na_cutGeo_py($geoToCut);
+}
+
+

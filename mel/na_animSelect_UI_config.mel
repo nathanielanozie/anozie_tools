@@ -1,0 +1,216 @@
+//na_animSelect_UI_config.mel
+
+/**allow ability to select animator controls
+*/
+
+//widget commands
+global proc string[] selectLArm()
+{
+    string $l_arm[] = {"l_fk_hand_elbow_anim", "l_fk_low_arm_anim", "l_fk_up_arm_anim", "l_hand_anim", "l_ik_elbow_anim", "l_ik_hand_anim", "l_fk_hand_anim", "l_shldr_anim", "l_up_arm_orient_anim", "l_mid_anim", "l_pinky_anim", "l_pointer_anim",  "l_thumb_anim"};
+    
+    na_assertObjectExist($l_arm);
+    
+    return $l_arm;
+}
+global proc string[] selectLLeg()
+{
+    string $l_leg[] = {"l_fk_foot_anim", "l_fk_lowLeg_anim", "l_fk_toe_anim", "l_fk_upLeg_anim",  "l_foot_anim", "l_knee_anim"};
+    
+    na_assertObjectExist($l_leg);
+    
+    return $l_leg;
+}
+global proc string[] selectRArm()
+{
+    string $r_arm[] = {"r_fk_hand_elbow_anim", "r_fk_low_arm_anim", "r_fk_up_arm_anim", "r_hand_anim", "r_ik_elbow_anim", "r_ik_hand_anim", "r_fk_hand_anim", "r_shldr_anim", "r_up_arm_orient_anim", "r_mid_anim", "r_pinky_anim", "r_pointer_anim",  "r_thumb_anim"};
+    
+    na_assertObjectExist($r_arm);
+    
+    return $r_arm;
+}
+global proc string[] selectRLeg()
+{
+    string $r_leg[] = {"r_fk_foot_anim", "r_fk_lowLeg_anim", "r_fk_toe_anim", "r_fk_upLeg_anim",  "r_foot_anim", "r_knee_anim"};
+    
+    na_assertObjectExist($r_leg);
+    
+    return $r_leg;
+}
+global proc string[] selectBody()
+{
+    string $body[] = {"body_anim", "hip_anim", "torso_1_anim", "torso_2_anim", "shldr_anim" };
+    na_assertObjectExist($body);
+    
+    return $body;
+}
+global proc string[] selectHead()
+{
+    string $head[] = { "head_anim", "neck_anim"};
+    na_assertObjectExist($head);
+    return $head;
+}
+global proc string[] selectAll()
+{
+    string $all[] = {};
+    
+    $all = stringArrayCatenate($all,selectLArm());
+    $all = stringArrayCatenate($all,selectRArm());
+    $all = stringArrayCatenate($all,selectLLeg());
+    $all = stringArrayCatenate($all,selectRLeg());
+    $all = stringArrayCatenate($all,selectHead());
+    $all = stringArrayCatenate($all,selectBody());
+    
+    na_assertObjectExist($all);
+    return $all;
+}
+//
+
+
+/**change data here
+how many check boxes
+*/
+proc string[]
+na_animSelect_configGetAllLabel()
+{ 
+    string $result[]={};
+    
+    $result = {"left arm","left leg","right arm","right leg", "body", "head", "all"};
+    
+    return $result;
+}
+proc string[]
+na_animSelect_configGetAllCmd()
+{ 
+    string $result[]={};
+    
+    $result = {"selectLArm()","selectLLeg()","selectRArm()","selectRLeg()","selectBody()","selectHead()","selectAll()"};
+    na_assertSizeEqualArg( $result, size(na_animSelect_configGetAllLabel()) );
+    
+    return $result;
+}
+global proc int
+na_animSelect_configGetMaxWidget()
+{ 
+    int $result = size(na_animSelect_configGetAllLabel());
+    return $result;
+}
+
+
+
+proc int[]
+na_animSelect_configGetLabelIndex(int $widgetIndex)
+{ 
+    int $result[] = {};
+    $result = {$widgetIndex};
+    return $result;
+}
+proc int[]
+na_animSelect_configGetCmdIndex(int $widgetIndex)
+{ 
+    int $result[] = {};
+    $result = {$widgetIndex};
+    return $result;
+}
+
+proc string[]
+na_animSelect_configGetCmd(int $widgetIndex)
+{ 
+    string $result[] = {};
+    
+    string $allAttr[] = na_animSelect_configGetAllCmd();
+    
+    int $allIndex[] = {};
+    $allIndex = na_animSelect_configGetCmdIndex($widgetIndex);
+    
+    na_assertIntSizeGreaterEqualTo( $allIndex, 1 );
+    
+    for($i = 0; $i < size($allIndex); $i++){
+        if( $allIndex[$i] >= size($allAttr) ){ error("Index Error");}
+        $result[size($result)] = $allAttr[$allIndex[$i]];
+    }
+    
+    return $result;
+}
+
+global proc string[]
+na_animSelect_configGetLabel(int $widgetIndex)
+{ 
+    string $result[] = {};
+    
+    string $allLabel[] = na_animSelect_configGetAllLabel();
+    
+    int $allIndex[] = {};
+    $allIndex = na_animSelect_configGetLabelIndex($widgetIndex);
+    
+    na_assertIntSizeGreaterEqualTo( $allIndex, 1 );
+    
+    for($i = 0; $i < size($allIndex); $i++){
+        if( $allIndex[$i] >= size($allLabel) ){ error("Index Error");}
+        $result[size($result)] = $allLabel[$allIndex[$i]];
+    }
+    
+    return $result;
+}
+
+
+
+
+global proc
+na_animSelect_configAssert(int $widgetIndex)
+{ 
+    na_assertIntNonNegative({$widgetIndex});
+    
+    string $result = "";
+    
+    string $cmdArray[] = na_animSelect_configGetCmd($widgetIndex);
+    string $labelArray[] = na_animSelect_configGetLabel($widgetIndex); 
+    
+    na_assertSizeEqualArg($labelArray,1);   
+    na_assertSizeEqualArg($cmdArray,1);
+}
+//so begin with nothing selected
+global proc
+na_animSelect_init()
+{ 
+    select -cl;
+}
+
+//note some correspondence between what object goes to what attribute
+//is needed if there are more than one attribute, maybe having them
+//both identical sizes would be a good idea
+global proc
+na_animSelect_configGetMelCmdOn(int $widgetIndex)
+{ 
+    na_animSelect_configAssert($widgetIndex);
+    
+    string $result = "";
+    
+    string $cmdArray[] = na_animSelect_configGetCmd($widgetIndex);
+    
+    na_assertSizeEqualArg($cmdArray,1);
+    
+    string $obj[] = eval($cmdArray[0]);
+    
+    select -add $obj;
+}
+
+global proc
+na_animSelect_configGetMelCmdOff(int $widgetIndex)
+{ 
+    na_animSelect_configAssert($widgetIndex);
+    
+    string $result = "";
+    
+    string $cmdArray[] = na_animSelect_configGetCmd($widgetIndex);
+    
+    na_assertSizeEqualArg($cmdArray,1);
+    
+    string $obj[] = eval($cmdArray[0]);
+    
+    string $sel[] = `ls -sl`;
+    //if obj is in selection remove it from selection
+    string $selectionWithoutObject[] = stringArrayRemoveExact($obj,$sel);
+    select -r $selectionWithoutObject;
+}
+
+

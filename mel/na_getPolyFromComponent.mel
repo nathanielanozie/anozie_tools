@@ -1,0 +1,16 @@
+
+
+//helper functions
+////get poly name given any poly component
+/*supports any component vtx,face,edge,vFace ..
+*/
+global proc string[] na_getPolyFromComponent(string $component)
+{
+    string $result[];
+    if( `objectType $component` != "mesh" ){error("Error finding poly from component!!!");}
+    string $parts[];
+    tokenize($component,".",$parts); 
+    $result[0] = $parts[0];  
+    
+    return $result;
+}

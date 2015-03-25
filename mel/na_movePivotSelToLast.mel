@@ -1,0 +1,13 @@
+
+//--move pivot all selected thing but last to the last things pivot
+global proc na_movePivotSelToLast(){
+    string $sel[] = `ls -sl`;
+    if(size($sel) < 2){error("Requires last thing where want pivot!!!");}
+    string $arg = $sel[size($sel)-1];//last thing is where want pivot
+    for($i = 0; $i < (size($sel)-1); $i++ ){
+    $obj = $sel[$i];//notice never using the last thing
+    float $pos[] = `xform -q -ws -t $arg`;
+    move $pos[0] $pos[1] $pos[2] ($obj+"."+"scalePivot") ($obj+"."+"rotatePivot");
+    }
+}
+//na_movePivotSelToLast();

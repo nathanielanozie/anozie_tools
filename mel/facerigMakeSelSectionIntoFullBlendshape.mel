@@ -1,0 +1,80 @@
+
+// updated 08-06-2014 nate ----- added return, added clean up bases from wrap, added face wrapping instead of point
+// updated 03-11-2014 nate ----- making wrap mechanism more robust, added multiple shape support
+// updated 05-27-2012 nate ----- initial commit
+
+//--------------------------------------
+//requires sections selected on scene, input is full shape, and the overlapping section shape. assumes section does not have blendshapes. if shape look off change wrap options max dist to 0.01
+//--------------------------------------
+global proc string[] facerigMakeSelSectionIntoFullBlendshape(string $full, string $section )
+{
+    string $result[] = {};
+    string $full, $section;
+    string $sectionShapesArray[] = {};
+    string $sectionShapes = "";
+    //$section =  "polySurface217";
+    //$full =  "polySurface216";
+    
+    //$sectionShapes = {"lt_browLowerer","lt_innerBrowRaiser","lt_outerBrowRaiser"};
+    $sectionShapesArray = `ls -sl`;
+
+    if(size($sectionShapesArray) == 0){error("First Select half sculpted blendshape(s) !!!.  \nDefault section should NOT be deformed !!! \n");}
+    
+    string $wrapName = "";
+    for( $sectionShapes in $sectionShapesArray ){     
+        //section should move full face
+        select -cl;
+        select -r $full;
+        select -add $section;
+        //CreateWrap;
+        doWrapArgList "3" { "1","0","4", "2" };//wrap deformer last arg 2 faces, 1 would be points, third arg max distance
+        string $fullShapeArray[] = {};
+        $fullShapeArray = `pickWalk -direction down $full`;
+        select -cl;
+        string $fullShape = $fullShapeArray[0];//would bug out if multiple child shapes
+        string $wrapNameArray[] = {};
+        $wrapNameArray = stringArrayRemoveDuplicates( `listConnections -source true -type wrap ($fullShape)` );
+        if(size($wrapNameArray) != 1){error("Error Wrapping Geometry !!!:"+$sectionShapes);}
+        string $wrapName = $wrapNameArray[0];
+        //deformer -type wrap $full; //there is some maya bug using this
+        //so we're not affecting mirrored side
+        //setAttr ($wrapName+"."+"maxDistance") 0.01; //make smaller so section moves smaller area of full head
+        //setAttr ($wrapName+"."+"inflType") 2; //make points since verts should overlap ... i think need api to do this
+        
+        //make shapes moving section
+        select -r $sectionShapes;
+        select -add $section;
+        //$blendName = "tmp_bnd";
+        string $blendNameAr[] = `blendShape`; //make sure blendnode not on scene
+        $blendName = $blendNameAr[0];
+        //---make section moving full face, section needs to be at default
+        setAttr ($blendName+"."+$sectionShapes) 0;
+        
+    
+        
+        //select -r polySurface216 ; 
+        //select -add polySurface217 ;
+        //deformer -type wrap polySurface216;
+        
+    
+        //--get our full faces
+        string $resultShapeName = $sectionShapes+"_full";
+        setAttr ($blendName+"."+$sectionShapes) 0;//first reset all shapes
+        setAttr ($blendName+"."+$sectionShapes) 1.0;
+        duplicate -n $resultShapeName -rr $full;
+
+        
+        setAttr ($blendName+"."+$sectionShapes) 0;//put back to default
+        string $baseNameForWrapAr[] = `listConnections -source true ($wrapName+".basePoints[0]")`; //clean wrap base
+        catch(delete($baseNameForWrapAr[0]));
+        delete -ch $full;//clean history
+        delete -ch $section;//clean history
+        delete(`pointConstraint -offset 0 0 0 -weight 1 $sectionShapes $resultShapeName`); //clean position of created shape 
+        
+        //save
+        $result[size($result)] = $resultShapeName;
+        
+    }//end looping over all selected shapes
+    
+    return $result;
+}

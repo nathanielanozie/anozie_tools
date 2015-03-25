@@ -1,0 +1,83 @@
+
+// updated 07-02-2014 nate ----- working on initial commit
+
+//--------------------------------------
+//requires "to recreate blendshapes" selected on scene, input is "maya default mesh", and the "zbrush default mesh".
+//also the zbrush default mesh and the zbrush blendshapes need to be of identical scaling, i exported a non deformed one from zbrush after if needed subdivisions
+//--------------------------------------
+global proc zbrushBlendshapeToMaya(string $mayaDefaultArg, string $zbrushDefaultArg )
+{
+
+    
+    string $mayaDefault, $zbrushDefault;
+    //$zbrushDefault =  "polySurface217";
+    //$mayaDefault =  "polySurface216";
+    string $mayaDefaultAr[] = {};
+    //weve got input -- maybe set visibility of originals off, maybe unlock all translate channels of duplicates
+    $mayaDefaultAr = `duplicate -rr $mayaDefaultArg`;
+    $mayaDefault = $mayaDefaultAr[0];
+    
+    string $zbrushDefaultAr[] = {};
+    $zbrushDefaultAr = `duplicate -rr $zbrushDefaultArg`;
+    $zbrushDefault = $zbrushDefaultAr[0];
+    
+    delete -ch $mayaDefault;//clean history
+    delete -ch $zbrushDefault;//clean history
+    //    
+    
+    //weve checked selected blendshapes
+    string $sectionShapesArray[] = {};
+    string $sectionShapes = "";
+    //$sectionShapes = {"lt_browLowerer","lt_innerBrowRaiser","lt_outerBrowRaiser"};
+    $sectionShapesArray = `ls -sl`;
+    if(size($sectionShapesArray) == 0){error("First Select blendshape(s) !!!.  \ninput should NOT be deformed !!! \n");}
+    //
+    
+    
+    //make a polygon that will be used to offset and correct zbrush blendshapes to make them scaled like maya default mesh
+    string $meshCombineName = "";
+    select -r $zbrushDefault;
+    select -add $mayaDefault;
+    string $meshCombineblendNameAr[] = `blendShape`; //make sure blendnode not on scene
+    $meshCombineblendName = $meshCombineblendNameAr[0];
+    //---make zbrush default move maya default, both need to have identical topology and be in default position
+    setAttr ($meshCombineblendName+"."+$zbrushDefault) 1;
+    
+    string $meshCombineNameAr[] = {};
+    $meshCombineNameAr = `duplicate -rr $mayaDefault`;
+    $meshCombineName = $meshCombineNameAr[0];
+    //--so mayaDefault back to original so we can use it again
+    setAttr ($meshCombineblendName+"."+$zbrushDefault) 0;
+    delete -ch $mayaDefault;//clean history
+    //done making the offset polygon//
+    
+    
+    //start correcting zbrush blendshapes
+    for( $sectionShapes in $sectionShapesArray ){     
+        
+        //so we start with clean mesh to use
+        string $mayaDefaultTempAr[] = `duplicate -rr $mayaDefault`;
+        $mayaDefaultTemp = $mayaDefaultTempAr[0];
+        
+        //make shape and "created poly" move default mesh
+        select -r $sectionShapes $meshCombineName;
+        select -add $mayaDefaultTemp;
+        string $blendNameAr[] = `blendShape`; //make sure blendnode not on scene
+        $blendName = $blendNameAr[0];
+        //---do operate math to make result
+        setAttr ($blendName+"."+$sectionShapes) 1;
+        setAttr ($blendName+"."+$meshCombineName) -1;
+    
+        //do saving and cleanup
+        $resultShapeName = $sectionShapes+"_naScaled";
+        duplicate -n $resultShapeName -rr $mayaDefaultTemp;
+        delete $mayaDefaultTemp;//remove unneeded mesh,may want to delete history first not sure
+        delete(`pointConstraint -offset 0 0 0 -weight 1 $sectionShapes $resultShapeName`); //clean position of created shape 
+        
+    }//end looping over all selected shapes
+    
+    //final cleanup
+    delete $meshCombineName;
+    delete $mayaDefault;
+    delete $zbrushDefault;
+}

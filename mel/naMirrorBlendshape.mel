@@ -1,0 +1,347 @@
+/**@file naMirrorBlendshape.mel Mirror the vertex location of one side of blendshape to the other side of blendshape.
+It uses a symmetric unedited default mesh. Why: Its use comes in handy when sculpting blendshapes with joint, deformer, cluster etc tools where symmetry can't be established easily.  By using this tool can focus on one half not worrying about the other side.
+@note tested on sphere about 3542 vertices on 2.2Ghz cpu in about 10 seconds
+@note date created: September 26, 2011
+@author Nathaniel Anozie, ogbonnawork at gmail dot com, nathananozie dot blogspot dot com
+
+type for mel
+naMirrorBlendshape("BASE/DEFAULT MESH NAME", "BLENDSHAPE NAME WANT TO MIRROR", "+x" )
+to use the ui
+naMirrorBlendshape_ui_based()
+
+and type in gui "insert name of default face not shape node",  
+"name of blendshape not shape node", 
+"-x means mirror from -x direction to positive x direction"  
+
+Version History:
+v1.0.0 initial release
+v1.0.1 speed increase
+v1.0.2 added gui
+v1.0.3 separated mirror step into a separate procedure
+v1.0.4 speed increase, blendshape needs to have center pivot but it doesn't have to be at origin
+@note Acknowledgement: Duncan Brinsmead and Bryan Ewert, xyz2 dot net for rounding a float to decimal places
+*/
+
+// updated 09-02-2014 nate ----- working on making it more usable by allowing larger middle vert threshold
+// updated 07-16-2014 nate ----- working on making it less dependent and reusable, returns result etc
+// updated 06-16-2014 nate ----- added temporary fix (line 235) for figuring out mirror side of mesh , it needs an option in ui with .001 default
+// updated 03-11-2014 nate ----- making tool more robust by allowing multiple blendshapes entered at once
+// updated 09-26-2011 nate ----- initial commit
+
+
+eval( "source \"naMirrorSelectedVerts.mel\";" );//assumes a way to mirror vertices exists
+
+
+//make user interface
+proc makeGui()
+{
+    string $titleWindow = "Mirror Blendshape Tool";
+    string $titleButton = "Mirror";
+    string $t_defTextField = "baseMesh name";
+    string $t_blendTextField = "blendShape(s) (space sep)";
+    string $t_mirrorTextField = "mirror from dir ex: '+x' ";
+    
+    
+    //setup up title for gui
+    
+    //delete window pref for this window if it exists
+    if(`windowPref -exists ToolMainWindow`){ windowPref -remove ToolMainWindow;}
+
+    if( `window -exists ToolMainWindow`  )
+    {
+        deleteUI ToolMainWindow;
+    }
+    window -t $titleWindow -width 400 -height 160 -sizeable false ToolMainWindow;
+    
+    
+    
+    //set up format for gui
+        //make it a single column with 3 text fields and a button
+    string $form = `formLayout -numberOfDivisions 320`;
+        
+        
+        textFieldGrp -l $t_defTextField defTextField;
+        textFieldGrp -l $t_blendTextField blendTextField;
+        textFieldGrp -l $t_mirrorTextField mirrorTextField;
+        button -label $titleButton -command "naMirrorBlendshape_UI" mirrorButton;
+       
+        formLayout -edit 
+            -attachForm defTextField "top" 10
+            -attachForm blendTextField "top" 40
+            -attachForm mirrorTextField "top" 70
+            -attachForm mirrorButton "top" 100 
+            -attachForm mirrorButton "left" 10
+            $form;
+         
+        showWindow ToolMainWindow;
+    
+}
+
+
+
+
+//show user interface
+global proc naMirrorBlendshape_ui_based()
+{
+    makeGui();
+}
+
+
+
+
+/////
+/**this doesnt do much other than call something else, it does parse user arguments in a form later things can use
+*/
+global proc naMirrorBlendshape_UI()
+{
+    //get user variables
+    string $polyObject = `textFieldGrp -query -text defTextField`;
+    string $targetObjectSpaceSep = `textFieldGrp -query -text blendTextField`;
+    string $mirrorFrom = `textFieldGrp -query -text mirrorTextField`;
+    
+    string $blendshapesToMirrorList[] = {};//figure out from parsing space separated string and doing some error checking
+    $blendshapesToMirrorList = stringToStringArray( $targetObjectSpaceSep, " ");
+    $blendshapesToMirrorList = stringArrayRemoveDuplicates($blendshapesToMirrorList);
+    
+    //na_assertObjectExist( $blendshapesToMirrorList );
+    //na_assertObjectExist({$polyObject});
+    //na_assertAllInList({$mirrorFrom},{"+x","-x"});
+    
+    //send the work horse to use the data parsed from here
+    string $targetObject = "";
+    for( $targetObject in $blendshapesToMirrorList){
+    naMirrorBlendshape($polyObject, $targetObject, $mirrorFrom ); }
+}
+
+
+
+
+global proc string[]
+naMirrorBlendshape(string $polyObjectArg, string $targetObjectArg, string $mirrorFromArg )
+{
+    float $midBorderThreshold[] = {-.009,.009 };//this may need to be enlarged or reduced depending on ur model
+    //it tries to figure out what to consider a middle vertex, something near 0
+    
+    //copies the vertex location of one side of blendshape to other side in x direction
+    //returns result as a list
+    
+    string $result[] = {};
+    
+    //get user variables
+    string $polyObject = "";
+    string $targetObject = "";
+    string $mirrorFrom = "";
+    string $polyObject = $polyObjectArg;
+    string $targetObject = $targetObjectArg;
+    string $mirrorFrom = $mirrorFromArg;
+    
+    
+    
+    string $mirrorMeshArray[] = `duplicate -rr $polyObject`; //this is the only mesh we change its vertex positions
+    $mirrorMesh = $mirrorMeshArray[0];
+    string $blendshapeArray[] = `duplicate -rr $targetObject`; //we will remove this when were done
+    $blendshape = $blendshapeArray[0];
+    
+    //world position target
+    float $worldBlend[] = {};
+    $worldBlend = `xform -q -ws -t $blendshape`;
+    
+       
+    //put blendshape at x origin for computational reasons
+    //
+    xform -ws -t 0.0 $worldBlend[1] $worldBlend[2] $blendshape;
+    xform -ws -t 0.0 $worldBlend[1] $worldBlend[2] $mirrorMesh;
+    
+    
+    
+    //variables for getting vertex location
+    float $defaultMeshVertexPosition[]={};
+    int $i=0;
+    float $translateXYZ[];
+    int $vertsSource[]={};
+    string $vertsSourceName[] = {};
+
+    float $allRowsBlend[]={};
+    float $translateXYZBlend[]={};
+
+    
+    
+    //There is repetive looking code here
+    //not in separate function because multiple things would be needed returned
+    //
+    //source is on left side of default mesh
+    
+    string $obj = $polyObject;
+    $obj = $polyObject;
+    int $numVtx[] = `polyEvaluate -vertex $obj`;
+    
+    if($mirrorFrom == "-x")
+    {
+        ////get mesh vertex transformations
+        //over vertices
+        for( $i=0; $i< $numVtx[0]; $i++)
+        {
+            
+            //save default mesh transformations 
+            string $vertexLabel = $obj+".vtx["+$i+"]";
+            $translateXYZ = `xform -ws -q -t $vertexLabel`;
+            $defaultMeshVertexPosition[ $i*3+0 ] =  $translateXYZ [0];
+            $defaultMeshVertexPosition[ $i*3+1 ] =  $translateXYZ [1];
+            $defaultMeshVertexPosition[ $i*3+2 ] =  $translateXYZ [2];
+            
+            //save blendshape mesh transformations
+            string $vertexLabelBlend = $blendshape+".vtx["+$i+"]";
+            $translateXYZBlend = `xform -ws -q -t $vertexLabelBlend`;
+            $allRowsBlend[ $i*3+0 ] =  $translateXYZBlend[0];
+            $allRowsBlend[ $i*3+1 ] =  $translateXYZBlend[1];
+            $allRowsBlend[ $i*3+2 ] =  $translateXYZBlend[2];
+            
+            
+            
+            //save vertex name on source side of base mesh we don't want to include
+            //symmetry border vertices that is why were using small number not zero
+            //
+            if( $translateXYZ[0] < $midBorderThreshold[0] )
+            {  
+                $vertsSource[ size($vertsSource) ] = $i;
+                $vertsSourceName[ size($vertsSourceName) ] = $obj+".vtx"+"["+$i+"]";
+            }
+        }
+    }    
+    
+    //function 
+    //initializeDataWhenMirrorFromPositiveToNegativeX
+    else if($mirrorFrom == "+x")  //source is on right side of default mesh
+    {
+        for( $i=0; $i< $numVtx[0]; $i++)
+        {
+            //save default mesh transformations 
+            string $vertexLabel = $obj+".vtx["+$i+"]";
+            $translateXYZ = `xform -ws -q -t $vertexLabel`;
+            $defaultMeshVertexPosition[ $i*3+0 ] =  $translateXYZ [0];
+            $defaultMeshVertexPosition[ $i*3+1 ] =  $translateXYZ [1];
+            $defaultMeshVertexPosition[ $i*3+2 ] =  $translateXYZ [2];
+            
+            //save blendshape mesh transformations
+            string $vertexLabelBlend = $blendshape+".vtx["+$i+"]";
+            $translateXYZBlend = `xform -ws -q -t $vertexLabelBlend`;
+            $allRowsBlend[ $i*3+0 ] =  $translateXYZBlend[0];
+            $allRowsBlend[ $i*3+1 ] =  $translateXYZBlend[1];
+            $allRowsBlend[ $i*3+2 ] =  $translateXYZBlend[2];
+            
+            //save vertex name on source side of base mesh
+            //
+            if( $translateXYZ[0] > $midBorderThreshold[1] )
+            {  
+                $vertsSource[ size($vertsSource) ] = $i;
+                $vertsSourceName[ size($vertsSourceName) ] = $obj+".vtx"+"["+$i+"]";
+            }
+        }
+    }
+    
+ 
+    //mirror base vertices 
+    //
+    string $sel[] = `ls -sl`;
+    select -r $vertsSourceName;
+    string $vertexMatch[] = {};
+    $vertexMatch = naMirrorSelectedVerts( 1, 0.09 );//should default to .001 mirror x direction, how close enough were allowed
+    select -r $sel;
+    //na_assertSizeEqualArg($vertexMatch,size($vertsSource));
+    
+    
+   
+    print("Initialized data for mirror\n");
+    
+    //move blendshape vertices variables
+    float $translateXYZFinal[];
+    
+   
+
+    string $vertsInBlendshape = "";
+    //over vertices
+    for($j=0; $j<size($vertsSource); $j++)
+    {
+        $translateXYZFinal = na_get3DRow($vertsSource[$j],$allRowsBlend);
+        
+        //figure out blendshape vertex name on mirrored side
+        //
+        string $tokens[] = {};
+        $tokens = na_getTokensByThisSeparator($vertexMatch[$j],".");
+        //na_assertSizeEqualArg($tokens,2);
+        
+        //were using the original mesh so we get just one half edited
+        //
+        $vertsInBlendshape = $mirrorMesh+"."+$tokens[1];
+        
+        
+        //moving mirror side vertex of blendshape
+        
+        move (-1*$translateXYZFinal[0]) $translateXYZFinal[1] $translateXYZFinal[2] $vertsInBlendshape;
+    }
+    
+    //return blendshape to its position
+    xform -ws -t $worldBlend[0] $worldBlend[1] $worldBlend[2] $blendshape;
+    
+    //cleanup
+    delete $blendshape;
+
+    //cleanup naming and positioning of result
+    string $resultName = "naMIRRORBlend_"+$targetObject;//should replace r with l, or l with r, or rt with lt ...
+    rename $mirrorMesh $resultName;
+    delete(`pointConstraint -offset 0 0 0 -weight 1 $targetObject $resultName`); //clean position of created shape 
+    print("Completed mirror\n");
+    
+    
+    $result[size($result)] = $resultName; //save result
+    
+    
+    
+    return $result;
+}
+
+
+
+
+
+
+//given a float 1D array simulating a 2D array of 3 columns, return 3 element row at index
+global proc float[] na_get3DRow(int $index, float $array[])
+{
+    //na_assertIsDivisibleByThis( size($array), 3 );
+    //na_assertIntNonNegative({$index});
+    //na_assertFloatSizeGreaterEqualTo($array, ($index+1) );
+    
+    float $return[];
+    int $j=0;
+    for($j=0; $j<3; $j++)
+    {
+        $return[$j] = $array[$index*3+$j];
+    }
+    return $return;
+}
+/**Separate string and return tokens as list, empty list returned on no separator occurence.
+@note  ex: ("a.b.hi",".") result {a,b,hi}
+@note ex: ("a.b.hi","-") result {a.b.hi}
+@note ex: ("a.",".") gives list {"a"}
+*/
+global proc string[]
+na_getTokensByThisSeparator(string $arg, string $separator)
+{
+    string $result[];
+    string $buffer[]; 
+    tokenize $arg $separator $buffer;
+    if(size($buffer) >= 2 ){ $result = $buffer; }
+    
+    return $result;
+}
+
+
+
+
+
+
+
+
+
+

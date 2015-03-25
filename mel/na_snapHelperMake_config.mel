@@ -1,0 +1,95 @@
+
+/**@file na_snapHelperMake_config.mel v1.0.0*/
+
+
+
+global proc string[]
+na_snapHelperGetAttrPlug(string $anim, string $naAttr)
+{
+    //get all attrs names
+    string $attrAndPlug[] = {};
+    $attrAndPlug = na_getPlugInputFromMultiMDNodeFromAnim($anim,$naAttr,"Y","input1");
+    
+    string $attr[] = {};
+    string $attr_sep[] = {};
+    for( $i = 0; $i < size($attrAndPlug); $i++ )
+    {
+        $attr_sep = na_getObjectSepPlug( $attrAndPlug[$i] );
+        $attr[size($attr)] = $attr_sep[1];
+    }
+    
+    return $attr;
+}
+
+global proc float[]
+na_snapHelperGetValue(string $anim, string $naAttr)
+{
+    float $result[] = {};
+    
+    string $nodeArray[] = {};
+    $nodeArray = na_getMultiplyDivideNodeFromPlug($anim, $naAttr );
+    string $node = "";
+    if( size($nodeArray) == 1 )
+    {
+        $node = $nodeArray[0];
+        $result[size($result)] = `getAttr ($node+"."+"outputX")`;
+    }
+    
+    return $result;
+}
+
+
+/**given an animator control, allow retrieving data about a specific attribute through an interface on the animator
+control.  Here its going to be used to set attribute on the animator control used for matching rigs
+@param animator control
+@param attributes
+@param interface access attribute
+@param prefix for backend node names
+*/
+global proc
+na_snapHelperMake(string $animArg, string $attrArrayArg[], string $naAttr, string $prefixName)
+{
+    
+    //set some variables
+    string $anim="";
+    $anim = $animArg;  
+    
+    //assert data
+    na_assertObjectExist( {$anim} );
+    
+    
+    //make special attribute used to find all data
+    if( `objExists ($anim+"."+$naAttr) ` == 0 )
+    {
+        na_addNonKeyFloatAttr($anim,$naAttr); 
+    }
+    
+    
+    ///what to store
+    string $attrArray[] = {};
+    $attrArray = $attrArrayArg;
+    
+    for($i = 0; $i < size($attrArray); $i++)
+    {
+        string $attr = "";
+        $attr= $attrArray[$i];
+        na_assertObjectExist( {($anim+"."+$attr)} );
+        
+        //
+        //make md nodes
+        string $suffix = "_"+$attr+"_md";
+        string $prefix = $prefixName+"_";
+        string $mdName = $prefix+$anim+$suffix;
+        
+        if( `objExists $mdName` ){ error("found--"+$mdName+"\n");  }
+        na_makeMultiplyDivide( $mdName );
+        
+        //
+        //connect md nodes
+        na_setInputToMDByPlugLetter($mdName,"Y",$anim,$attr,"input1");
+        na_setInputToMDByPlugLetter($mdName,"Z",$anim,$naAttr,"input1");
+        
+    }
+    
+    
+}

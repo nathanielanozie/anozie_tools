@@ -1,0 +1,153 @@
+/**@file  na_match_UI.mel v1.0.0
+*/
+global string $gl_fkMatch_radioCol = "gl_fkMatch_radioCol";
+/**ui
+*/
+global proc na_match_UI(string $title, string $mainWindowName, int $colPerRow[],
+string $allLabel[],string $allRowTitle[],int $numRow)
+{
+    
+    na_assertIntSizeGreaterEqualTo( $colPerRow,0);
+    na_assertSizeGreaterEqualTo( $allLabel,0);
+    na_assertSizeGreaterEqualTo( $allRowTitle,0);
+    na_assertIntNonNegative({$numRow});
+    
+    
+    global string $gl_fkMatch_radioCol;
+    
+    
+    string $firstFrameLayout =
+    `frameLayout
+    -label $title
+    -labelAlign "center"
+    -collapsable true
+    -collapse true
+    `;
+    
+
+    //set up format for gui
+    string $form = `formLayout -numberOfDivisions 50 "form layout"`;
+    
+
+    //
+    //ui formatting
+    int $vspace = 60;
+    int $hspace = 120;
+    int $rowTitleX = 10;
+    int $itemLeftOffset = 70;//
+    int $itemTopOffset = 20;//
+    
+    string $pickCmd = "na_match_pickType_cmd";  
+    
+    //local
+    int $widget = 0;//this gets incremented by one for every widget we add
+    int $col = 0; //current column
+    int $rowY = 0;
+    int $rowX = 0;
+    string $rowTitle = "";
+    string $rowLabel = "";
+    string $radioCol = "";
+    string $collection = "";
+    
+    //make radio button widget
+    //
+    for($i = 0; $i < $numRow; $i++)
+    {
+        $rowY = $i*$vspace+$itemTopOffset;
+        na_assertSizeGreaterEqualTo($allRowTitle, ($i+1) );
+        $rowTitle = $allRowTitle[$i];
+        
+        $col = $colPerRow[$i];
+        
+        //prepare to make widget
+        na_text($form, $mainWindowName,$rowTitle, $rowY, $rowTitleX );
+        $radioCol = `radioCollection`;
+        $collection = $collection+" "+$radioCol;
+        
+        for($j = 0; $j < $col; $j++)
+        {   
+            $rowX = $j*$hspace+$itemLeftOffset;
+            na_assertSizeGreaterEqualTo($allLabel, ($widget+1) );
+            $rowLabel = $allLabel[$widget];
+            
+            //make the widget
+            na_radioButton($form, $mainWindowName,$rowLabel, $rowY, $rowX,($pickCmd+"("+$widget+")"),$radioCol);
+            
+            $widget++;//increment widget
+        }
+    }
+    
+    
+    na_button($form, $mainWindowName,"ok", 250, 190,"button","na_match_cmd");
+    
+    
+    
+    $gl_fkMatch_radioCol = $collection;
+}
+
+
+/**used to keep ui updated with current selection
+*/
+global proc na_match_selectUI(int $widget[])
+{
+    global string $gl_fkMatch_radioCol;
+    
+    //select radio buttons on ui at specified places
+    if(size($widget) > 0){
+        string $collection = $gl_fkMatch_radioCol;    
+        na_selectRadioButtonOfCollectionByIndex($collection, $widget); 
+    }
+}
+
+
+
+/**widget commands
+*/
+global proc na_match_pickType_cmd(int $widget)
+{
+    //print("This Widget Index Was Pressed--"+$widget+"\n");    
+}
+
+
+/**ui command
+*/
+
+global proc na_match_cmd()
+{
+    global string $gl_fkMatch_radioCol;
+    
+    string $radioCol = $gl_fkMatch_radioCol;
+    int $widgetArray[] = na_getIDFromRadioButtonCollection($radioCol); //contains all user selections
+    na_assertIntSizeGreaterEqualTo($widgetArray,0);
+    
+    
+    for($widget in $widgetArray)
+    {
+        
+        if($widget == 0 || $widget == 1 || $widget == 2)
+        {
+            print( "setLeftArm_cmd"+"("+$widget+")\n" );
+            na_match_setLeftArm($widget);
+        }
+        
+        if($widget == 3 || $widget == 4 || $widget == 5 )
+        {
+            print( "setRightArm_cmd"+"("+$widget+")\n" );
+            na_match_setRightArm($widget);
+        }
+        
+        if( $widget == 6 || $widget == 7 || $widget == 8 )
+        {
+            print( "setLeftLeg_cmd"+"("+$widget+")\n" );
+            na_match_setLeftLeg($widget);
+        }
+        if( $widget == 9 || $widget == 10 || $widget == 11 )
+        {
+            print( "setRightLeg_cmd"+"("+$widget+")\n" );
+            na_match_setRightLeg($widget);
+        }
+    }
+    print("\n");
+}
+
+

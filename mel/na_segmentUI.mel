@@ -1,0 +1,76 @@
+//v1.0.0
+//Author: Nathaniel Anozie
+//ogbonnawork at gmail dot com
+//
+////description: common math functions 
+//supports rounding
+//
+//How to Install: Source: 
+//  na_segment.mel
+//  na_ui.mel
+//  na_segmentUI.mel
+//
+//date created: March 20, 2012
+//date last revised: March 20, 2012
+//
+//Modify at your own risk
+
+//source na_ui.mel
+
+    global string $gl_numSegments = "gl_numSegments";
+    global string $gl_startJoint="gl_startJoint";
+    global string $gl_endJoint="gl_endJoint";
+    global string $gl_prefix = "gl_prefix";
+    
+/**ui
+*/
+global proc na_segmentUI()
+{
+    
+    global string $gl_numSegments;
+    global string $gl_startJoint;
+    global string $gl_endJoint;
+    global string $gl_prefix;
+    
+    
+    //setup up title for gui
+    string $titleWindow = "na_segment.mel  Add Joint segments";
+    string $mainWindowName = "mainWindow";
+    na_window($mainWindowName,$titleWindow, 330, 150);
+    
+    
+    //set up format for gui
+    string $form = `formLayout -numberOfDivisions 50 "form layout"`;
+    
+    //add ui elements like textfields,buttons, and/or radio buttons
+    na_intFieldGrp($form, $mainWindowName,"segments", 5, -70, $gl_numSegments);
+    na_textFieldGrp($form, $mainWindowName,"start joint", 25, -70, $gl_startJoint);
+    na_textFieldGrp($form, $mainWindowName,"end joint", 45, -70, $gl_endJoint);
+    na_textFieldGrp($form, $mainWindowName,"prefix", 65, -70, $gl_prefix);
+    na_button($form, $mainWindowName,"ok", 100, 150,"button","na_segment_cmd");
+    
+    showWindow $mainWindowName;
+}
+
+
+/**ui command
+*/
+
+global proc na_segment_cmd()
+{
+    global string $gl_numSegments;
+    global string $gl_startJoint;
+    global string $gl_endJoint;
+    global string $gl_prefix;
+    
+    int $numSegments = 1;
+    string $startJoint ="";
+    string $endJoint = "";
+    string $prefix = "";
+    $numSegments = `intFieldGrp -query -value1 $gl_numSegments`;
+    $startJoint = `textFieldGrp -query -text $gl_startJoint`;
+    $endJoint = `textFieldGrp -query -text $gl_endJoint`;
+    $prefix = `textFieldGrp -query -text $gl_prefix`;
+    na_segment($numSegments,$startJoint,$endJoint,$prefix);
+}
+

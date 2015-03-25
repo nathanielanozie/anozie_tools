@@ -1,0 +1,229 @@
+//na_vis_UI_config.mel
+
+/**this is specific for vis ui and not for another tool although some ideas can
+be reused from here
+*/
+
+/**change data here
+how many check boxes
+*/
+global proc int
+na_vis_configGetMaxWidget()
+{ 
+    int $result = 6;
+    return $result;
+}
+global proc string[]
+na_vis_configGetAllObject()
+{ 
+    string $result[]={};
+    
+    $result = {"settings_visibility","settings_visibility","settings_visibility","settings_visibility","settings_visibility", "settings_visibility"};
+    
+    return $result;
+}
+global proc string[]
+na_vis_configGetAllLabel()
+{ 
+    string $result[]={};
+    
+    $result = {"left arm","left leg","right arm","right leg", "torso", "head"};
+    
+    return $result;
+}
+global proc string[]
+na_vis_configGetAllAttr()
+{ 
+    string $result[]={};
+    
+    $result = {"l_arm_vis","l_leg_vis","r_arm_vis","r_leg_vis","body_vis","head_vis"};
+    
+    return $result;
+}
+
+global proc int[]
+na_vis_configGetLabelIndex(int $widgetIndex)
+{ 
+    int $result[] = {};
+    
+    //change this for each ui element
+    //if($widgetIndex == 0){
+    //$result = {0}; }
+    
+    $result = {$widgetIndex};
+    return $result;
+}
+global proc int[]
+na_vis_configGetObjectIndex(int $widgetIndex)
+{ 
+    int $result[] = {};
+    
+    //if($widgetIndex == 0){
+    //$result = {0}; }
+    
+    $result = {$widgetIndex};
+
+    
+    return $result;
+}
+global proc int[]
+na_vis_configGetAttrIndex(int $widgetIndex)
+{ 
+    int $result[] = {};
+    
+    //if($widgetIndex == 0){
+    //$result = {0}; }
+    
+    $result = {$widgetIndex};
+
+    
+    return $result;
+}
+
+
+/**has ability so one widgetindex can correspond to multiple objects
+like need to set visibility of a group and a few shapes too
+*/
+global proc string[]
+na_vis_configGetObject(int $widgetIndex)
+{ 
+    string $result[] = {};
+        
+    string $allObject[] = na_vis_configGetAllObject();
+    na_assertObjectExist( $allObject );
+    
+    int $allIndex[] = {};
+    $allIndex = na_vis_configGetObjectIndex($widgetIndex);
+ 
+    na_assertIntSizeGreaterEqualTo( $allIndex, 1 );
+    
+    for($i = 0; $i < size($allIndex); $i++){
+        if( $allIndex[$i] >= size($allObject) ){ error("Index Error");}
+        $result[size($result)] = $allObject[$allIndex[$i]];
+    }
+    
+    return $result;
+}
+global proc string[]
+na_vis_configGetAttr(int $widgetIndex)
+{ 
+    string $result[] = {};
+        
+    string $allAttr[] = na_vis_configGetAllAttr();
+    
+    int $allIndex[] = {};
+    $allIndex = na_vis_configGetAttrIndex($widgetIndex);
+ 
+    na_assertIntSizeGreaterEqualTo( $allIndex, 1 );
+    
+    for($i = 0; $i < size($allIndex); $i++){
+        if( $allIndex[$i] >= size($allAttr) ){ error("Index Error");}
+        $result[size($result)] = $allAttr[$allIndex[$i]];
+    }
+    
+    return $result;
+}
+
+global proc string[]
+na_vis_configGetLabel(int $widgetIndex)
+{ 
+ string $result[] = {};
+        
+    string $allLabel[] = na_vis_configGetAllLabel();
+    
+    int $allIndex[] = {};
+    $allIndex = na_vis_configGetLabelIndex($widgetIndex);
+ 
+    na_assertIntSizeGreaterEqualTo( $allIndex, 1 );
+    
+    for($i = 0; $i < size($allIndex); $i++){
+        if( $allIndex[$i] >= size($allLabel) ){ error("Index Error");}
+        $result[size($result)] = $allLabel[$allIndex[$i]];
+    }
+    
+    return $result;
+}
+
+
+
+
+global proc
+na_vis_configAssert(int $widgetIndex)
+{ 
+    na_assertIntNonNegative({$widgetIndex});
+    
+    string $result = "";
+    
+    string $objectArray[] = na_vis_configGetObject($widgetIndex);
+    string $attrArray[] = na_vis_configGetAttr($widgetIndex);
+    string $labelArray[] = na_vis_configGetLabel($widgetIndex); 
+    
+    na_assertSizeEqualArg($labelArray,1);   
+    na_assertSizeEqualArg($objectArray,1);
+    na_assertSizeEqualArg($attrArray,size($objectArray));
+    na_assertObjectExist($objectArray);
+}
+
+
+//note some correspondence between what object goes to what attribute
+//is needed if there are more than one attribute, maybe having them
+//both identical sizes would be a good idea
+global proc string
+na_vis_configGetMelCmdOn(int $widgetIndex)
+{ 
+    na_assertIntNonNegative({$widgetIndex});
+    
+    string $result = "";
+    
+    string $objectArray[] = na_vis_configGetObject($widgetIndex);
+    string $attrArray[] = na_vis_configGetAttr($widgetIndex);
+
+
+    na_assertSizeEqualArg($objectArray,1);
+    na_assertSizeEqualArg($attrArray,size($objectArray));
+    
+    //change this here
+    string $object = $objectArray[0];
+    string $attr = $attrArray[0];
+    na_assertObjectExist( {($object+"."+$attr)} );
+        
+    
+    string $cmd = "setAttr "+$object+"."+$attr+" "+1;
+ 
+    $result = $cmd;
+    
+    return $result;
+    
+}
+
+global proc string
+na_vis_configGetMelCmdOff(int $widgetIndex)
+{ 
+    na_assertIntNonNegative({$widgetIndex});
+    
+    string $result = "";
+    
+    string $objectArray[] = na_vis_configGetObject($widgetIndex);
+    string $attrArray[] = na_vis_configGetAttr($widgetIndex);
+
+    
+    na_assertSizeEqualArg($objectArray,1);
+    na_assertSizeEqualArg($attrArray,size($objectArray));
+    
+    //change this here
+    string $object = $objectArray[0];
+    string $attr = $attrArray[0];
+    na_assertObjectExist( {($object+"."+$attr)} );
+        
+    
+    string $cmd = "setAttr "+$object+"."+$attr+" "+0;
+ 
+    $result = $cmd;
+    
+    return $result;
+    
+}
+
+
+
+

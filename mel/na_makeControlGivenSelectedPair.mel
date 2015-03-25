@@ -1,0 +1,73 @@
+/**@file na_makeControlGivenSelectedPair.mel
+*
+*use a two joint chain and allow creation of mirrored fk controls (Tested Maya 2008)
+*
+*@author Nathaniel O. Anozie (ogbonnawork at gmail dot com)
+*@note date created: June 11, 2013
+*@note Modify at your own risk
+*/
+
+//updated 06-11-2013 nate ----- initial commit
+
+//--make control with orientation of input joint, it returns a group that you can move to location you need. should work with any orientation
+global proc string na_makeControlGivenJoint( string $jnt )
+{
+    print("[na_makeControlGivenJoint] Start make control with orientation of input joint\n");
+    if(`objExists $jnt`==0){error("Requires input to exist on scene !!!\n");}
+    string $circleAr[] = `circle -ch 0`;
+    string $ctrl = $circleAr[0];
+    string $cntAr[] = `parentConstraint $jnt $ctrl`;
+    delete $cntAr[0];
+    parent $ctrl $jnt;
+    makeIdentity -apply true -t 1 -r 1 -s 0 -n 0 $ctrl;
+    string $ctrlPar = `group $ctrl`;
+    parent -w $ctrlPar; 
+
+    print("[na_makeControlGivenJoint] Great Day, Completed making control!\n");
+    return $ctrlPar;
+}
+
+//---use a two joint chain and with fk option it creates two mirrored controls, it should work on x axis only. code should be able to be extended to different axis.
+global proc na_makeControlGivenSelectedPair( int $isFK )
+{
+    print("[na_makeControlGivenSelectedPair] Start make controls for input pair\n");
+    string $sel[] = `ls -sl`;
+    if(size($sel)!=2){error("Requires Two things Selected where to put created animator controls");}
+    
+    select -cl;
+    string $jnt = `joint -p -1 0 0`;
+    joint -p -2 0 0 ;
+    joint -e -zso -oj xyz -sao yup $jnt;
+    
+    string $jnt_opposite;
+    if( $isFK ){
+    mirrorJoint -mirrorYZ -mirrorBehavior -searchReplace "l_" "r_" $jnt; //change mirrorYZ for different axis
+    string $jntArOpposite[] = `ls -sl`;
+    $jnt_opposite = $jntArOpposite[0];
+    }
+    else{
+        $jnt_opposite = $jnt;
+    }
+    
+    //for left side control
+    string $sideA = na_makeControlGivenJoint( $jnt );
+    
+    //for opposite side control, assumes first thing selected is in negative x direction, i think would need to switch if first selected is in +x
+    string $sideB = na_makeControlGivenJoint( $jnt_opposite );
+    
+    //so created things are at selected
+    string $cntAr[] = `pointConstraint $sel[0] $sideA`;
+    delete $cntAr[0];
+    string $cntAr[] = `pointConstraint $sel[1] $sideB`;
+    delete $cntAr[0];
+    
+    //cleanup
+    if(`objExists $jnt`){delete $jnt;}
+    if(`objExists $jnt_opposite`){delete $jnt_opposite;}
+    
+    print("[na_makeControlGivenSelectedPair] Great Day, Completed making controls!\n");
+}
+
+
+
+

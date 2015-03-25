@@ -1,0 +1,111 @@
+/**@file na_snapMake_UI.mel v1.0.1
+*/
+
+global string $gl_anim = "gl_anim";
+global string $gl_dupAnim = "gl_dupAnim";
+global string $gl_snapAttr = "gl_snapAttr";
+global string $gl_prefix = "gl_prefix";
+global string $gl_moveType_1 = "gl_moveType_1";
+global string $gl_moveType_2 = "gl_moveType_2";
+global string $gl_moveType_3 = "gl_moveType_3";
+
+global proc na_snapMake_UI()
+{
+    global string $gl_anim;
+    global string $gl_dupAnim;
+    global string $gl_snapAttr;
+    global string $gl_prefix;
+    
+    //setup up title for gui
+    string $titleWindow = "na_snap.mel  Snapping";
+    string $mainWindowName = "mainWindow";
+    na_window($mainWindowName,$titleWindow, 430, 205);
+    
+    //set up format for gui
+    string $form = `formLayout -numberOfDivisions 50 "form layout"`;
+    
+    
+    na_textFieldGrp($form, $mainWindowName,"anim", 5, -10, $gl_anim);
+    na_textFieldGrp($form, $mainWindowName,"where to move", 30, -10, $gl_dupAnim);
+    na_textFieldGrp($form, $mainWindowName,"prefix backend", 55, -10, $gl_prefix);
+    na_textFieldGrp($form, $mainWindowName,"attr name", 80, -10, $gl_snapAttr);
+    
+    na_checkBox($form, $mainWindowName,"translation", 110, 60,"moveType_pickTypeOn_cmd(1)","moveType_pickTypeOff_cmd(1)");
+    na_checkBox($form, $mainWindowName,"rotation", 110, 170,"moveType_pickTypeOn_cmd(2)","moveType_pickTypeOff_cmd(2)");
+    na_checkBox($form, $mainWindowName,"scale", 110, 280,"moveType_pickTypeOn_cmd(3)","moveType_pickTypeOff_cmd(3)");
+    
+    na_button($form, $mainWindowName,"ok", 150, 180,"button","na_snapMake_cmd");
+    
+    showWindow $mainWindowName;
+    
+}
+
+/**widget commands
+*/
+global proc moveType_pickTypeOn_cmd(int $type)
+{
+    global string $gl_moveType_1;
+    global string $gl_moveType_2;
+    global string $gl_moveType_3;
+
+    //widget command string
+    string $moveType_pickType_on_str = "on";
+    
+    if($type == 1){ $gl_moveType_1 = $moveType_pickType_on_str; }
+    if($type == 2){ $gl_moveType_2 = $moveType_pickType_on_str; }
+    if($type == 3){ $gl_moveType_3 = $moveType_pickType_on_str; }
+}
+global proc moveType_pickTypeOff_cmd(int $type)
+{
+    global string $gl_moveType_1;
+    global string $gl_moveType_2;
+    global string $gl_moveType_3;
+
+    //widget command string
+    string $moveType_pickType_off_str = "off";
+    
+    if($type == 1){ $gl_moveType_1 = $moveType_pickType_off_str; }
+    if($type == 2){ $gl_moveType_2 = $moveType_pickType_off_str; }
+    if($type == 3){ $gl_moveType_3 = $moveType_pickType_off_str; }
+}
+
+
+
+/**ui command
+*/
+
+global proc na_snapMake_cmd()
+{
+    global string $gl_anim;
+    global string $gl_dupAnim;
+    global string $gl_snapAttr;
+    global string $gl_prefix;
+    global string $gl_moveType_1;
+    global string $gl_moveType_2;
+    global string $gl_moveType_3;
+    
+    //main variables used by script
+    string $anim = "";
+    string $dupAnim = "";
+    string $attrName = "";
+    string $prefix = "";
+    int $moveType[] = {};
+    
+    //get main variables
+    $anim = `textFieldGrp -query -text $gl_anim`;
+    $dupAnim = `textFieldGrp -query -text $gl_dupAnim`;
+    $attrName = `textFieldGrp -query -text $gl_snapAttr`;
+    $prefix = `textFieldGrp -query -text $gl_prefix`;
+    
+    //widget command string
+    string $moveType_pickType_on_str = "on";
+    
+    if( `strcmp $gl_moveType_1 $moveType_pickType_on_str` == 0 ){ $moveType[size($moveType)] = 1; }
+    if( `strcmp $gl_moveType_2 $moveType_pickType_on_str` == 0 ){ $moveType[size($moveType)] = 2; }
+    if( `strcmp $gl_moveType_3 $moveType_pickType_on_str` == 0 ){ $moveType[size($moveType)] = 3; }
+
+    
+    //main command
+    na_snapMake($anim,$dupAnim,$moveType,$attrName,$prefix);
+
+}

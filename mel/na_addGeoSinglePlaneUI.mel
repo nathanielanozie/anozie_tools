@@ -1,0 +1,45 @@
+//source
+//na_hierarchy.mel
+//naMath.mel
+//naGeneral.mel
+//date created: 03/21/02
+//date last revised: 03/21/02
+
+global string $gl_rootJoint = "gl_rootJoint";
+
+
+/**ui
+*/
+global proc na_addGeoSinglePlaneUI()
+{    
+    global string $gl_rootJoint;
+    
+    
+    //setup up title for gui
+    string $titleWindow = "na_hierarchy.mel  Add Geo";
+    string $mainWindowName = "mainWindow";
+    na_window($mainWindowName,$titleWindow, 330, 90);
+    
+    
+    //set up format for gui
+    string $form = `formLayout -numberOfDivisions 50 "form layout"`;
+    
+    //add ui elements like textfields,buttons, and/or radio buttons
+    na_textFieldGrp($form, $mainWindowName,"root joint", 5, -70, $gl_rootJoint);
+    na_button($form, $mainWindowName,"ok", 45,160,"button","na_addGeoSinglePlane_cmd");
+    
+    showWindow $mainWindowName;
+}
+
+
+/**ui command
+*/
+
+global proc na_addGeoSinglePlane_cmd()
+{
+    global string $gl_rootJoint;
+    
+    string $joint = "";
+    $joint = `textFieldGrp -query -text $gl_rootJoint`;
+    na_addGeoSinglePlaneJoint($joint);
+}

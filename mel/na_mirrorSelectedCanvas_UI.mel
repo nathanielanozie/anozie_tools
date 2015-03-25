@@ -1,0 +1,66 @@
+/**@file na_mirrorSelectedCanvas_UI.mel mirror rivet canvas v1.0.0
+*/
+
+global string $gl_mirrorAxis = "gl_mirrorAxis";
+
+
+/**ui
+*/
+global proc na_mirrorSelectedCanvas_UI()
+{
+
+    global string $gl_mirrorAxis;
+
+    //setup up title for gui
+    string $titleWindow = "na_mirrorSelectedCanvas_UI.mel";
+    string $mainWindowName = "mainWindow";
+    na_window($mainWindowName,$titleWindow, 300, 120);
+    
+    //set up format for gui
+    string $form = `formLayout -numberOfDivisions 50 "form layout"`;
+    
+    
+    //mirror axis
+    na_text($form, $mainWindowName,"mirror axis", 22, 20);
+    string $col_na_mirrorSelectedCanvas = `radioCollection`;
+    na_radioButton($form, $mainWindowName,"x", 17, 110,"na_mirrorSelectedCanvas_pickType_cmd(0)",$col_na_mirrorSelectedCanvas);
+    na_radioButton($form, $mainWindowName,"y", 17, 150,"na_mirrorSelectedCanvas_pickType_cmd(1)",$col_na_mirrorSelectedCanvas);
+    na_radioButton($form, $mainWindowName,"z", 17, 190,"na_mirrorSelectedCanvas_pickType_cmd(2)",$col_na_mirrorSelectedCanvas);
+
+    
+    na_button($form, $mainWindowName,"ok", 68, 140,"button","na_mirrorSelectedCanvas_UI_cmd");
+    
+    showWindow $mainWindowName;
+}
+
+/**widget commands
+*/
+global proc na_mirrorSelectedCanvas_pickType_cmd(int $type)
+{
+    global string $gl_mirrorAxis;
+    if($type == 0){ $gl_mirrorAxis = "0"; }
+    else if($type == 1){ $gl_mirrorAxis = "1"; }
+    else {$gl_mirrorAxis = "2";}
+}
+
+
+/**ui command
+*/
+
+global proc na_mirrorSelectedCanvas_UI_cmd()
+{
+    global string $gl_mirrorAxis;
+  
+    
+    //main variables used by script
+    int $mirrorAxis = 0;
+    ///
+      
+    //got main variables
+    $mirrorAxis = int($gl_mirrorAxis);
+      
+    
+    na_mirrorSelectedCanvas( $mirrorAxis );
+}
+
+

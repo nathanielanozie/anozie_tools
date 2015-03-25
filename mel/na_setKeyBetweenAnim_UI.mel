@@ -1,0 +1,75 @@
+/**
+*/
+
+
+global string $gl_fromAttribute = "gl_fromAttribute";
+global string $gl_fromAnim = "gl_fromAnim";
+global string $gl_toAnim = "gl_toAnim";
+
+/**ui
+*/
+global proc
+na_setKeyBetweenAnimUI()
+{
+    global string $gl_fromAttribute;
+    global string $gl_fromAnim;
+    global string $gl_toAnim;
+    
+    
+    
+    //setup up title for gui
+    string $titleWindow = "na_setKeyBetweenAnim.mel  Add new keys";
+    string $mainWindowName = "mainWindow";
+    na_window($mainWindowName,$titleWindow, 420, 220);
+    
+    //set up format for gui
+    string $form = `formLayout -numberOfDivisions 50 "form layout"`;
+    
+    
+    na_textFieldGrp($form, $mainWindowName,"attr(s) space separated", 25, 20, $gl_fromAttribute);
+    na_textFieldGrp($form, $mainWindowName,"from anim", 85, 20, $gl_fromAnim);
+    na_textFieldGrp($form, $mainWindowName,"to anim", 115, 20, $gl_toAnim);
+    
+    
+    na_button($form, $mainWindowName,"ok", 160, 170,"button","na_setKeyBetweenAnim_cmd");
+    
+    showWindow $mainWindowName;
+    
+    
+}
+
+
+/**ui command
+@see na_setKeyBetweenAnim
+*/
+global proc
+na_setKeyBetweenAnim_cmd()
+{
+    
+    global string $gl_fromAttribute;
+    global string $gl_fromAnim;
+    global string $gl_toAnim;
+    
+    
+    //temp
+    string $fromAttribute="";
+    
+    //used
+    string $fromAttributeArray[] = {};
+    string $fromAnim="";
+    string $toAnim="";
+    
+    
+    $fromAttribute = `textFieldGrp -query -text $gl_fromAttribute`;
+    $fromAnim = `textFieldGrp -query -text $gl_fromAnim`;
+    $toAnim = `textFieldGrp -query -text $gl_toAnim`;
+    
+    
+    
+    $fromAttributeArray = stringToStringArray($fromAttribute," ");
+    
+    
+    
+    na_setKeyBetweenAnim($fromAnim,$toAnim,$fromAttributeArray);
+    
+}

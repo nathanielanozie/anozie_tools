@@ -1,0 +1,392 @@
+/* 
+naCpBaseToTarget.mel  v1.0.0
+
+Last Modified: October 31, 2011
+Author: Nathaniel Anozie
+ogbonnawork at gmail dot com
+nathanielanozie dot blogspot dot com
+
+
+Acknowledgement: Firat Enderoglu, where I learned 
+about the shapeOrig node and modifying blendshape targets 
+from base polygon from reading his online rigging tutorials
+
+Purpose: Edit blendshape targets from the polygon mesh used to make targets.
+
+Why: Reduce time to make modifications on blendshapes by allowing base blendshape changes to affect the targets
+automatically.
+
+
+How to install:
+tested for Maya 2008 on a mesh about 1700 vertices
+source script in Maya
+
+assume you have
+blendshapes and a mesh that blendshapes alter
+mesh has no polySmooth applied
+assumes meshes for targets have been created by transforms
+(use naCpBasetToTarget.mel to copy your blendshapes into a cleaner blendshape format about 20 secs per 3000 faces)
+
+
+
+Select polygon mesh (not blendshape)
+
+and type in mel script editor
+naCpBaseToTargetOn;
+
+now your edits should effect targets.
+when your complete and want to return to normal
+
+in outliner select polygon mesh (not blendshape)
+and type in mel script editor
+naCpBaseToTargetOff();
+
+
+Version History:
+v1.0.0 initial release
+*/
+
+//last updated: 02/16/2014 --  working on fixing get orig node-- added fix for get blend node -- added so remembers base mesh
+//last updated: 10/31/2011 -- initial release --
+
+
+
+/////given a polygon with blendhshapes allow ability to apply modeling changes to base shape to all target shapes
+//needs a selected polygon
+/*
+    supports:
+        polygon
+*/
+
+global string $gl_basePoly = "gl_basePoly";
+
+global proc naCpBaseToTargetOn()
+{
+    global string $gl_basePoly;
+    string $sel[] = `filterExpand -selectionMask 12`;
+    
+    if( size($sel) == 1 ){
+        
+        ////get shape and tweak node
+        string $baseMesh = $sel[0];    
+        $gl_basePoly = $baseMesh;
+        string $baseShape = getShape($baseMesh);
+        string $blendNode[] = getBlendNode($baseMesh);
+        string $tweakNode[] = getTweakNode($baseMesh);     
+        
+
+        
+        if(size($blendNode) == 1){
+            
+            string $targetShapes[] = getTargetShapes($blendNode[0]);        
+            string $origNodeArray[] = getOrigNode($baseMesh);
+            string $origNode = $origNodeArray[0];
+            
+            if(size($origNodeArray) > 0){
+                ////make base orig node visible and ready to edit
+                int $i = 0;
+                
+                //make target shapes editable by editing original mesh
+                //skip target shapes that are already connected
+                //loop target shapes
+                for($i=0; $i<size($targetShapes); $i++)
+                { 
+                    string $sourcePlug = $tweakNode[0]+".outputGeometry[0]";
+                    string $destinationPlug = $targetShapes[$i]+".inMesh";
+                    int $isConnected = `isConnected $sourcePlug $destinationPlug`;
+                    if( $isConnected == 0 ){
+                        connectAttr -f ($sourcePlug) ($destinationPlug);
+                    }
+                    else{
+                        warning("skipped target shape: "+$targetShapes[$i]);
+                    }
+                }
+                
+                //make it so your edit effects targets by editing an intermediate object
+                setAttr ($origNode+".intermediateObject") 0;
+                //so dont accidentally edit non intermediate object
+                //hide original shape node
+                setAttr ($baseShape+".visibility") 0;
+                //put material on thing we can edit
+                select -r $origNode;
+                sets -e -forceElement ("initialShadingGroup");
+            }
+            else
+            {
+                error("cannot find orig node");
+            }
+                   
+        }
+        else
+        {
+            error("cannot find one blend node");
+        }
+    }
+    else
+    {
+        error("please select base mesh");
+    }
+}
+
+
+////// Error: No object matches name:  // 
+global proc naCpBaseToTargetOff()
+{
+    global string $gl_basePoly;
+    select -r $gl_basePoly;
+    string $sel[] = `ls -sl`;
+    
+    if( size($sel) == 1 ){
+        
+        ////get shape and tweak node
+        string $baseMesh = $sel[0];    
+        string $baseShape = getShape($baseMesh);
+        string $blendNode[] = getBlendNode($baseMesh);
+        string $tweakNode[] = getTweakNode($baseMesh);     
+       
+        if(size($blendNode) == 1){
+             
+            string $targetShapes[] = getTargetShapes($blendNode[0]);
+            
+            //make it so your edit dont effects targets by editing an intermediate object
+            string $origNodeArray[] = getOrigNode($baseMesh);
+            string $origNode = $origNodeArray[0];
+            
+            setAttr ($origNode+".intermediateObject") 1;
+            //show original shape node
+            setAttr ($baseShape+".visibility") 1;            
+            
+            ////make base orig node not visible
+            int $i = 0;
+            //loop target shapes
+            for($i=0; $i<size($targetShapes); $i++)
+            { 
+                //bug doesn not skip target without the connection it wants to remove
+                string $sourcePlug = $tweakNode[0]+".outputGeometry[0]";
+                string $destinationPlug = $targetShapes[$i]+".inMesh";
+                int $isConnected = `isConnected $sourcePlug $destinationPlug`;
+                if( $isConnected == 1 ){
+                    disconnectAttr ($sourcePlug) ($destinationPlug);
+                }
+                else{
+                    warning("skipped target shape: "+$targetShapes[$i]);
+                }
+            } 
+        }
+        else
+        {
+            error("cannot find one blend node");
+        }
+    }
+    else
+    {
+        error("please select base mesh");
+    }    
+}
+
+
+
+
+////given transform string name return string name for blend shape node
+/*
+    /////
+    string name of transform
+    ex: pCube1
+    does not support a transform with a polysmooth
+*/
+global proc string[] getBlendNode(string $transform)
+{
+    string $blendNode[];
+    string $shape = getShape($transform);    
+    string $allNodeShape[];
+    $allNodeShape = `listConnections -s true -d false -c true $shape`;
+    
+    //$blendNode = getFirstHasNodeType($allNodeShape, "blendShape");
+    
+    //changed to getting matching strings using all potential blendshape nodes
+    //
+    string $allBlendNode[] = `ls -type blendShape`;
+    for( $potentialBlendNode in $allBlendNode ){
+        for( $somethingInConnection in $allNodeShape){
+            if( gmatch( $somethingInConnection, $potentialBlendNode+"*") ){$blendNode[size($blendNode)] = $potentialBlendNode;break;}
+        }
+    }
+    //
+    return $blendNode;
+}
+
+
+/////given a blend node string, return the shapes involved as targets of blendshape
+/*
+*/
+global proc string[] getTargetShapes(string $blendShape)
+{
+    string $result[];
+    string $blendNode = $blendShape;
+    string $targetMesh[] = `blendShape -q -t $blendNode`;                
+    
+    //loop the meshes that are targets of users base mesh
+    //reason were not done here is we need
+    //to find the shape of the mesh used in blend
+    //and not just the name of the mesh
+    for($i=0; $i<size($targetMesh); $i++){
+        string $shapes[] = `listRelatives -children -fullPath $targetMesh[$i]`;
+              
+        //given a transform find the shape that is a target
+        //since a transform can have multiple shapes 
+        //we find out which of these shapes is actually
+        //connected to a blend node
+        for($k=0; $k<size($shapes); $k++){
+            string $shapesDestination[] = `listConnections -s false -d true -c false $shapes[$k]`;
+            
+            string $blendName[] = getFirstHasNodeType($shapesDestination,"blendShape");
+            if(size($blendName) > 0){
+                int $isEqual = `strcmp $blendName[0] $blendNode`;
+                if( $isEqual == 0 )
+                {
+                    //found blend node matching a shape
+                    //save shape
+                    $result[size($result)] = $shapes[$k];
+                    break;
+                }
+            }
+        }
+    }   
+    return $result;
+}
+
+
+
+
+////given transform string name return string name for tweak node
+/*
+    /////
+    string name of transform
+    ex: pCube1
+*/
+global proc string[] getTweakNode(string $transform)
+{
+    string $tweakNode[];
+    string $shape = getShape($transform);    
+    string $allNodeShape[] = `listConnections -s true -d false -c true $shape`;
+    $tweakNode = getFirstHasNodeType($allNodeShape, "tweak");
+    return $tweakNode;
+}
+
+
+
+
+/////get base orig node from a polygon mesh, and a tweak node
+/*
+to help modelers witn blendshapes
+this helps find a node that will
+allow changes to one mesh to propagate
+to all the blendshape targets automatically
+*/
+/* DEPRECATED 
+global proc string[] getOrigNode(string $mesh, string $tweakNode)
+{
+    string $result[];
+    string $poly = $mesh;
+    string $tweak = $tweakNode;
+
+    
+    //string $origNode =$baseShape+"Orig";     
+  
+    //the node we are after is the input to a node called groupPart
+    //it is found using a node called tweak
+    string $goupPartArray[] = `listConnections -s true -d false -c false($tweak+".input[0].inputGeometry")`;
+    if(size($goupPartArray) > 0){
+        string $groupPart = $goupPartArray[0];
+        string $relativesMesh[] = `listRelatives -fullPath -shapes $poly`;
+        for($i=0; $i<size($relativesMesh); $i++){
+            string $shape = $relativesMesh[$i];
+            string $destinations[] = `listConnections -s false -d true -c false ($shape)`;
+            if( $destinations[0] == $groupPart )
+            {
+                $result[0] = $relativesMesh[$i];
+                break;
+            }
+        }
+    }
+    return $result;
+    
+}
+*/
+//NOTE: this won't work if you renamed the shape orig node
+global proc string[] getOrigNode(string $mesh)
+{
+    //it looks look all potential shape orig meshes and does string matching to see if it is the shape orig..    
+    string $result[];
+    
+    
+    //changed to getting matching strings using all potential mesh nodes
+    //
+    string $allMeshNode[] = `ls -type mesh`;
+   
+    for( $potentialOrigNode in $allMeshNode ){
+            if( gmatch( $potentialOrigNode, $mesh+"ShapeOrig*") ){$result[size($result)] = $potentialOrigNode;break;}
+    }
+    
+    return $result;
+}
+
+
+////given array transform return array shape
+/*
+    a string array name of transform, assumes it exists
+*/
+global proc string[] getShapes(string $_transform[])
+{
+    string $result[];
+    string $transform[] = $_transform;
+    int $i = 0;
+    string $shapes[];
+    
+    for($i = 0; $i <size($transform); $i++){
+        $shapes[$i] = getShape($transform[$i]);
+    }
+    
+    $result = $shapes;
+    return $result;
+}
+
+
+////given trasnform return shape
+/*
+    a string name of transform, assumes it exists
+*/
+global proc string getShape(string $_transform)
+{
+    string $result = "";
+    string $transform = $_transform;
+    string $shapes[] = `listRelatives -fullPath -shapes $transform`;
+    $result = $shapes[0];
+    return $result;
+}
+
+/**given string array of node and node type return array for name first occurence of node type
+@param string array of node ex: [blendNode, tweakNode, shapeNode]
+@param string node type ex: tweak, blendShape
+*/
+global proc string[] 
+getFirstHasNodeType(string $nodeArray[], string $nodeType)
+{
+    string $result[];
+    int $i= 0;
+    string $tempType;//store node type of loop element,cleared on every step
+    //loop nodes of input
+    
+    for ($i=0;$i< size($nodeArray); $i++)
+    {
+        $tempType = `nodeType $nodeArray[$i]`;
+        //if found matching node return it
+        if( $tempType == $nodeType  )
+        {
+            $result[0] = $nodeArray[$i];
+            break;
+        }
+    }
+    
+    return $result;
+}

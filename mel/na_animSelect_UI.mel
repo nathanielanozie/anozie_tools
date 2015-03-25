@@ -1,0 +1,75 @@
+//na_animSelect_UI.mel
+
+
+/**a ui script that uses an external config file
+@bug the layout is hard to read example need to scroll really far down to find the all button, maybe having
+multiple columns per row like say all arm on one row, all leg on one, all torso on another then would be easier to read.
+*/
+
+global proc na_animSelect_UI(string $title, string $mainWindowName)
+{
+
+    
+    //trying to make window big enough to accomadate widgets
+    int $numberWidget = na_animSelect_configGetMaxWidget();
+    if($numberWidget==0){error("Requires At least One Widget");}
+    float $xPos = 40.0;
+    float $width = 160.0;
+    float $height = $numberWidget*(60.0);
+    if( $height >= 600){error("Requires Smaller Window Size");}
+    
+
+    string $firstFrameLayout =
+    `frameLayout
+    -label $title
+    -labelAlign "center"
+    -collapsable true
+    -collapse true
+    `;
+    
+    //set up format for gui
+    string $form = `formLayout -numberOfDivisions 50 "form layout"`;
+    
+
+    
+    //here we make a widget according to config file
+    //
+    na_animSelect_init();
+    float $yPos = 50.0;
+    float $startYPos = 20.0;
+    int $widgetIndex = 0;
+    string $onCmd = "na_animSelect_pickTypeOn_cmd(1,"+$widgetIndex+")";
+    string $offCmd = "na_animSelect_pickTypeOn_cmd(0,"+$widgetIndex+")";
+    string $labelArray[] = {};
+    string $label = "translation";
+
+    for($i=0; $i < $numberWidget; $i++)
+    {
+        $yPos = ( (0.1*$height)/$numberWidget)+($i*50)+$startYPos;
+        $widgetIndex = $i;
+        $onCmd = "na_animSelect_pickTypeOn_cmd(1,"+$widgetIndex+")";
+        $offCmd = "na_animSelect_pickTypeOn_cmd(0,"+$widgetIndex+")";
+        $labelArray = na_animSelect_configGetLabel($widgetIndex); 
+        na_assertSizeEqualArg($labelArray,1);
+        $label = $labelArray[0];
+        na_checkBox($form, $mainWindowName,$label,$yPos, $xPos,$onCmd,$offCmd);  
+    }
+    
+    
+}
+
+/**widget commands
+*/
+global proc na_animSelect_pickTypeOn_cmd(int $type, int $widgetIndex)
+{   
+    if($type == 1){ 
+        //print doing something
+        na_animSelect_configGetMelCmdOn($widgetIndex);         
+    }
+    else if($type == 0){    
+        na_animSelect_configGetMelCmdOff($widgetIndex); 
+    }
+    
+}
+
+

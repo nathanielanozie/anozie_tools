@@ -1,0 +1,59 @@
+/**@file na_spaceMakeLocatorUI.mel v1.0.0
+*/
+
+
+global string $gl_anim = "gl_anim";
+global string $gl_attr = "gl_attr";
+global string $gl_suffix = "gl_suffix";
+
+
+/**ui
+*/
+global proc
+na_spaceMakeLocatorUI()
+{
+    global string $gl_anim;
+    global string $gl_attr;
+    global string $gl_suffix;
+    
+    
+    //setup up title for gui
+    string $titleWindow = "na_space.mel  Add locator";
+    string $mainWindowName = "mainWindow";
+    na_window($mainWindowName,$titleWindow, 340, 200);
+    
+    //set up format for gui
+    string $form = `formLayout -numberOfDivisions 50 "form layout"`;
+    
+        
+    //set up ui widgets
+    na_textFieldGrp($form, $mainWindowName,"anim", 25, -50, $gl_anim);
+    na_textFieldGrp($form, $mainWindowName,"enum", 65, -50, $gl_attr);
+    na_textFieldGrp($form, $mainWindowName,"suffix", 105, -50, $gl_suffix);
+    na_button($form, $mainWindowName,"ok", 145, 150,"button","na_spaceMakeLocator_cmd");
+    
+    showWindow $mainWindowName;
+    
+}
+
+
+/**ui command
+*/
+global proc
+na_spaceMakeLocator_cmd()
+{
+    global string $gl_anim;
+    global string $gl_attr;
+    global string $gl_suffix;
+    
+    //used
+    string $anim="";
+    string $attr="";
+    string $suffix="";
+    
+    $anim = `textFieldGrp -query -text $gl_anim`;
+    $attr = `textFieldGrp -query -text $gl_attr`;
+    $suffix = `textFieldGrp -query -text $gl_suffix`;
+    
+    na_makeLocatorAtAnimFromEnum($anim,$attr,$suffix);
+}

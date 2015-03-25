@@ -1,0 +1,62 @@
+/**@file na_renameBlendshape.mel Face Rigging Utility to name Blendshape Sculpts
+@note date created: Aug 1, 2012
+@author Nathaniel Anozie, ogbonnawork at gmail dot com, nathananozie dot blogspot dot com
+*/
+
+
+/**blendshapes usually have a left and right half, so given user selected blends (order matters) rename them. advantage is we 
+need names for only half of them. it does matter that order of prefix and order blends were selected correspond.
+@param $name (string[]) names
+@param $prefix (string[]) prefix
+@pre selected transform, number names equals half number selected,supports exactly two prefixes
+@post changes name of selected to  'prefix_currentName'
+@note ex: polySurface1,polySurface2,polySurface5,polySurface6 selected with prefix 'lt','rt' and name 'browUp', 'browDn'
+@result ex: lt_browUp, rt_browUp, lt_browDn, rt_browDn
+*/
+global proc
+na_renameBlendshape(string $name[], string $prefix[])
+{
+    
+    string $sel[] = `ls -sl`;
+    
+    na_assertTypeInList($sel,{"transform"});
+    na_assertSizeEqualArg($prefix,2);//ex: lt,rt
+    if( size($name)*size($prefix) != size($sel) ){error("Cannot Rename --please check there are enough names provided for half of selected");}
+    
+    //make sure new names don't exist already on scene
+    string $newName[] = {};
+    for($j = 0; $j < size($name); $j++)
+    {
+        $newName[size($newName)] = $prefix[0]+"_"+$name[$j];
+        $newName[size($newName)] = $prefix[1]+"_"+$name[$j];
+    }
+    na_assertObjectDoesNotExist($newName);
+    na_assertSizeEqualArg($newName,size($sel));
+    
+    //weve got names so we can rename selected
+    //
+    for($i = 0; $i < size($sel); $i++)
+    {rename $sel[$i] $newName[$i];}
+    
+}
+
+global proc
+na_renameBlendshape_unitTest()
+{
+    select -cl;
+    
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    select -cl  ;
+    select -r pCube1 ;
+    duplicate -rr;
+    move -r -os -wd 2 0 0 ;
+    duplicate -rr;
+    move -r -os -wd 2 0 0 ;
+    duplicate -rr;
+    move -r -os -wd 2 0 0 ;
+    
+    select -r pCube1 pCube2 pCube3 pCube4;
+    na_renameBlendshape({"browUp","browDn"}, {"lt","rt"});
+    
+}
+

@@ -1,0 +1,71 @@
+
+/////makes epmpty attribute of type float (supports 3 sdk values)
+//supports: curl, spread finger, with max min on sdk of 10,-10,0 respectively, 3 sdks, different controls
+
+/**put empty attributes on animator controls using appropriate data
+*/
+global proc 
+curlHandAttr()
+{   
+    string $attributeNames[] = getNameAttr_finger_curl(); //ex: ["a_curl","joint_twist"] what are names for attr to create
+    string $controllerForAttribute[] = getControlNamePerAttr_finger_curl();//ex: ["finger1_con","phalange2_ctrl"]  
+    //needs to be in same order as attribute names
+    
+    //put empty attributes on controls nothing put on joints
+    for( $i = 0; $i < size($attributeNames); $i++ )
+    {
+        na_addAttribute( {$attributeNames[$i]}, {$controllerForAttribute[$i]} );
+        addAttr -e -minValue -10.0 -maxValue 10.0 ($controllerForAttribute[$i]+"."+$attributeNames[$i]);  
+
+    }
+    
+}
+
+
+/////set keys on the attributes so moving the attributes can move a skeleton part
+//it requires mapping between skeleton part and attribute to be made in an external data file
+//supports: curl, curl finger, with different max min on sdk, 3 sdks, different controls
+/*
+needs no arguments
+*/
+global proc 
+curlHandControl()
+{    
+    string $namesAllSkeleton[] = getDefaultNameJoint();
+    string $attributeNames[] = getNameAttr_finger_curl();
+    string $controllerForAttribute[] = getControlNamePerAttr_finger_curl();
+    string $skipAttr[] = getDefaultFingerCurlAttributes();
+    float $defaultFingerSDK[] = getDefaultFingerCurlSDK();
+    
+    //set rotation y of all finger joints according to trio of data activated by controls
+    float $frame[],$value[];
+    string $to,$toAttr,$from,$fromAttr,$jnt;
+    int $attrIndex[];
+    $toAttr = "rotateY"; //because default curling finger joint is in y direction
+    $frame = {10.0,-10.0,0.0};//max,min,default on control
+    for($i = 0; $i < size($namesAllSkeleton); $i++)
+    {
+        //we tell this is a finger joint by skipping na 
+        if( strcmp( $skipAttr[$i] , "NA" ) != 0 ){
+            $jnt = $namesAllSkeleton[$i];
+            $to = $jnt+"."+$toAttr;
+            $value = {$defaultFingerSDK[$i*3+0],$defaultFingerSDK[$i*3+1],$defaultFingerSDK[$i*3+2]};
+            
+            //because attributes,controls are not same length as joints
+            //this use an attribute list with nas but same length as joints to find control
+            $attrIndex = naIndex($skipAttr[$i],$attributeNames);
+            $from = $controllerForAttribute[$attrIndex[0]];
+            $fromAttr = $attributeNames[$attrIndex[0]];
+            
+            print("to--"+$to+"\n");
+            print("from--"+$from+"\n");
+            print("frinAttr--"+$fromAttr+"\n");
+            na_setSDK($to,$frame,$value, $from, $fromAttr);
+        }
+    }
+}
+
+
+
+
+

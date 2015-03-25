@@ -1,0 +1,283 @@
+/**@file
+@brief  useful in weightpainting if skinned a split mesh and want to select same vertices on combined mesh
+@author Nathaniel O. Anozie (ogbonnawork at gmail dot com)
+@note date created: 02 09, 2015
+@note --
+@note -- 
+@note Modify at your own risk
+*/
+
+//updated 02-16-2015 nate --- adding multi selection support
+//updated 02-09-2015 nate --- working on initial release
+
+
+/*usage -- try to make a simple ui to load source, load destination, enter optional tolerance default to .05
+source "/Users/noa/Documents/src/mel/naMirrorUV/trunk/naSelectVertsByWorldPosition.mel";
+
+string $result[] = naSelectVertsByWorldPosition( "polySurface1", "pPlane2", .09  ) 
+
+select -r $result;
+*/
+
+/**given selected vertices return list of closest vertices on destination mesh 
+@pre assumes vertices selected are all source vertices
+@pre assumes nearestPointOnMesh plugin loaded
+@pre assumes argument are polygon meshes on scene
+@param howCloseIsNearEnough, it will produce error on first time it can't find a near enough mirrorer vertex
+@note it will do the opposite side of whatever axis chosen
+@pre the mesh this is called on is symmetrical otherwise the results wont be mirror but something else
+*/
+
+//eval( "source \"na_getPolyFromComponent.mel\";" );//helper
+
+global proc string[] 
+naSelectVertsByWorldPosition( string $destinationMesh, float $howCloseIsNearEnoughArg )
+{   
+    float $howCloseIsNearEnough = 0.09;  //default to use ---
+    if( $howCloseIsNearEnoughArg < $howCloseIsNearEnough ){ $howCloseIsNearEnough = $howCloseIsNearEnoughArg; }
+    string $result[] = {};
+    string $_verts[] = `ls -sl`;
+    //na_assertTypeInList($_verts,{"mesh"});  
+    //na_assertFloatNonNegative( {$howCloseIsNearEnough} );
+    
+
+    
+    
+            
+    //print(`date -time`+"\n");
+    string $cVerts[]; //for each input vtx corresponding closest vtx on destination
+    
+    if(size($_verts)>0){
+        string $verts[] = `filterExpand -sm 31 -expand true`;
+        string $nearestFace[];  //nearest face to each selected vtx
+
+        
+        //get shape for mesh Destination we want to look for verts
+        string $polyNameArray[] = { $destinationMesh };//na_getPolyFromComponent($verts[0]);
+        string $polyName = $polyNameArray[0];
+        string $shapes[] = `listRelatives - shapes $polyName`;
+        string $shape = $shapes[0];
+        
+        
+        //this will be able to tell given a point what is nearest face to it
+        
+        string $near = "nearNodeForNAMirrorUV";
+        //na_assertObjectDoesNotExist({$near});
+        addNearNodeToShape($shape,$near);
+
+        //loop over verts
+        for($i=0; $i<size($verts); $i++){
+            
+            float $selPos[] = `xform -q -t -ws $verts[$i]`;
+            
+            //we give it the point
+            tellNodeWhereToLook($near, {$selPos[0],$selPos[1],$selPos[2]});
+            //we get the closest face
+            $nearestFace[$i] = getClosestFace( $polyName, $near  );
+
+            //we get the vertex
+            string $closestVtx[] = getClosestVertToPosOfFace($nearestFace[$i],{$selPos[0],$selPos[1],$selPos[2]},$howCloseIsNearEnough);
+            //we need to do this so we can delete nodes it made
+            if( size($closestVtx) == 0 ){ break;}
+            $cVerts[$i] = $closestVtx[0];
+            
+            
+            $result[size($result)] = $cVerts[$i]; //order preserved
+            /*
+            //no same source as mirror allowed
+            //
+            if( `strcmp $cVerts[$i] $verts[$i]` == 0 ){
+                print("Requires No Selection of Symmetry Border");
+                clear($cVerts);
+                break;
+            }
+            else{
+                $result[size($result)] = $cVerts[$i];
+            }
+            */
+            //
+            //
+        }
+        //end loop
+        
+        //delete created nodes
+        //na_assertObjectExist({$near});
+        delete($near);
+        
+        
+        $result = $cVerts;
+        
+        
+    } 
+    
+
+
+    
+    
+    select -r $_verts;    
+    //print(`date -time`+"\n");
+    return($result);
+}
+
+
+
+
+//helper functions
+/**this will be able to tell given a point what is nearest face to it
+@param string shape
+@param string name for near node
+@note requires Maya 2008 nearestPointOnMesh plugin
+*/
+global proc
+addNearNodeToShape(string $shape, string $nearNodeName)
+{
+    //no checks for if shape exists
+    
+    //don't make if node exists
+    if(  `objExists $nearNodeName` == 0  ){
+        //make sure plugin loaded
+        string $plugin = "nearestPointOnMesh"+".bundle";
+        if( `pluginInfo -query -loaded $plugin` == 0 ){loadPlugin $plugin;}
+
+        createNode nearestPointOnMesh -n $nearNodeName;
+        connectAttr -f ($shape+".outMesh") ($nearNodeName+".inMesh");
+    }
+    else{
+        print("skipping, node exists\n");
+    }
+}
+/**give near node point were interested in
+@param    string          near node name
+@param float array     world position  {x y z}
+@note kindof lowlevel cause it needs a node to operate
+*/
+global proc tellNodeWhereToLook(string $nearNodeName, float $pos[])
+{
+    if(  `objExists $nearNodeName` ){
+        setAttr ($nearNodeName+".inPositionX") ($pos[0]);
+        setAttr ($nearNodeName+".inPositionY") ($pos[1]);
+        setAttr ($nearNodeName+".inPositionZ") ($pos[2]);
+    }
+    else{
+        error("cannot find node: "+$nearNodeName);
+    }   
+}
+
+/**give me the nearest face
+@param    string poly
+@param   string  name for near node
+*/
+global proc string
+getClosestFace( string $polyName, string $nearNodeName  )
+{
+    string $result;
+    
+    //does poly exist
+    if(  `objExists $polyName` == 0 ){
+        error("cannot find poly: "+$polyName);
+    }
+    
+    //get face using node if node is there
+    if(  `objExists $nearNodeName` ){
+    string $nearestFaceId = `getAttr $nearNodeName (".nearestFaceIndex")`;
+    $result = $polyName+".f"+"["+$nearestFaceId+"]";
+    }
+    else{
+        error("cannot find node: "+$nearNodeName);
+    }
+    return $result;
+}
+
+/**given face and a world position get the closest vertex of face to that position
+@param string name of face ex: "pCube1.f[2]"
+@param float 3 element array ex: {0.5,0.5,0.5}
+@note I think this is more useful on onetime operations than something like attaching nulls to world position of geometry
+*/
+global proc string[] 
+getClosestVertToPosOfFace(string $_face, float $wpos[], float $howCloseIsEnough )
+{
+    string $sel[] = `ls -sl`;
+    //na_assertObjectExist({$_face});
+    
+    string $result[];  
+    string $face = $_face;
+    
+    
+    string $_vertsOfFace[] = `polyListComponentConversion -ff -tv $face`;//has [2:3] possibly
+    
+    //replace with filter expand
+    select -cl;
+    select -r $_vertsOfFace;
+    string $vertsOfFace[] = `filterExpand -sm 31 -expand true`;
+    
+    if(size($wpos)==3){
+        string $minVertex = $vertsOfFace[0];
+        float $minWorldPos[] = `xform -q -t  -ws $minVertex`;
+        float $bestDistance[] = euclidDistance( $minWorldPos, $wpos );
+        
+        //loop verts of face
+        int $i=0;
+        string $_minVertex="";
+        float $_minWorldPos[];
+        float $_minValue[];
+        
+        for($i=0; $i<size($vertsOfFace); $i++)
+        {
+            $_minVertex = $vertsOfFace[$i];
+            $_minWorldPos = `xform -q -t  -ws $_minVertex`;
+            $_minValue = euclidDistance( $_minWorldPos, $wpos );     
+            
+            //if found a closer point to input position save it
+            if( $_minValue[0] < $bestDistance[0] )
+            {
+                $minVertex = $_minVertex;
+                $minWorldPos = $_minWorldPos;
+                $bestDistance[0] = $_minValue[0];
+            }
+
+            $_minVertex="";
+        }
+        //end loop
+        if( $bestDistance[0] > $howCloseIsEnough )
+        {
+            print("Could not find vertex within--"+$howCloseIsEnough+"--for face--"+$face);
+        }
+        else{
+            $result[0] = $minVertex;  
+        }
+    }
+    
+    
+    select -r $sel;
+    
+    return $result;
+}
+/**given two 3-D vectors return euclidean distance
+@param float $a[] -- first vector of 3 elements
+@param float $b[] -- second vector of 3 elements
+@note this is used to find closeness on a mesh
+suppose you wanted to know of the vertices of a face
+which one is closest this other point, user can
+use this to find out
+@bug doesn't work for arbitray length
+*/
+global proc float[] 
+euclidDistance(float $a[], float $b[] )
+{
+    //na_assertFloatSizeEqualArg( $a, 3 );
+    //na_assertFloatSizeEqualArg( $b, 3 );
+    
+    float $result[];
+    
+    $result[0] = sqrt( pow(($a[0]-$b[0]),2)+
+    pow(($a[1]-$b[1]),2)+
+    pow(($a[2]-$b[2]),2)
+    );
+ 
+    return $result;
+}
+
+
+
+
+

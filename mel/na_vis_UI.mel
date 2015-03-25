@@ -1,0 +1,74 @@
+//na_vis_UI.mel
+
+
+/**a ui script that uses an external config file
+*/
+
+global proc na_vis_UI(string $title, string $mainWindowName)
+{
+
+    
+    //trying to make window big enough to accomadate widgets
+    int $numberWidget = na_vis_configGetMaxWidget();
+    if($numberWidget==0){error("Requires At least One Widget");}
+    float $xPos = 40.0;
+    float $width = 160.0;
+    float $height = $numberWidget*(60.0);
+    if( $height >= 600){error("Requires Smaller Window Size");}
+    
+
+    string $firstFrameLayout =
+    `frameLayout
+    -label $title
+    -labelAlign "center"
+    -collapsable true
+    -collapse true
+    `;
+    
+    //set up format for gui
+    string $form = `formLayout -numberOfDivisions 50 "form layout"`;
+    
+
+    
+    //here we make a widget according to config file
+    //
+    float $yPos = 50.0;
+    int $widgetIndex = 0;
+    string $onCmd = "na_vis_pickTypeOn_cmd(1,"+$widgetIndex+")";
+    string $offCmd = "na_vis_pickTypeOn_cmd(0,"+$widgetIndex+")";
+    string $labelArray[] = {};
+    string $label = "translation";
+
+    for($i=0; $i < $numberWidget; $i++)
+    {
+        $yPos = ( (0.1*$height)/$numberWidget)+($i*50);
+        $widgetIndex = $i;
+        $onCmd = "na_vis_pickTypeOn_cmd(1,"+$widgetIndex+")";
+        $offCmd = "na_vis_pickTypeOn_cmd(0,"+$widgetIndex+")";
+        $labelArray = na_vis_configGetLabel($widgetIndex); 
+        na_assertSizeEqualArg($labelArray,1);
+        $label = $labelArray[0];
+        na_checkBox($form, $mainWindowName,$label,$yPos, $xPos,$onCmd,$offCmd);  
+    }
+    
+
+}
+
+/**widget commands
+*/
+global proc na_vis_pickTypeOn_cmd(int $type, int $widgetIndex)
+{   
+    if($type == 1){ 
+        na_vis_configAssert($widgetIndex);
+        string $cmd = na_vis_configGetMelCmdOn($widgetIndex);         
+        eval($cmd);
+    }
+    else if($type == 0){    
+        na_vis_configAssert($widgetIndex);
+        string $cmd = na_vis_configGetMelCmdOff($widgetIndex); 
+        eval($cmd);
+    }
+    
+}
+
+

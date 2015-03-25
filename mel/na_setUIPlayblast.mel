@@ -1,0 +1,18 @@
+/**@file na_setUIPlayblast.mel
+*
+*hide or show ui elements so can playblast large movie (Tested Maya 2008)
+*
+*@author Nathaniel O. Anozie (ogbonnawork at gmail dot com)
+*@note date created: March 27, 2014
+*@note Modify at your own risk
+*/
+
+//last modified: 03-27-2014  -- added initial release
+
+//handy script so can make playblasts of larger size
+global proc na_setUIPlayblastStart(){
+setAllMainWindowComponentsVisible 0;ToggleTimeSlider;//want to also see time slider so can playblast
+}
+global proc na_setUIPlayblastStop(){
+setAllMainWindowComponentsVisible 1;
+}

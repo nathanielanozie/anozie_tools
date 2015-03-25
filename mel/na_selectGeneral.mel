@@ -1,0 +1,364 @@
+/**@file na_selectGeneral.mel
+@brief v1.0.1 scene selection operations. example covert selections to string, convert string to selections, print selection as cmd etc.
+@author Nathaniel O. Anozie (ogbonnawork at gmail dot com)
+@note date created: June 07 2012
+@note released --
+@note working on adding select printing
+@note Modify at your own risk
+*/
+
+//last updated: 06/20/2014 -- added ability to select a different object from originally selected
+//last updated: 04/14/2014 -- initial release, integrated ui elements with code so script is in one file, type in MEL script editor "na_selectGeneral" to use tool
+
+
+/**
+*/
+global string $gl_selection = "gl_selection";//actually will hold string of selection not just a global name
+global string $gl_cmd_switch_search = "gl_cmd_switch_search";
+global string $gl_cmd_switch_replace = "gl_cmd_switch_replace";
+
+/**Call this function to use tool
+*/
+global proc na_selectGeneral()
+{    
+    global string $gl_selection;
+    global string $gl_cmd_switch_search;
+    global string $gl_cmd_switch_replace;
+    
+    //setup up title for gui
+    string $titleWindow = "na_selectGeneral.mel";
+    string $mainWindowName = "mainWindow";
+    na_window($mainWindowName,$titleWindow, 250, 300);
+    
+    
+    //set up format for gui
+    string $form = `formLayout -numberOfDivisions 50 "form layout"`;
+    
+    //add ui elements like textfields,buttons, and/or radio buttons
+    
+    na_button($form, $mainWindowName,"save", 10,75,"button1","na_selectionTool_cmd_save");
+    na_button($form, $mainWindowName,"select", 45,75,"button2","na_selectionTool_cmd_select");
+    na_button($form, $mainWindowName,"print", 85,75,"button3","na_selectionTool_cmd_print");
+    
+
+    na_separator($form, $mainWindowName, 210, 120,20,"separator1");
+    na_button($form, $mainWindowName,"switch", 125,75,"button4","na_selectionTool_cmd_switch");
+    na_textFieldGrp($form, $mainWindowName, 300, "search", 165, -75, $gl_cmd_switch_search);
+    na_textFieldGrp($form, $mainWindowName, 300, "replace", 205, -75, $gl_cmd_switch_replace);
+
+    na_clickText($form, $mainWindowName,"Visit WebsiteÉ", 245,75,"text1","showHelp -a \"http://www.nathananozie.blogspot.com/\"; ");
+	
+
+    showWindow $mainWindowName;
+}
+
+
+/**ui command
+*/
+global proc na_selectionTool_cmd_save()
+{
+    
+    global string $gl_selection;
+    
+    string $arg = "";
+    $gl_selection = "";
+    
+    $arg = na_selectionToolSave();
+    if(size($arg) == 0){
+        na_selectionToolStringErrorMessage();
+    }
+    else{
+        $gl_selection = $arg;
+    }
+}
+
+global proc na_selectionTool_cmd_select()
+{
+    global string $gl_selection;
+    
+    string $sel = "";
+    $sel = $gl_selection;
+    if(size($sel) == 0){
+        na_selectionToolStringErrorMessage();
+    }
+    else{
+        na_selectionToolSelect($sel);
+    }
+    
+    
+}
+
+
+global proc na_selectionTool_cmd_print()
+{
+    global string $gl_selection;
+    
+    string $sel = "";
+    $sel = $gl_selection;
+    if(size($sel) == 0){
+        na_selectionToolStringErrorMessage();
+    }
+    else{
+        na_selectionToolPrint($sel);
+    }
+    
+}
+
+
+global proc na_selectionTool_cmd_switch()
+{
+    global string $gl_selection;
+    global string $gl_cmd_switch_search;
+    global string $gl_cmd_switch_replace; 
+    
+    string $sel = "";
+    string $search = "";
+    string $replace = "";
+    
+    $sel = $gl_selection;
+    $search = `textFieldGrp -query -text $gl_cmd_switch_search`;
+    $replace = `textFieldGrp -query -text $gl_cmd_switch_replace`;
+    
+    if(size($sel) == 0 || size($search) == 0 || size($replace) == 0 ){
+        print("Skipping --- Please enter search and replace text and first save a selection before using button\n");
+    }
+    else{
+        string $newSel = "";
+
+        //replacement code
+        /*
+        string $arg = "new_topology1.vtx[1083:1090] new_topology1.vtx[1093:1094]";
+        //a.replace( 'a', 'A')
+        //python( "'vtx1'.replace('vtx','edg')"+"" );
+        //python( "'"+$arg+"'"+".replace('vtx','edg')" );
+        python( "'"+$arg+"'"+".replace('"+"new_topology1"+"','"+"new_topology2"+"')" );//strong recommend all written in python
+        */
+        $newSel = python( "'"+$sel+"'"+".replace('"+$search+"','"+$replace+"')" );//wheretolook . old, new, in python need single quotes around strings
+        //$newSel = `substitute $search $sel $replace`;//search string, where to look, replacement  --> only works on single string
+        //
+        $gl_selection = $newSel; //saving
+    }
+    
+}
+
+
+/**return user selection as a string space separated
+@bug probably more useful if input came as parameter
+*/
+global proc string
+na_selectionToolSave()
+{
+    string $result = "";
+    string $sep = " ";
+    
+    string $sel[] = {};
+    $sel = `ls -sl`;
+    
+    if(size($sel) > 0 )
+    {
+        $result = stringArrayToString($sel,$sep);
+    }
+
+    return $result;
+}
+
+
+
+
+
+/**select input after space separating string
+@bug no check whether input exists on scene
+*/
+global proc
+na_selectionToolSelect(string $arg)
+{
+    string $argArray[] = {};
+    string $sep = " ";
+    
+    if(size($arg) > 0)
+    {
+       $argArray = stringToStringArray($arg,$sep);
+       //possibly insert input check here
+       select -r $argArray;
+    }
+}
+
+/**print cmd to select input after space separating string
+*/
+global proc
+na_selectionToolPrint(string $arg)
+{
+    if(size($arg) > 0)
+    {
+       print("//select -r ");
+       string $printString = "";
+       $printString = $arg;
+
+       $printString = strip($printString);
+       print($printString);
+       print(";\n");
+    }
+}
+
+/**print error message
+*/
+global proc
+na_selectionToolStringErrorMessage()
+{
+    string $msg = "Nothing Selected\n";
+    print($msg);
+}
+
+
+
+
+
+
+
+/**create an empty window
+@param string $mainWindowName window global name
+@param string $titleWindow
+@param float $width
+@param float $height
+@bug sizeable fixed
+*/
+global proc na_window(string $mainWindowName, string $titleWindow, float $width, float $height)
+{
+    
+    na_windowRemoveIfExist($mainWindowName);
+    window -t $titleWindow -width $width -height $height -sizeable true $mainWindowName;
+    
+}
+
+/**remove window and windows preferences if it exists
+@param string $mainWindowName window global name
+*/
+global proc na_windowRemoveIfExist(string $mainWindowName)
+{
+    //delete window pref for this window if it exists
+    if(`windowPref -exists $mainWindowName`){ windowPref -remove $mainWindowName;}
+    
+    if( `window -exists $mainWindowName`  )
+    {
+        deleteUI $mainWindowName;
+    }
+}
+/**
+@result 1 if window exist, 0 otherwise
+*/
+global proc int
+na_isWindowExist(string $mainWindowName)
+{
+    int $result = 0;
+    if(`window -exists $mainWindowName`)
+    {
+        $result = 1;
+    }
+    return $result;
+}
+/**add a button to a window
+@parm string $form -- name of form
+@param string $winName -- name of window
+@param string $label -- ?should be label
+@param float $top  position top
+@param float $left position left
+@param string $globalName  global variable to hold value
+@param string $cmd command for button
+*/
+global proc na_button(string $form, string $winName, string $label, float $top, float $left, string $globalName, string $cmd)
+{
+    if( `window -exists $winName`  )
+    {       
+        button -label $label  -width 100 -command $cmd $globalName;//remove width so automatically sized
+               
+        //how should things be positioned
+        formLayout -edit 
+        -attachForm $globalName "top" $top
+        -attachForm $globalName "left" $left
+        $form;
+        
+        //setParent $winName;//add tab to arg window
+    }
+    else{
+        ui_errorMessage();
+    }
+}
+
+/**add a text field to a window
+@parm string $form -- name of form
+@param string $winName -- name of window
+@param string $label -- ?should be label
+@param float $top  position top
+@param float $left position left
+@param string $globalName  global variable to hold value
+*/
+global proc na_textFieldGrp(string $form, string $winName, int $width, string $label, float $top, float $left, string $globalName)
+{
+    //int $width = 300; //change to make more characters visibile in ui
+    
+    if( `window -exists $winName`  )
+    {       
+        textFieldGrp -width $width -label $label $globalName;
+               
+        //how should things be positioned
+        formLayout -edit 
+        -attachForm $globalName "top" $top
+        -attachForm $globalName "left" $left
+        $form;
+        
+        //setParent $winName;//add tab to arg window
+    }
+    else{
+        ui_errorMessage();
+    }
+}
+
+global proc na_clickText(string $form, string $winName, string $label, float $top, float $left, string $globalName, string $cmd)
+{
+    if( `window -exists $winName`  )
+    {       
+    	iconTextButton -style "textOnly" -width 100 -height 20 -label $label -c $cmd $globalName; //remove width,height for auto sizing
+       
+        //how should things be positioned
+        formLayout -edit 
+        -attachForm $globalName "top" $top
+        -attachForm $globalName "left" $left
+        $form;
+        
+        //setParent $winName;//add tab to arg window
+    }
+    else{
+        ui_errorMessage();
+    }
+}
+
+
+global proc na_separator(string $form, string $winName, int $width, float $top, float $left, string $globalName)
+{
+    if( `window -exists $winName`  )
+    {       
+        separator -width $width -style "single" $globalName;//single,double,singleDash,in,out       
+        //how should things be positioned
+        formLayout -edit 
+        -attachForm $globalName "top" $top
+        -attachForm $globalName "left" $left
+        $form;
+        
+        //setParent $winName;//add tab to arg window
+    }
+    else{
+        ui_errorMessage();
+    }
+}
+
+/**print error message
+*/
+global proc ui_errorMessage()
+{
+    print("skipping, error creating window");
+}
+
+
+
+na_selectGeneral;
+

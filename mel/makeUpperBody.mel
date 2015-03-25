@@ -1,0 +1,74 @@
+//makeUpperBody.mel
+//Author: Nathaniel Anozie
+//ogbonnawork at gmail dot com
+//
+//date created: December 3, 2010
+//date last revised: January 7, 2012
+//Modify at your own risk
+
+
+
+//last updated: 07/11/2013 -- add world control orientation to joint
+
+
+global proc characterRig_makeUpperBody(string $joints[])
+{
+    print("[characterRig_makeUpperBody] Start ...\n");
+    string $root = $joints[0];
+    string $spine1 = $joints[1];
+    string $spine2 = $joints[2];
+    string $neck = $joints[3];
+    
+    makeUpperBody($root, $spine1, $spine2, $neck);
+    print("[characterRig_makeUpperBody] Complete ...\n");
+}
+
+
+global proc makeUpperBody(string $root, string $spine1, string $spine2, string $neck)
+{
+    print("[makeUpperBody] Start ...\n");
+    
+    print("[Warning--makeUpperBody] Assumes Fixed Control Names\n"); 
+  
+    //spine 1 controller radius
+    float $spine_rad = 2.0;
+    
+    //make controller at location matching joint and with a radius spine_rad
+    string $ROOT_CON[] = `circle -nr 0 1 0 -c 0.0 0.0 0.0 -r $spine_rad`;
+    rename $ROOT_CON[0] "ROOT_CON"; 
+    string $SPINE_1_CON[] = `circle -nr 0 1 0 -c 0.0 0.0 0.0 -r $spine_rad`;
+    rename $SPINE_1_CON[0] "SPINE_1_CON";
+    string $SPINE_2_CON[] = `circle -nr 0 1 0 -c 0.0 0.0 0.0 -r $spine_rad`;
+    rename $SPINE_2_CON[0] "SPINE_2_CON";
+    string $NECK_CON[] = `circle -nr 0 1 0 -c 0.0 0.0 0.0 -r $spine_rad`;  
+    rename $NECK_CON[0] "NECK_CON";
+    
+    //
+    print("[makeUpperBody] Aligning spine controls cvs to face frontward ...\n");
+    for($arg in {"ROOT_CON","SPINE_1_CON","SPINE_2_CON","NECK_CON"}){
+        if(`objExists $arg`){
+            select -r $arg;
+            selectCurveCV all;
+            rotate -r -eu -ocp 90 0 0;
+        }
+    }
+    //
+    
+    print("[makeUpperBody] making controls have same orients as spine and neck \n");
+    string $root_g = na_fkControl_noShape($root,"ROOT_CON");
+    string $spine1_g = na_fkControl_noShape($spine1,"SPINE_1_CON");
+    string $spine2_g = na_fkControl_noShape($spine2,"SPINE_2_CON");
+    string $neck_g = na_fkControl_noShape($neck,"NECK_CON");
+    
+    //make spine curves move together
+    parentConstraint -mo -weight 1 ROOT_CON $spine1_g;
+    parentConstraint -mo -weight 1 SPINE_1_CON $spine2_g;
+    parentConstraint -mo -weight 1 SPINE_2_CON $neck_g;
+    //
+    
+    print("[makeUpperBody] Completed! \n");
+    
+}
+
+
+

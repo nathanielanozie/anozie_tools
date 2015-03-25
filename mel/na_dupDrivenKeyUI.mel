@@ -1,0 +1,119 @@
+/**@file na_dupDrivenKey.mel
+@brief ui for tool for duplicating set driven keys
+@author Nathaniel O. Anozie (ogbonnawork at gmail dot com)
+@bug all functions no assert checks
+@note date created: Apr 5 2012
+@note date last modified: Apr 5 2012
+@note source na_dupDrivenKey.mel
+@note source na_ui.mel
+@see na_ui.mel
+*/
+
+
+
+
+
+
+global string $gl_joint = "gl_joint";
+global string $gl_jointAttr = "gl_jointAttr";
+global string $gl_fromAnim = "gl_fromAnim";
+global string $gl_fromAnimAttr = "gl_fromAnimAttr";
+global string $gl_anim = "gl_anim";
+global string $gl_animAttr = "gl_animAttr";
+
+/**ui
+*/
+global proc
+na_dupDrivenKeyUI()
+{
+    global string $gl_joint;
+    global string $gl_jointAttr;
+    global string $gl_fromAnim;
+    global string $gl_fromAnimAttr;
+    global string $gl_anim;
+    global string $gl_animAttr;
+    
+    
+    
+    //setup up title for gui
+    string $titleWindow = "na_dupDrivenKey.mel  Add new anim control";
+    string $mainWindowName = "mainWindow";
+    na_window($mainWindowName,$titleWindow, 420, 280);
+    
+   
+    
+    //set up format for gui
+    string $form = `formLayout -numberOfDivisions 50 "form layout"`;
+    
+    
+    na_textFieldGrp($form, $mainWindowName,"joint(s) space separated", 25, 20, $gl_joint);
+    na_textFieldGrp($form, $mainWindowName,"joint attr(s) space separated", 55, 20, $gl_jointAttr);
+    na_textFieldGrp($form, $mainWindowName,"from anim", 85, 20, $gl_fromAnim);
+    na_textFieldGrp($form, $mainWindowName,"from attr", 115, 20, $gl_fromAnimAttr);
+    na_textFieldGrp($form, $mainWindowName,"anim", 145, 20, $gl_anim);
+    na_textFieldGrp($form, $mainWindowName,"attr", 175, 20, $gl_animAttr);
+    
+    na_button($form, $mainWindowName,"ok", 220, 170,"button","na_dupDrivenKey_cmd");
+    
+    showWindow $mainWindowName;
+    
+    
+}
+
+
+/**ui command
+*/
+global proc
+na_dupDrivenKey_cmd()
+{
+   
+    global string $gl_joint;
+    global string $gl_jointAttr;
+    global string $gl_fromAnim;
+    global string $gl_fromAnimAttr;
+    global string $gl_anim;
+    global string $gl_animAttr;
+    
+    //temp
+    string $joint="";
+    string $jointAttr="";
+    
+    //used
+    string $jointArray[] = {};
+    string $jointAttrArray[] = {};
+    string $fromAnim="";
+    string $fromAnimAttr="";
+    string $anim="";
+    string $animAttr="";
+    
+    $joint = `textFieldGrp -query -text $gl_joint`;
+    $jointAttr = `textFieldGrp -query -text $gl_jointAttr`;
+    $fromAnim = `textFieldGrp -query -text $gl_fromAnim`;
+    $fromAnimAttr = `textFieldGrp -query -text $gl_fromAnimAttr`;
+    $anim = `textFieldGrp -query -text $gl_anim`;
+    $animAttr = `textFieldGrp -query -text $gl_animAttr`;
+    
+    
+    $jointArray = stringToStringArray($joint," ");
+    $jointAttrArray = stringToStringArray($jointAttr," ");
+    
+    //print used
+    /*
+    print($jointArray);
+    print("\n");
+    print($jointAttrArray);
+    print("\n");
+    print($anim);
+    print("\n");
+    print($animAttr);
+    print("\n");
+    print($fromAnim);
+    print("\n");
+    print($fromAnimAttr);
+    print("\n");
+    */
+    
+    na_dupDrivenKey( $jointArray, $jointAttrArray, $anim, $animAttr, $fromAnim,$fromAnimAttr);
+    
+    
+}

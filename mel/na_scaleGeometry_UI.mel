@@ -1,0 +1,120 @@
+/**@file na_scaleGeometry_UI.mel v1.0.0
+*/
+
+
+global string $gl_fromObject = "gl_fromObject";
+global string $gl_fromAttribute = "gl_fromAttribute";
+global string $gl_toObject = "gl_toObject";
+global string $gl_toAttribute = "gl_toAttribute";
+
+
+/**ui
+*/
+global proc
+na_scaleGeometry_UI()
+{
+    global string $gl_fromObject;
+    global string $gl_fromAttribute;
+    global string $gl_toObject;
+    global string $gl_toAttribute;
+    
+    
+    //setup up title for gui
+    string $titleWindow = "na_scaleGeometry.py  Scale Geo Rig";
+    string $mainWindowName = "mainWindow";
+    na_window($mainWindowName,$titleWindow, 400, 250);
+    
+    //set up format for gui
+    string $form = `formLayout -numberOfDivisions 50 "form layout"`;
+    
+        
+    //set up ui widgets
+    na_textFieldGrp($form, $mainWindowName,"from", 25, -15, $gl_fromObject);
+    na_textFieldGrp($form, $mainWindowName,"from Attr", 65, -15, $gl_fromAttribute);
+    na_textFieldGrp($form, $mainWindowName,"to", 105, -15, $gl_toObject);
+    na_textFieldGrp($form, $mainWindowName,"toAttr", 145, -15, $gl_toAttribute);
+    
+    na_button($form, $mainWindowName,"ok", 190, 190,"button","na_scaleGeometry_cmd");
+    
+    showWindow $mainWindowName;
+    
+}
+
+
+
+
+
+
+
+/**call python function from mel. 
+@note shows example for parse string array, and other strings
+*/
+proc
+na_scaleGeometry_py(string $from,string $fromAttr, string $to, string $toAttr )
+{
+    //Change Python module(s) here
+    string $pyFn_1 = "setScaleByTranslation";
+    string $pyModule_1= "na_scaleGeometry";
+    
+    
+    
+    string $importStatement = "from "+$pyModule_1+" import "+$pyFn_1;
+    python $importStatement;
+    
+    
+    //Change Python Function Here
+    //shows 3 parameters cause 3 rows
+    
+    string $p1 = na_getStringPadded($from,"'","'");
+    string $p2 = na_getStringPadded($fromAttr,"'","'");
+    string $p3 = na_getStringPadded($to,"'","'");
+    string $p4 = na_getStringPadded($toAttr,"'","'");
+    
+    string $tempcmd = $pyFn_1+"("+
+    $p1+", "+
+    $p2+", "+
+    $p3+", "+
+    $p4
+    +")";
+    
+    print($tempcmd);
+    print("\n");
+    python $tempcmd;
+    
+}
+
+
+
+
+
+
+
+/**ui command
+*/
+global proc
+na_scaleGeometry_cmd()
+{
+    global string $gl_fromObject;
+    global string $gl_fromAttribute;
+    global string $gl_toObject;
+    global string $gl_toAttribute;
+    
+
+    
+    //used
+    string $from="";
+    string $fromAttr="";
+    string $to="";
+    string $toAttr="";
+    
+    $from = `textFieldGrp -query -text $gl_fromObject`;
+    $fromAttr = `textFieldGrp -query -text $gl_fromAttribute`;   
+    $to = `textFieldGrp -query -text $gl_toObject`;
+    $toAttr = `textFieldGrp -query -text $gl_toAttribute`;
+    
+    
+    //python command
+    na_scaleGeometry_py($from,$fromAttr,$to,$toAttr);
+}
+
+

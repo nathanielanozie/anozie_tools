@@ -1,0 +1,16 @@
+
+global proc naModeling_jnX(){
+    //Joining Original(s) And Mirrored Mesh(s)
+    string $orig[] = `ls -sl`;
+    string $dupAr[] = {};
+    for($arg in $orig){
+        select -r $arg;
+        $dupAr = {};
+        $dupAr = `duplicate -rr $arg`; 
+        scale -r -1 1 1 $arg;
+        //combine them
+        select -r $arg;
+        select -tgl $dupAr[0];
+        polyUnite -ch 0;
+}
+}

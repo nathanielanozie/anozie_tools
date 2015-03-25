@@ -1,0 +1,117 @@
+//print to script editor command to reproduce animation of selected blend node
+
+//this would be alot faster using c++ command plugin, say 3000 frames, 200 bs, 10 items to save per keyframe, 
+//6000000 (6 million loop)
+
+//Inspired by Brian Ewert (ewertb dot soundlinker dot com) learning about querying tangent type
+//Inspired by Oleg Alexander (I learned about printing commands to script editor for later use from his online demo scripts)
+
+//updated 02-25-2015 nate --- adding translate key support
+//updated 11-03-2014 nate --- adding support rotation keying of non blendshape node
+//updated 10-14-2014 nate --- initial release, should work with different type of tangents and angles
+
+
+//string $attributesToKey[] = {"rotateX","rotateY","rotateZ","translateX","translateY","translateZ"};
+global proc wrapperExportAnimationToScriptEditor( string $attributesToKey[] )
+{
+    //wrapper for print keyframes, does rotation only
+    
+    string $sel[] = `ls -sl`;
+    if(size($sel) == 0){error("Error, Nothing Selected With Keys");}
+
+    string $thingsWithKey[] = {};
+    //string $attributesToKey[] = {"rotateX","rotateY","rotateZ"};
+
+    //call the print key
+	for($i = 0; $i < size($sel); $i++)
+	{
+		$thingsWithKey = {};
+		$thingsWithKey = {$sel[$i]};
+    		na_exportAnimation( $thingsWithKey, $attributesToKey );
+	}
+}
+
+
+global proc rotateWrapperExportAnimationToScriptEditor()
+{
+    //wrapper for print keyframes, does rotation only
+    
+    string $sel[] = `ls -sl`;
+    if(size($sel) == 0){error("Error, Nothing Selected With Keys");}
+
+    string $thingsWithKey[] = {};
+    string $attributesToKey[] = {"rotateX","rotateY","rotateZ"};
+
+    //call the print key
+	for($i = 0; $i < size($sel); $i++)
+	{
+		$thingsWithKey = {};
+		$thingsWithKey = {$sel[$i]};
+    		na_exportAnimation( $thingsWithKey, $attributesToKey );
+	}
+}
+
+
+global proc blendshapeWrapperExportAnimationToScriptEditor()
+{
+    //wrapper for print keyframes, works if thing selected is a blend node
+    
+    string $sel[] = `ls -sl`;
+    if(size($sel) != 1){error("Error, Requires One Blend Node Selected With Keys");}
+    //assumes one thing selected
+    string $obj = $sel[0];
+    
+    string $thingsWithKey[] = {$obj};
+    string $attributesToKey[] = {};
+    if( `objectType $obj` == "blendShape" )
+    {
+        $attributesToKey = `blendShape -q -target $obj`;
+    }else{ print("Doing Nothing"); }
+    
+    //call the print key
+    na_exportAnimation( $thingsWithKey, $attributesToKey );
+}
+
+
+
+global proc na_exportAnimation( string $thingsWithKey[], string $attributesToKey[] )
+{
+    //send to script editor command to reproduce animation
+    //
+    
+    if(size($thingsWithKey) != 1){error("Error: Expects One Object with Animation");}
+    if(size($attributesToKey) == 0 ){error("Error: Expects some Attribute with Animation");}
+    
+    //get list of places where bs has key: keyframe -at cornerDnFoward_BrowDn -q -tc blendshape;
+    string $at = "";
+    
+    print("//Starting na_exportAnimation.mel For: "+$thingsWithKey[0]+"\n");
+    for($i = 0; $i < size($attributesToKey); $i++){
+        $at = $attributesToKey[$i];
+        print("/////Set Animation For: "+$at+"\n");//so user knows we are exporting animation for this
+        float $times[] = {};
+        $times = `keyframe -at $at -q -tc $thingsWithKey[0]`;
+        
+        for($time in $times){
+            float $objVal[] = `keyframe -at $at -t $time -q -eval $thingsWithKey[0]`;
+            //get info about keyframe example tangent etc
+            string $objType[] = `keyTangent -t $time -q -ott ($thingsWithKey[0]+"."+$at)`;
+            float $objAngleIn[] = `keyTangent -t $time -q -inAngle ($thingsWithKey[0]+"."+$at)`;
+            float $objAngleOut[] = `keyTangent -t $time -q -outAngle ($thingsWithKey[0]+"."+$at)`;
+            int $objWt[] = `keyTangent -t $time -q -weightedTangents ($thingsWithKey[0]+"."+$at)`;
+            
+            //print command to reproduce frames
+            string $cmd1 = "setKeyframe -t "+$time+" -v "+$objVal[0]+" ("+"\""+$thingsWithKey[0]+"."+$at+"\""+");\n";
+            //setKeyframe  -t 24 -v 0.0 "blendshape.pCube3" ;
+            string $cmd2 = "keyTangent -t "+$time+" -e -ott "+$objType[0]+" ("+"\""+$thingsWithKey[0]+"."+$at+"\""+");\n";
+            string $cmd3 = "keyTangent -t "+$time+" -e -inAngle "+$objAngleIn[0]+" ("+"\""+$thingsWithKey[0]+"."+$at+"\""+");\n";
+            string $cmd4 = "keyTangent -t "+$time+" -e -outAngle "+$objAngleOut[0]+" ("+"\""+$thingsWithKey[0]+"."+$at+"\""+");\n";
+            string $cmd5 = "keyTangent -t "+$time+" -e -weightedTangents "+$objWt[0]+" ("+"\""+$thingsWithKey[0]+"."+$at+"\""+");\n";
+            print $cmd1;print $cmd2;print $cmd3;print $cmd4;print $cmd5;
+            
+            print("\n");
+        }
+        print("\n");//go to new line
+    }
+    
+}

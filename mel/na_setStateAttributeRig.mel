@@ -1,0 +1,173 @@
+/**@file na_setStateAttributeRig.mel 
+@brief v1.0.0 clean rig tools
+@author Nathaniel Anozie
+@brief clean user attribute from rig ex: locking and making non key (backend snap,space) attributes on animator controls 
+*/
+
+/**
+@see na_setAttributeStateBySuffix na_setAttributeStateByName
+*/
+global proc 
+na_setAttributeStateBySuffixOrName(string $attrArray[],string $attrSuffixAllowed[],string $object[],int $keyState,int $lockState, int $isLockCurve, int $isReadOnly)
+{
+    
+    
+    //attribute
+    if(size($attrArray) > 0 && (na_isAllExist($object) == 1) )
+    {
+        na_setAttributeStateByName($attrArray,$object,$keyState,$lockState);
+    }
+    //
+    
+    
+    
+    //attribute suffix
+    if(size($attrSuffixAllowed) > 0  && (na_isAllExist($object) == 1) )
+    {
+        na_setAttributeStateBySuffix($attrSuffixAllowed,$object,$keyState,$lockState);
+    }
+    //
+    
+    //readOnly
+    if( na_isAllExist($object) == 1)
+    {
+        na_setReadOnlyState($object, $isReadOnly );
+    }
+    //
+  
+    
+    //currently does for all anim curves in scene
+    na_setAttributeStateAllAnimCurve($isLockCurve);
+    print("completed cleaning rig\n---\n");
+    
+}
+/**clean by suffix example going through animator controls 
+finding the user attributes with suffix and set not keyable and locked
+@note supports, keyable, locked
+@note supports, transforms, joints
+@note
+ex:string $attrSuffixAllowed[] = {"naSnap", "naSnapInit", "naSnapAdv","naSnapSimple"};
+*/
+global proc 
+na_setAttributeStateBySuffix(string $attrSuffixAllowed[],string $object[],int $keyState,int $lockState)
+{
+    na_assertObjectExist($object);
+    na_assertTypeInList($object, {"transform","joint"} );
+    na_assertSizeGreaterEqualTo($attrSuffixAllowed,1);
+    na_assertBinaryInteger( {$keyState,$lockState} );
+    string $sel[] = `ls -sl`;
+    string $attr[] = {};     
+    
+    for($anim in $object)
+    {
+        select -r $anim;
+        $attr = na_getUserAttributeBySuffix( $anim, $attrSuffixAllowed);
+        
+        //if there are user attributes on anim in subset then lock and nonkeyable
+        // 
+        if(size($attr) > 0){
+            na_setKeyableStateUserDefinedAttrOfSelectedByList( $attr, $keyState  );
+            na_setLockStateUserDefinedAttrOfSelectedByList( $attr, $lockState );
+        }
+        
+    }
+    
+    if(size($sel)>0){
+    select -r $sel;}
+    
+}
+
+/**set lock and keystate on given attributes on given objects, it skips attributes not existing on objects
+@note supports, keyable, locked
+@note supports, transforms, joints
+@param $attrArray list attribute full names
+@param $object list of objects
+@param $keyState 1 make keyable, 0 make unkeyable
+@param $lockState 1 make locked, 0 make unlocked
+@ex: string $attrArray[] = {"naSnapIndex","naSpace","naSnap"};
+*/
+global proc 
+na_setAttributeStateByName(string $attrArray[],string $object[],int $keyState,int $lockState)
+{
+    na_assertObjectExist($object);
+    na_assertTypeInList($object, {"transform","joint"} );
+    na_assertSizeGreaterEqualTo($attrArray,1);
+    na_assertBinaryInteger( {$keyState,$lockState} );
+    string $sel[] = `ls -sl`;
+    string $attr[] = {};     
+    
+    for($anim in $object)
+    {
+        //if there are user attributes on anim in subset then lock and nonkeyable
+        //
+        $attr = na_getUserAttributeInList( $anim, $attrArray);
+        if(size($attr) > 0){
+            na_setAttributeKeyableOfAnim( $anim, $keyState, $attr );
+            na_setAttributeLockOfAnim( $anim, $lockState, $attr );
+        }
+    }
+    
+    if(size($sel)>0){
+    select -r $sel;}
+}
+
+
+
+/**set lock of animCurve on or off
+@param int $isLockCurve 1 lock curve, 0 un lock curve
+*/
+global proc 
+na_setAttributeStateAllAnimCurve(int $isLockCurve)
+{
+    string $sel[] = `ls -sl`;
+    
+    na_assertBinaryInteger( {$isLockCurve} );
+    string $object[] = {};
+    $object = na_getAllAnimCurve();
+    if( size($object) > 0 )
+    {
+        for($element in $object)
+        {
+            select -r $element;
+            setAttr -l $isLockCurve ".keyTimeValue";
+        }
+    }
+    
+    select -r $sel;
+}
+
+
+
+
+global proc
+na_setReadOnlyState_unitTest_1()
+{
+    circle -c 0 0 0 -nr 0 1 0 -sw 360 -r 1 -d 3 -ut 0 -tol 0.01 -s 8 -ch 1;
+    na_setReadOnlyState({"nurbsCircle1"}, 1 );
+}
+global proc
+na_setReadOnlyState_unitTest_2()
+{
+    circle -c 0 0 0 -nr 0 1 0 -sw 360 -r 1 -d 3 -ut 0 -tol 0.01 -s 8 -ch 1;
+    na_setReadOnlyState({"nurbsCircle1"}, 0 );
+}
+
+/**set lockNode on input according to choice
+@note supports non camera transforms, joints
+@param string $objectArray[] objects
+@param int $isReadOnly 1 make readonly, 0 make not readonly
+*/
+global proc
+na_setReadOnlyState(string $objectArray[], int $isReadOnly)
+{
+    na_assertBinaryInteger( {$isReadOnly} );
+    na_assertTypeInList($objectArray,{"transform","joint"});
+    na_assertObjectExist($objectArray);
+    na_assertDoesNotExistCamera($objectArray);
+    
+    for($obj in $objectArray)
+    { lockNode -l $isReadOnly $obj;}
+}
+
+
+

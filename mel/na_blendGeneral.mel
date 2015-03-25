@@ -1,0 +1,51 @@
+/**@file na_blendGeneral.mel Tools for querying Blendshapes
+@author Nathaniel O. Anozie (ogbonnawork at gmail dot com)
+*/
+
+/**
+@pre selected blend shape node
+@result (string[]) of blendshapes involved in blend node
+*/
+global proc string[]
+na_getBlendShapeFromSelected()
+{
+    string $sel[] = `ls -sl`;
+    na_assertSizeEqualArg($sel,1);
+    na_assertTypeInList($sel,{"blendShape"});
+    
+    string $blendNode = $sel[0];
+    string $shape[] = {};
+    
+    string $shapeAndWeight[] = `aliasAttr -q $blendNode`;
+    
+    for($i = 0; $i < size($shapeAndWeight); $i++ )
+    {
+        //save first of each pair
+        if( fmod($i,2) == 0 ){ $shape[size($shape)] = $shapeAndWeight[$i];}
+    }
+    
+    select -r $sel;
+    
+    return $shape;
+}
+
+global proc
+na_getBlendShapeFromSelected_unitTest()
+{
+    polyCube -w 1 -h 1 -d 1 -sx 1 -sy 1 -sz 1 -ax 0 1 0 -cuv 4 -ch 1;
+    select -r pCube1 ;
+    duplicate -rr;
+    move -r -os -wd 1.831206 0 0 ;
+    duplicate -rr;
+    move -r -os -wd 1.276926 0 0 ;
+    duplicate -rr;
+    move -r -os -wd 1.585769 0 0 ;
+    select -cl  ;
+    select -r pCube2 pCube3 pCube4 ;
+    select -tgl pCube1 ;
+    blendShape -n "smileLip_blend";
+    select -cl  ;
+    
+    select -r smileLip_blend;
+    print( na_getBlendShapeFromSelected() );
+}

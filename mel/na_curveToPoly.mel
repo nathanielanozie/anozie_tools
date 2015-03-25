@@ -1,0 +1,43 @@
+//na_curveToPoly.mel
+/**
+@author Nathaniel Anozie
+ogbonnawork at gmail dot com
+@note created: 07/09/2013
+@note Modify at your own risk
+*/
+//covert selected curves to polygons
+
+//last updated: 07/09/2013 -- added merging vertices
+
+
+global proc na_curveToPoly(){
+    string $sel[] = `ls -sl`;
+    int $N = size($sel) - 1;
+    if($N <= 0){error("Requires Two or More Selected EP curves!!!\n");}
+    //make sure all are curves
+    for($j = 0; $j < size($sel); $j++){ string $curve[] = {}; $curve = `pickWalk -d down $sel[$j]`; select -r $curve[0];
+    if(size(`ls -sl -type nurbsCurve`)!=1){error("Requires All Selected EP Curves!!!\n");}  }
+    
+    string $loft[], $shape[], $shapeTesselate[], $allLoft[];
+    for($i = 0; $i < $N; $i++){
+        string $curveA = $sel[$i];//ex. curve1
+        string $curveB = $sel[$i+1];//reason range needs to be one less than size
+        string $loft[] = `loft -ch 1 -u 1 -c 0 -ar 1 -d 3 -ss 1 -rn 0 -po 1 -rsn true $curveA $curveB`;
+        $shape = {};
+        $shape = `pickWalk -d down $loft[0]`;
+        $shapeTesselate = {};
+        $shapeTesselate = `listConnections -type nurbsTessellate $shape[0]`;
+        setAttr ($shapeTesselate[0]+"."+"polygonCount") 1;//so were four vert polys
+        delete -ch $loft[0];
+        $allLoft[size($allLoft)] = $loft[0];
+    }
+    delete $sel;//clean up curves
+    polyUnite -ch 0 $allLoft;//combine all lofted surfaces
+    //merge all vertices
+    //select -r $allLoft;
+    ConvertSelectionToVertices;
+    PolyMerge;
+    DeleteHistory;
+    //
+}
+
